@@ -1,4 +1,4 @@
-# 🎯 XPath 탐색기 (XPath Explorer) v3.2
+# 🎯 XPath 탐색기 (XPath Explorer) v3.3
 
 티켓 예매 사이트의 XPath를 탐색하고 관리하는 도구입니다.  
 인터파크, 티켓링크, 멜론티켓, YES24 등 다양한 사이트의 요소를 분석할 수 있습니다.
@@ -6,6 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green.svg)
 ![Selenium](https://img.shields.io/badge/Selenium-WebDriver-orange.svg)
+![HiDPI](https://img.shields.io/badge/HiDPI-Supported-purple.svg)
 
 ---
 
@@ -40,6 +41,11 @@
 - 선택한 XPath 자동 기록
 - 최근 사용 항목 빠른 접근
 
+### 🖼️ HiDPI 지원 (v3.3 NEW)
+- 고해상도 디스플레이 자동 스케일링
+- DPI 인식 UI 요소
+- 4K/Retina 디스플레이 완벽 지원
+
 ---
 
 ## 🚀 설치
@@ -64,7 +70,7 @@ pip install PyQt6 selenium webdriver-manager undetected-chromedriver
 
 ### 1. 프로그램 실행
 ```bash
-python "251214 xpath 조사기(모든 티켓 사이트).py"
+python "251221 xpath 조사기(모든 티켓 사이트).py"
 ```
 
 ### 2. 브라우저 열기
@@ -142,6 +148,14 @@ pyinstaller xpath_explorer.spec
 ---
 
 ## 📋 버전 히스토리
+
+### v3.3 (2025-12)
+- **HiDPI 디스플레이 지원**
+  - 고해상도 모니터 자동 스케일링
+  - DPI 인식 UI 요소 (ToastWidget 등)
+  - Qt HighDpiScaleFactorRoundingPolicy 적용
+- DPI 스케일링 헬퍼 함수 추가 (`scaled()`, `get_dpi_scale()`)
+- 기동 시 DPI 정보 로깅
 
 ### v3.2 (2025-12)
 - Config 상수 클래스 추가
