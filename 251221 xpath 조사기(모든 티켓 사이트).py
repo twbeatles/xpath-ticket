@@ -20,6 +20,10 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 
+# HiDPI 지원을 위한 환경변수 설정 (PyQt6 초기화 전에 설정)
+os.environ['QT_ENABLE_HIGHDPI_SCALING'] = '1'
+os.environ['QT_SCALE_FACTOR_ROUNDING_POLICY'] = 'PassThrough'
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit, QComboBox, QCheckBox,
@@ -106,7 +110,7 @@ logger = setup_logger()
 class Config:
     """앱 설정 상수"""
     APP_NAME = "티켓 사이트 XPath 탐색기"
-    VERSION = "3.2"
+    VERSION = "3.3"  # HiDPI 지원 추가
     WINDOW_WIDTH = 1600
     WINDOW_HEIGHT = 950
     CHECK_INTERVAL_MS = 2000
@@ -116,6 +120,31 @@ class Config:
     FONT_SIZE_MIN = 8
     FONT_SIZE_MAX = 18
     FONT_SIZE_DEFAULT = 10
+    # HiDPI 기준 DPI (100% 스케일링)
+    BASE_DPI = 96
+
+
+# ============================================================================
+# DPI 스케일링 헬퍼
+# ============================================================================
+
+def get_dpi_scale() -> float:
+    """현재 화면의 DPI 스케일 비율을 반환합니다."""
+    app = QApplication.instance()
+    if app:
+        screen = app.primaryScreen()
+        if screen:
+            return screen.logicalDotsPerInch() / Config.BASE_DPI
+    return 1.0
+
+def scaled(value: int) -> int:
+    """픽셀 값을 현재 DPI에 맞게 스케일링합니다."""
+    return int(value * get_dpi_scale())
+
+def scaled_size(width: int, height: int) -> tuple:
+    """크기 값을 현재 DPI에 맞게 스케일링합니다."""
+    scale = get_dpi_scale()
+    return (int(width * scale), int(height * scale))
 
 
 # ============================================================================
@@ -135,12 +164,13 @@ class ToastWidget(QFrame):
                 font-weight: bold;
             }
         """)
-        self.setFixedHeight(50)
-        self.setMinimumWidth(300)
-        self.setMaximumWidth(600)
+        # DPI 스케일링 적용
+        self.setFixedHeight(scaled(50))
+        self.setMinimumWidth(scaled(300))
+        self.setMaximumWidth(scaled(600))
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(15, 5, 15, 5)
+        layout.setContentsMargins(scaled(15), scaled(5), scaled(15), scaled(5))
         
         self.icon_label = QLabel()
         layout.addWidget(self.icon_label)
@@ -150,7 +180,7 @@ class ToastWidget(QFrame):
         layout.addWidget(self.message_label, 1)
         
         self.close_btn = QPushButton("✕")
-        self.close_btn.setFixedSize(25, 25)
+        self.close_btn.setFixedSize(scaled(25), scaled(25))
         self.close_btn.setStyleSheet("border: none; background: transparent; font-size: 14pt;")
         self.close_btn.clicked.connect(self.hide)
         layout.addWidget(self.close_btn)
@@ -194,7 +224,7 @@ class ToastWidget(QFrame):
         # 부모 위젯 중앙 상단에 배치
         if self.parent():
             parent_rect = self.parent().rect()
-            self.move((parent_rect.width() - self.width()) // 2, 10)
+            self.move((parent_rect.width() - self.width()) // 2, scaled(10))
             self.raise_()
         
         self.show()
@@ -3779,8 +3809,21 @@ class XPathExplorer(QMainWindow):
 # ============================================================================
 
 def main():
+    # HiDPI 스케일링 정책 설정
+    from PyQt6.QtCore import Qt
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+    
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
+    
+    # DPI 스케일 정보 로깅
+    screen = app.primaryScreen()
+    if screen:
+        dpi = screen.logicalDotsPerInch()
+        scale = dpi / Config.BASE_DPI
+        logger.info(f"화면 DPI: {dpi:.0f}, 스케일 비율: {scale:.2f}x")
     
     window = XPathExplorer()
     window.show()
