@@ -21,9 +21,31 @@ class XPathItem:
     element_text: str = ""
     found_window: str = ""
     found_frame: str = ""
+    # v3.3 신규 필드
+    is_favorite: bool = False                    # 즐겨찾기 (#6)
+    tags: List[str] = field(default_factory=list)  # 태그 (#6)
+    test_count: int = 0                          # 테스트 횟수 (#14)
+    success_count: int = 0                       # 성공 횟수 (#14)
+    last_tested: str = ""                        # 마지막 테스트 시간 (#14)
+    sort_order: int = 0                          # 정렬 순서 (#13)
     
     def to_dict(self) -> Dict:
         return asdict(self)
+    
+    @property
+    def success_rate(self) -> float:
+        """성공률 계산"""
+        if self.test_count == 0:
+            return 0.0
+        return (self.success_count / self.test_count) * 100
+    
+    def record_test(self, success: bool):
+        """테스트 결과 기록"""
+        self.test_count += 1
+        if success:
+            self.success_count += 1
+        from datetime import datetime
+        self.last_tested = datetime.now().isoformat()
 
 
 @dataclass
@@ -55,7 +77,29 @@ class SiteConfig:
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'SiteConfig':
-        items = [XPathItem(**item) for item in data.get('items', [])]
+        items = []
+        for item_data in data.get('items', []):
+            # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
+            item = XPathItem(
+                name=item_data.get('name', ''),
+                xpath=item_data.get('xpath', ''),
+                category=item_data.get('category', 'common'),
+                description=item_data.get('description', ''),
+                css_selector=item_data.get('css_selector', ''),
+                is_verified=item_data.get('is_verified', False),
+                element_tag=item_data.get('element_tag', ''),
+                element_text=item_data.get('element_text', ''),
+                found_window=item_data.get('found_window', ''),
+                found_frame=item_data.get('found_frame', ''),
+                # v3.3 신규 필드 (기본값 처리)
+                is_favorite=item_data.get('is_favorite', False),
+                tags=item_data.get('tags', []),
+                test_count=item_data.get('test_count', 0),
+                success_count=item_data.get('success_count', 0),
+                last_tested=item_data.get('last_tested', ''),
+                sort_order=item_data.get('sort_order', 0)
+            )
+            items.append(item)
         return cls(
             name=data.get('name', ''),
             url=data.get('url', ''),
