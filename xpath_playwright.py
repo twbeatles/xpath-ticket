@@ -1,434 +1,598 @@
 # -*- coding: utf-8 -*-
 """
-XPath Explorer Playwright Integration
-네트워크 분석 및 자동 탐색 모듈
+XPath Explorer - Playwright Browser Manager
+Playwright 기반 브라우저 관리 및 자동 탐색 기능
+탐지 우회 기술 포함
 """
 
-import asyncio
+import logging
+import random
 import json
-import time
-from typing import List, Dict, Optional, Callable
-from dataclasses import dataclass, asdict, field
-from datetime import datetime
+from typing import List, Dict, Optional, Any, Callable
+from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-import threading
+
+# 상수 임포트
+from xpath_constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
+
+logger = logging.getLogger('XPathExplorer')
+
+# Playwright 가용성 확인
+try:
+    from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
 
 
 @dataclass
-class RequestInfo:
+class ScannedElement:
+    """스캔된 요소 정보"""
+    xpath: str
+    css_selector: str
+    tag: str
+    text: str
+    element_id: str
+    element_name: str
+    element_class: str
+    is_visible: bool
+    is_enabled: bool
+    frame_path: str = ""
+
+
+@dataclass
+class NetworkRequest:
     """네트워크 요청 정보"""
     url: str
     method: str
-    resource_type: str  # document, xhr, fetch, script, image, etc.
-    headers: Dict = field(default_factory=dict)
-    post_data: str = ""
-    timestamp: str = ""
-    
-    # 응답 정보
+    resource_type: str
     status: int = 0
-    status_text: str = ""
-    response_headers: Dict = field(default_factory=dict)
-    response_size: int = 0
-    response_time_ms: float = 0.0
+    response_body: str = ""
 
 
-class NetworkAnalyzer:
-    """
-    Playwright 기반 네트워크 분석기
-    
-    네트워크 요청/응답을 가로채서 분석합니다.
-    """
+class PlaywrightManager:
+    """Playwright 기반 브라우저 관리 (탐지 우회 포함)"""
     
     def __init__(self):
         self._playwright = None
-        self._browser = None
-        self._context = None
-        self._page = None
+        self._browser: Optional[Browser] = None
+        self._context: Optional[BrowserContext] = None
+        self._page: Optional[Page] = None
+        self._is_initialized = False
+        self._stealth_enabled = False
+        self._network_requests: List[NetworkRequest] = []
+        self._network_monitoring = False
         
-        self._requests: List[RequestInfo] = []
-        self._is_capturing = False
-        self._capture_start_time = None
-        
-        # 필터 설정
-        self.filter_types: List[str] = []  # 빈 리스트면 모든 타입 캡처
-        self.filter_url_pattern: str = ""
+    @property
+    def is_available(self) -> bool:
+        """Playwright 사용 가능 여부"""
+        return PLAYWRIGHT_AVAILABLE
     
-    def is_playwright_available(self) -> bool:
-        """Playwright 사용 가능 여부 확인"""
-        try:
-            from playwright.sync_api import sync_playwright
-            return True
-        except ImportError:
-            return False
+    @property
+    def page(self) -> Optional[Page]:
+        """현재 페이지 객체"""
+        return self._page
     
-    def start_browser(self, url: str = "about:blank", headless: bool = False) -> bool:
+    def launch(self, headless: bool = False, stealth: bool = True) -> bool:
         """
-        브라우저 시작 및 네트워크 캡처 준비
+        브라우저 실행 (탐지 우회 옵션)
         
         Args:
-            url: 초기 URL
-            headless: 헤드리스 모드 여부
+            headless: 헤드리스 모드
+            stealth: 탐지 우회 활성화
         """
-        if not self.is_playwright_available():
-            print("Playwright가 설치되지 않았습니다. pip install playwright 후 playwright install 실행")
+        if not PLAYWRIGHT_AVAILABLE:
+            logger.error("Playwright가 설치되지 않았습니다.")
             return False
-        
+            
         try:
-            from playwright.sync_api import sync_playwright
+            # 랜덤 User-Agent 선택
+            user_agent = random.choice(USER_AGENTS)
             
             self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(headless=headless)
-            self._context = self._browser.new_context()
+            
+            # 브라우저 시작 옵션
+            launch_args = [
+                '--start-maximized',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-infobars',
+                '--disable-extensions',
+                '--lang=ko-KR',
+            ]
+            
+            if headless:
+                launch_args.extend([
+                    '--headless=new',  # 새로운 headless 모드 (탐지 어려움)
+                ])
+            
+            self._browser = self._playwright.chromium.launch(
+                headless=headless,
+                args=launch_args
+            )
+            
+            # 컨텍스트 생성 (fingerprint 설정)
+            self._context = self._browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent=user_agent,
+                locale='ko-KR',
+                timezone_id='Asia/Seoul',
+                geolocation={'latitude': 37.5665, 'longitude': 126.9780},
+                permissions=['geolocation'],
+                color_scheme='light',
+                device_scale_factor=1,
+            )
+            
             self._page = self._context.new_page()
             
-            # 네트워크 이벤트 핸들러 등록
-            self._page.on("request", self._on_request)
-            self._page.on("response", self._on_response)
+            # 탐지 우회 스크립트 주입
+            if stealth:
+                self._apply_stealth()
             
-            self._page.goto(url)
+            self._is_initialized = True
+            self._stealth_enabled = stealth
+            logger.info(f"Playwright 브라우저 실행 완료 (stealth={stealth})")
             return True
             
         except Exception as e:
-            print(f"브라우저 시작 실패: {e}")
+            logger.error(f"Playwright 브라우저 실행 실패: {e}")
             return False
+    
+    def _apply_stealth(self):
+        """탐지 우회 스크립트 적용"""
+        if self._page:
+            # 모든 페이지 로드 전에 스크립트 주입
+            self._page.add_init_script(STEALTH_SCRIPT)
+            logger.debug("Stealth 스크립트 적용됨")
     
     def close(self):
         """브라우저 종료"""
         try:
+            if self._context:
+                self._context.close()
             if self._browser:
                 self._browser.close()
             if self._playwright:
                 self._playwright.stop()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Playwright 종료 중 예외: {e}")
         finally:
+            self._page = None
+            self._context = None
             self._browser = None
             self._playwright = None
-            self._page = None
+            self._is_initialized = False
+            self._network_requests = []
     
-    def start_capture(self):
-        """네트워크 캡처 시작"""
-        self._requests.clear()
-        self._is_capturing = True
-        self._capture_start_time = time.time()
-    
-    def stop_capture(self) -> List[RequestInfo]:
-        """네트워크 캡처 중지 및 결과 반환"""
-        self._is_capturing = False
-        return self._requests.copy()
-    
-    def is_capturing(self) -> bool:
-        """캡처 중인지 확인"""
-        return self._is_capturing
-    
-    def _on_request(self, request):
-        """요청 이벤트 핸들러"""
-        if not self._is_capturing:
-            return
-        
-        # 필터 적용
-        resource_type = request.resource_type
-        if self.filter_types and resource_type not in self.filter_types:
-            return
-        
-        if self.filter_url_pattern and self.filter_url_pattern not in request.url:
-            return
-        
-        req_info = RequestInfo(
-            url=request.url,
-            method=request.method,
-            resource_type=resource_type,
-            headers=dict(request.headers),
-            post_data=request.post_data or "",
-            timestamp=datetime.now().isoformat()
-        )
-        
-        self._requests.append(req_info)
-    
-    def _on_response(self, response):
-        """응답 이벤트 핸들러"""
-        if not self._is_capturing:
-            return
-        
-        # 해당 요청 찾기
-        for req in reversed(self._requests):
-            if req.url == response.url and req.status == 0:
-                req.status = response.status
-                req.status_text = response.status_text
-                req.response_headers = dict(response.headers)
-                
-                try:
-                    # 응답 크기 (헤더에서)
-                    content_length = response.headers.get('content-length', '0')
-                    req.response_size = int(content_length)
-                except:
-                    pass
-                
-                break
-    
-    def navigate(self, url: str):
-        """URL 이동"""
-        if self._page:
-            self._page.goto(url)
-    
-    def get_requests(self) -> List[RequestInfo]:
-        """캡처된 요청 목록"""
-        return self._requests.copy()
-    
-    def filter_requests(self, 
-                       resource_type: str = None,
-                       method: str = None,
-                       url_contains: str = None,
-                       status_code: int = None) -> List[RequestInfo]:
-        """
-        요청 필터링
-        
-        Args:
-            resource_type: 리소스 타입 (xhr, fetch, document 등)
-            method: HTTP 메서드 (GET, POST 등)
-            url_contains: URL에 포함될 문자열
-            status_code: HTTP 상태 코드
-        """
-        filtered = self._requests
-        
-        if resource_type:
-            filtered = [r for r in filtered if r.resource_type == resource_type]
-        if method:
-            filtered = [r for r in filtered if r.method.upper() == method.upper()]
-        if url_contains:
-            filtered = [r for r in filtered if url_contains in r.url]
-        if status_code:
-            filtered = [r for r in filtered if r.status == status_code]
-        
-        return filtered
-    
-    def export_har(self, file_path: str):
-        """
-        HAR 형식으로 내보내기
-        
-        Args:
-            file_path: 저장할 파일 경로
-        """
-        har = {
-            "log": {
-                "version": "1.2",
-                "creator": {
-                    "name": "XPath Explorer",
-                    "version": "3.3"
-                },
-                "entries": []
-            }
-        }
-        
-        for req in self._requests:
-            entry = {
-                "startedDateTime": req.timestamp,
-                "request": {
-                    "method": req.method,
-                    "url": req.url,
-                    "headers": [{"name": k, "value": v} for k, v in req.headers.items()],
-                    "postData": {"text": req.post_data} if req.post_data else {}
-                },
-                "response": {
-                    "status": req.status,
-                    "statusText": req.status_text,
-                    "headers": [{"name": k, "value": v} for k, v in req.response_headers.items()],
-                    "content": {
-                        "size": req.response_size
-                    }
-                }
-            }
-            har["log"]["entries"].append(entry)
-        
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(har, f, ensure_ascii=False, indent=2)
-    
-    def export_json(self, file_path: str):
-        """JSON 형식으로 내보내기"""
-        data = [asdict(r) for r in self._requests]
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-class PlaywrightXPathExtractor:
-    """
-    Playwright 기반 XPath 자동 추출기
-    
-    페이지의 주요 요소들에서 XPath를 자동으로 추출합니다.
-    """
-    
-    def __init__(self):
-        self._playwright = None
-        self._browser = None
-        self._page = None
-    
-    def start(self, url: str, headless: bool = True) -> bool:
-        """브라우저 시작"""
+    def is_alive(self) -> bool:
+        """연결 상태 확인"""
+        if not self._is_initialized or not self._page:
+            return False
         try:
-            from playwright.sync_api import sync_playwright
-            
-            self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(headless=headless)
-            self._page = self._browser.new_page()
-            self._page.goto(url)
+            self._page.evaluate("() => true")
             return True
-        except Exception as e:
-            print(f"시작 실패: {e}")
+        except Exception:
             return False
     
-    def close(self):
-        """브라우저 종료"""
+    def navigate(self, url: str, timeout: int = 30000, 
+                 wait_until: str = 'domcontentloaded') -> bool:
+        """URL 이동"""
+        if not self.is_alive():
+            return False
         try:
-            if self._browser:
-                self._browser.close()
-            if self._playwright:
-                self._playwright.stop()
-        except:
-            pass
-    
-    def extract_interactive_elements(self) -> List[Dict]:
-        """
-        상호작용 가능한 요소 자동 추출
-        
-        버튼, 링크, 입력 필드 등을 자동으로 찾아 XPath 생성
-        """
-        if not self._page:
-            return []
-        
-        # JavaScript로 요소 탐색
-        script = '''
-        () => {
-            const elements = [];
-            
-            // 버튼
-            document.querySelectorAll('button, input[type="button"], input[type="submit"]').forEach((el, idx) => {
-                elements.push({
-                    tag: el.tagName.toLowerCase(),
-                    type: 'button',
-                    text: el.textContent?.trim() || el.value || '',
-                    id: el.id,
-                    className: el.className,
-                    name: el.name || ''
-                });
-            });
-            
-            // 링크
-            document.querySelectorAll('a[href]').forEach((el, idx) => {
-                elements.push({
-                    tag: 'a',
-                    type: 'link',
-                    text: el.textContent?.trim() || '',
-                    id: el.id,
-                    className: el.className,
-                    href: el.href
-                });
-            });
-            
-            // 입력 필드
-            document.querySelectorAll('input[type="text"], input[type="password"], input[type="email"], textarea').forEach((el, idx) => {
-                elements.push({
-                    tag: el.tagName.toLowerCase(),
-                    type: 'input',
-                    placeholder: el.placeholder || '',
-                    id: el.id,
-                    className: el.className,
-                    name: el.name || ''
-                });
-            });
-            
-            return elements;
-        }
-        '''
-        
-        try:
-            raw_elements = self._page.evaluate(script)
-            
-            # XPath 생성
-            results = []
-            for elem in raw_elements:
-                xpath = self._generate_xpath(elem)
-                results.append({
-                    'xpath': xpath,
-                    'tag': elem.get('tag', ''),
-                    'type': elem.get('type', ''),
-                    'text': elem.get('text', '')[:50],
-                    'id': elem.get('id', ''),
-                    'name': elem.get('name', '')
-                })
-            
-            return results
-            
+            self._page.goto(url, timeout=timeout, wait_until=wait_until)
+            return True
+        except PlaywrightTimeout:
+            logger.warning(f"페이지 로딩 타임아웃: {url}")
+            return True
         except Exception as e:
-            print(f"요소 추출 실패: {e}")
+            logger.error(f"페이지 이동 실패: {e}")
+            return False
+    
+    def get_current_url(self) -> str:
+        """현재 URL 반환"""
+        if self._page:
+            return self._page.url
+        return ""
+    
+    def get_page_title(self) -> str:
+        """현재 페이지 제목"""
+        if self._page:
+            return self._page.title()
+        return ""
+    
+    # =========================================================================
+    # 네트워크 모니터링
+    # =========================================================================
+    
+    def start_network_monitoring(self, filter_types: List[str] = None):
+        """네트워크 요청 모니터링 시작"""
+        if not self.is_alive():
+            return
+            
+        self._network_requests = []
+        self._network_monitoring = True
+        filter_types = filter_types or ['xhr', 'fetch', 'document']
+        
+        def on_request(request):
+            if request.resource_type in filter_types:
+                self._network_requests.append(NetworkRequest(
+                    url=request.url,
+                    method=request.method,
+                    resource_type=request.resource_type
+                ))
+        
+        def on_response(response):
+            for req in self._network_requests:
+                if req.url == response.url:
+                    req.status = response.status
+                    break
+        
+        self._page.on('request', on_request)
+        self._page.on('response', on_response)
+        logger.info("네트워크 모니터링 시작")
+    
+    def stop_network_monitoring(self) -> List[NetworkRequest]:
+        """네트워크 모니터링 중지 및 결과 반환"""
+        self._network_monitoring = False
+        return self._network_requests.copy()
+    
+    def get_network_requests(self) -> List[NetworkRequest]:
+        """현재까지의 네트워크 요청 목록"""
+        return self._network_requests.copy()
+    
+    # =========================================================================
+    # 쿠키 관리
+    # =========================================================================
+    
+    def get_cookies(self) -> List[Dict]:
+        """모든 쿠키 가져오기"""
+        if not self._context:
             return []
+        return self._context.cookies()
     
-    def _generate_xpath(self, elem: Dict) -> str:
-        """요소 정보로 XPath 생성"""
-        tag = elem.get('tag', 'div')
-        elem_id = elem.get('id', '')
-        name = elem.get('name', '')
-        text = elem.get('text', '')
-        
-        # ID가 있으면 가장 간단한 XPath
-        if elem_id:
-            return f"//*[@id='{elem_id}']"
-        
-        # name 속성
-        if name:
-            return f"//{tag}[@name='{name}']"
-        
-        # 텍스트 기반
-        if text and len(text) < 30:
-            safe_text = text.replace("'", "\\'")
-            return f"//{tag}[contains(text(), '{safe_text}')]"
-        
-        # 기본
-        return f"//{tag}"
+    def set_cookies(self, cookies: List[Dict]):
+        """쿠키 설정"""
+        if self._context:
+            self._context.add_cookies(cookies)
     
-    def find_element_xpath(self, selector: str) -> Optional[str]:
-        """
-        CSS 선택자로 요소를 찾고 XPath 반환
-        
-        Args:
-            selector: CSS 선택자
-        """
-        if not self._page:
-            return None
+    def save_cookies(self, filepath: str):
+        """쿠키를 파일로 저장"""
+        cookies = self.get_cookies()
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(cookies, f, indent=2, ensure_ascii=False)
+        logger.info(f"쿠키 저장됨: {filepath}")
+    
+    def load_cookies(self, filepath: str) -> bool:
+        """파일에서 쿠키 로드"""
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                cookies = json.load(f)
+            self.set_cookies(cookies)
+            logger.info(f"쿠키 로드됨: {filepath}")
+            return True
+        except Exception as e:
+            logger.error(f"쿠키 로드 실패: {e}")
+            return False
+    
+    def clear_cookies(self):
+        """모든 쿠키 삭제"""
+        if self._context:
+            self._context.clear_cookies()
+    
+    # =========================================================================
+    # 로컬 스토리지
+    # =========================================================================
+    
+    def get_local_storage(self) -> Dict:
+        """로컬 스토리지 가져오기"""
+        if not self.is_alive():
+            return {}
+        try:
+            return self._page.evaluate("() => Object.assign({}, localStorage)")
+        except Exception:
+            return {}
+    
+    def set_local_storage(self, data: Dict):
+        """로컬 스토리지 설정"""
+        if not self.is_alive():
+            return
+        for key, value in data.items():
+            self._page.evaluate(f"localStorage.setItem('{key}', '{value}')")
+    
+    # =========================================================================
+    # 자동 탐색 기능
+    # =========================================================================
+    
+    def scan_elements(self, element_type: str = 'interactive', 
+                      max_count: int = 100) -> List[ScannedElement]:
+        """페이지 요소 자동 스캔"""
+        if not self.is_alive():
+            return []
+            
+        selector = SCAN_SELECTORS.get(element_type, SCAN_SELECTORS['interactive'])
+        results = []
         
         try:
-            # 요소가 존재하는지 확인
-            element = self._page.locator(selector).first
-            if element.count() == 0:
-                return None
+            elements = self._page.query_selector_all(selector)
             
-            # JavaScript로 XPath 생성
-            xpath_script = '''
-            (element) => {
-                function getXPath(el) {
-                    if (el.id) return `//*[@id="${el.id}"]`;
-                    if (el === document.body) return '/html/body';
+            for i, el in enumerate(elements[:max_count]):
+                try:
+                    tag = el.evaluate("el => el.tagName.toLowerCase()")
+                    text = el.inner_text()[:100] if el.inner_text() else ""
+                    el_id = el.get_attribute('id') or ""
+                    el_name = el.get_attribute('name') or ""
+                    el_class = el.get_attribute('class') or ""
+                    is_visible = el.is_visible()
+                    is_enabled = el.is_enabled()
                     
-                    let ix = 0;
-                    const siblings = el.parentNode ? el.parentNode.childNodes : [];
-                    for (let i = 0; i < siblings.length; i++) {
-                        const sibling = siblings[i];
-                        if (sibling === el) {
-                            const path = getXPath(el.parentNode);
-                            const tag = el.tagName.toLowerCase();
-                            return `${path}/${tag}[${ix + 1}]`;
-                        }
-                        if (sibling.nodeType === 1 && sibling.tagName === el.tagName) {
-                            ix++;
-                        }
-                    }
-                    return '';
-                }
-                return getXPath(element);
-            }
-            '''
-            
-            return element.evaluate(xpath_script)
-            
+                    xpath = self._generate_xpath(el, el_id, el_name, tag, text)
+                    css = self._generate_css_selector(el_id, el_name, el_class, tag)
+                    
+                    results.append(ScannedElement(
+                        xpath=xpath,
+                        css_selector=css,
+                        tag=tag,
+                        text=text.strip()[:50],
+                        element_id=el_id,
+                        element_name=el_name,
+                        element_class=el_class[:50],
+                        is_visible=is_visible,
+                        is_enabled=is_enabled
+                    ))
+                except Exception as e:
+                    logger.debug(f"요소 스캔 중 오류: {e}")
+                    continue
+                    
         except Exception as e:
-            print(f"XPath 생성 실패: {e}")
+            logger.error(f"요소 스캔 실패: {e}")
+            
+        return results
+    
+    def _generate_xpath(self, el, el_id: str, el_name: str, 
+                        tag: str, text: str) -> str:
+        """최적화된 XPath 생성"""
+        if el_id:
+            return f'//*[@id="{el_id}"]'
+        if el_name:
+            return f'//{tag}[@name="{el_name}"]'
+        if text and tag in ['button', 'a']:
+            clean_text = text.strip()[:30]
+            if clean_text:
+                return f'//{tag}[contains(text(), "{clean_text}")]'
+        
+        try:
+            full_xpath = el.evaluate("""el => {
+                if (el.id) return '//*[@id="' + el.id + '"]';
+                var path = [];
+                while (el.nodeType === Node.ELEMENT_NODE) {
+                    var selector = el.nodeName.toLowerCase();
+                    if (el.id) {
+                        selector = '*[@id="' + el.id + '"]';
+                        path.unshift('//' + selector);
+                        break;
+                    } else {
+                        var sib = el, nth = 1;
+                        while (sib = sib.previousElementSibling) {
+                            if (sib.nodeName.toLowerCase() === selector) nth++;
+                        }
+                        if (nth !== 1) selector += '[' + nth + ']';
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                }
+                return '/' + path.join('/');
+            }""")
+            return full_xpath
+        except Exception:
+            return f"//{tag}"
+    
+    def _generate_css_selector(self, el_id: str, el_name: str, 
+                                el_class: str, tag: str) -> str:
+        """CSS 셀렉터 생성"""
+        if el_id:
+            return f"#{el_id}"
+        if el_name:
+            return f'{tag}[name="{el_name}"]'
+        if el_class:
+            classes = el_class.split()[:2]
+            return f"{tag}.{'.'.join(classes)}"
+        return tag
+    
+    def highlight(self, xpath: str, duration_ms: int = 2000) -> bool:
+        """요소 하이라이트"""
+        if not self.is_alive():
+            return False
+            
+        try:
+            el = self._page.query_selector(f"xpath={xpath}")
+            if not el:
+                return False
+                
+            el.evaluate(f"""el => {{
+                const original = {{
+                    outline: el.style.outline,
+                    outlineOffset: el.style.outlineOffset,
+                    backgroundColor: el.style.backgroundColor
+                }};
+                el.style.outline = '3px solid #00ff88';
+                el.style.outlineOffset = '2px';
+                el.style.backgroundColor = 'rgba(0, 255, 136, 0.2)';
+                el.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+                setTimeout(() => {{
+                    el.style.outline = original.outline;
+                    el.style.outlineOffset = original.outlineOffset;
+                    el.style.backgroundColor = original.backgroundColor;
+                }}, {duration_ms});
+            }}""")
+            return True
+        except Exception as e:
+            logger.error(f"하이라이트 실패: {e}")
+            return False
+    
+    def validate_xpath(self, xpath: str) -> Dict:
+        """XPath 검증"""
+        if not self.is_alive():
+            return {"found": False, "msg": "브라우저 연결 안됨"}
+            
+        try:
+            elements = self._page.query_selector_all(f"xpath={xpath}")
+            
+            if elements:
+                first = elements[0]
+                tag = first.evaluate("el => el.tagName.toLowerCase()")
+                text = first.inner_text()[:50] if first.inner_text() else ""
+                
+                return {
+                    "found": True,
+                    "count": len(elements),
+                    "tag": tag,
+                    "text": text,
+                    "visible": first.is_visible()
+                }
+            else:
+                return {"found": False, "msg": "요소를 찾을 수 없음"}
+                
+        except Exception as e:
+            return {"found": False, "msg": str(e)}
+    
+    # =========================================================================
+    # 요소 조작
+    # =========================================================================
+    
+    def click_element(self, xpath: str, timeout: int = 5000) -> bool:
+        """요소 클릭"""
+        if not self.is_alive():
+            return False
+        try:
+            self._page.click(f"xpath={xpath}", timeout=timeout)
+            return True
+        except Exception as e:
+            logger.error(f"클릭 실패: {e}")
+            return False
+    
+    def fill_input(self, xpath: str, text: str, clear_first: bool = True) -> bool:
+        """입력 필드에 텍스트 입력"""
+        if not self.is_alive():
+            return False
+        try:
+            if clear_first:
+                self._page.fill(f"xpath={xpath}", text)
+            else:
+                self._page.type(f"xpath={xpath}", text)
+            return True
+        except Exception as e:
+            logger.error(f"입력 실패: {e}")
+            return False
+    
+    def wait_for_element(self, xpath: str, timeout: int = 10000, 
+                         state: str = 'visible') -> bool:
+        """요소 대기"""
+        if not self.is_alive():
+            return False
+        try:
+            self._page.wait_for_selector(f"xpath={xpath}", 
+                                         timeout=timeout, state=state)
+            return True
+        except Exception as e:
+            logger.debug(f"요소 대기 실패: {e}")
+            return False
+    
+    def wait_for_navigation(self, timeout: int = 30000) -> bool:
+        """페이지 이동 대기"""
+        if not self.is_alive():
+            return False
+        try:
+            self._page.wait_for_load_state('domcontentloaded', timeout=timeout)
+            return True
+        except Exception:
+            return False
+    
+    # =========================================================================
+    # 스크린샷 및 캡처
+    # =========================================================================
+    
+    def screenshot(self, path: str = None, full_page: bool = False) -> Optional[bytes]:
+        """스크린샷 캡처"""
+        if not self.is_alive():
             return None
+        try:
+            if path:
+                return self._page.screenshot(path=path, full_page=full_page)
+            return self._page.screenshot(full_page=full_page)
+        except Exception as e:
+            logger.error(f"스크린샷 실패: {e}")
+            return None
+    
+    def capture_element(self, xpath: str, path: str = None) -> Optional[bytes]:
+        """특정 요소 캡처"""
+        if not self.is_alive():
+            return None
+        try:
+            el = self._page.query_selector(f"xpath={xpath}")
+            if el:
+                if path:
+                    return el.screenshot(path=path)
+                return el.screenshot()
+        except Exception as e:
+            logger.error(f"요소 캡처 실패: {e}")
+        return None
+
+    
+    def save_pdf(self, path: str) -> bool:
+        """페이지 PDF 저장"""
+        if not self.is_alive():
+            return False
+        try:
+            self._page.pdf(path=path)
+            return True
+        except Exception as e:
+            logger.error(f"PDF 저장 실패: {e}")
+            return False
+    
+    # =========================================================================
+    # iframe 처리
+    # =========================================================================
+    
+    def get_frames(self) -> List[Dict]:
+        """모든 프레임 목록"""
+        if not self.is_alive():
+            return []
+            
+        frames = []
+        for frame in self._page.frames:
+            frames.append({
+                "name": frame.name or "(unnamed)",
+                "url": frame.url,
+                "is_main": frame == self._page.main_frame
+            })
+        return frames
+    
+    def switch_to_frame(self, frame_name: str) -> bool:
+        """특정 프레임으로 전환"""
+        return True
+    
+    # =========================================================================
+    # JavaScript 실행
+    # =========================================================================
+    
+    def execute_script(self, script: str) -> Any:
+        """JavaScript 실행"""
+        if not self.is_alive():
+            return None
+        try:
+            return self._page.evaluate(script)
+        except Exception as e:
+            logger.error(f"스크립트 실행 실패: {e}")
+            return None
+    
+    def inject_script(self, script: str):
+        """페이지 로드 시 스크립트 주입"""
+        if self._page:
+            self._page.add_init_script(script)
+

@@ -85,8 +85,8 @@ class BrowserManager:
         if self.driver:
             try:
                 self.driver.quit()
-            except:
-                pass
+            except Exception:
+                pass  # 종료 시 예외 무시
             self.driver = None
             
     def is_alive(self) -> bool:
@@ -152,8 +152,8 @@ class BrowserManager:
             try:
                 self.driver.switch_to.window(original_handle)
                 self.driver.switch_to.default_content()
-            except:
-                pass
+            except Exception:
+                pass  # 복구 실패 무시
                 
         return frames_list
 
@@ -164,8 +164,8 @@ class BrowserManager:
         # 현재 컨텍스트의 모든 iframe 찾기
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-        except:
-            return
+        except Exception:
+            return  # iframe 검색 실패
 
         for i, frame in enumerate(iframes):
             try:
@@ -195,8 +195,8 @@ class BrowserManager:
                 logger.debug(f"프레임 내부 스캔 실패 ({identifier}): {e}")
                 try:
                     self.driver.switch_to.parent_frame()
-                except:
-                    pass
+                except Exception:
+                    pass  # 부모 프레임 복귀 실패 무시
 
     def switch_to_frame_by_path(self, frame_path: str) -> bool:
         """프레임 경로로 전환 (예: 'ifrmSeat/ifrmSeatDetail')"""
@@ -218,8 +218,8 @@ class BrowserManager:
                     self.driver.switch_to.frame(part)
                     found = True
                     continue
-                except:
-                    pass
+                except (NoSuchFrameException, Exception):
+                    pass  # ID로 찾기 실패, 다음 방법 시도
                 
                 # 2. WebElement로 찾기 (index=N 형식 처리)
                 if part.startswith("index="):
@@ -256,8 +256,8 @@ class BrowserManager:
             try:
                 el = self.driver.find_element(By.XPATH, xpath)
                 return el, "main"
-            except:
-                pass
+            except NoSuchElementException:
+                pass  # 메인 컨텐츠에 요소 없음
             
             # 2. 프레임 재귀 검색
             found_element, found_path = self._search_frames(xpath, "", 0, max_depth)
@@ -269,8 +269,8 @@ class BrowserManager:
                 try:
                     self.driver.switch_to.window(original_handle)
                     self.driver.switch_to.default_content()
-                except:
-                    pass
+                except Exception:
+                    pass  # 복구 실패 무시
         
         return found_element, found_path
 
@@ -280,8 +280,8 @@ class BrowserManager:
             
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-        except:
-            return None, ""
+        except Exception:
+            return None, ""  # iframe 검색 실패
             
         for i, frame in enumerate(iframes):
             try:
@@ -295,8 +295,8 @@ class BrowserManager:
                     el = self.driver.find_element(By.XPATH, xpath)
                     # 발견!
                     return el, current_path
-                except:
-                    pass
+                except NoSuchElementException:
+                    pass  # 이 프레임에 요소 없음
                 
                 # 재귀 호출
                 el, path = self._search_frames(xpath, current_path, depth + 1, max_depth)
@@ -311,8 +311,8 @@ class BrowserManager:
             except Exception:
                 try:
                     self.driver.switch_to.parent_frame()
-                except:
-                    pass
+                except Exception:
+                    pass  # 부모 프레임 복귀 실패 무시
                     
         return None, ""
 
@@ -325,8 +325,8 @@ class BrowserManager:
         current_handle = ""
         try:
             current_handle = self.driver.current_window_handle
-        except:
-            pass
+        except Exception:
+            pass  # 현재 핸들 확인 실패 무시
             
         for handle in self.driver.window_handles:
             try:
@@ -346,7 +346,7 @@ class BrowserManager:
         if current_handle:
             try:
                 self.driver.switch_to.window(current_handle)
-            except:
+            except Exception:
                 # 원래 윈도우가 닫혔으면 마지막으로
                 if self.driver.window_handles:
                     self.driver.switch_to.window(self.driver.window_handles[-1])
@@ -390,8 +390,8 @@ class BrowserManager:
 
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-        except:
-            return
+        except Exception:
+            return  # iframe 검색 실패
 
         for frame in iframes:
             try:
@@ -408,11 +408,11 @@ class BrowserManager:
                 
                 # 부모로 복귀
                 self.driver.switch_to.parent_frame()
-            except:
+            except Exception:
                 try:
                     self.driver.switch_to.parent_frame()
-                except:
-                    pass
+                except Exception:
+                    pass  # 복귀 실패 무시
 
     def get_picker_result(self) -> Optional[Dict]:
         """선택 결과 가져오기 - 모든 프레임에서 검색"""
@@ -441,8 +441,8 @@ class BrowserManager:
             
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-        except:
-            return None
+        except Exception:
+            return None  # iframe 검색 실패
             
         for i, frame in enumerate(iframes):
             try:
@@ -467,11 +467,11 @@ class BrowserManager:
                     return found
                     
                 self.driver.switch_to.parent_frame()
-            except:
+            except Exception:
                 try:
                     self.driver.switch_to.parent_frame()
-                except:
-                    pass
+                except Exception:
+                    pass  # 복귀 실패 무시
         return None
 
     def is_picker_active(self) -> bool:
@@ -487,8 +487,8 @@ class BrowserManager:
             
             # 프레임
             return self._check_active()
-        except:
-            return False
+        except Exception:
+            return False  # 피커 상태 확인 실패
 
     def _check_active(self, depth=0, max_depth=5):
         if depth > max_depth: return False
@@ -503,8 +503,8 @@ class BrowserManager:
                     self.driver.switch_to.default_content()
                     return True
                 self.driver.switch_to.parent_frame()
-        except:
-            pass
+        except Exception:
+            pass  # 프레임에서 피커 확인 실패
         return False
         
     def highlight(self, xpath: str, duration: int = 2500, frame_path: str = None) -> bool:
@@ -521,8 +521,8 @@ class BrowserManager:
             else:
                 try:
                     el = self.driver.find_element(By.XPATH, xpath)
-                except:
-                    return False
+                except NoSuchElementException:
+                    return False  # 요소 없음
             
             # 하이라이트 실행
             self.driver.execute_script("""
@@ -572,7 +572,7 @@ class BrowserManager:
                     "text": text,
                     "frame_path": frame_path
                 }
-            except:
+            except Exception:
                 return {"found": True, "msg": "요소 찾음 (상세 정보 읽기 실패)"}
         
         return {"found": False, "msg": "요소를 찾을 수 없음"}

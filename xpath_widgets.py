@@ -1,16 +1,40 @@
 # -*- coding: utf-8 -*-
 """
-XPath Explorer Widgets v3.3
+XPath Explorer Widgets v3.4
 - Enhanced Toast notifications with slide animation
 - Modern styling and effects
+- NoWheel widgets for better UX
 """
 
 from PyQt6.QtWidgets import (
     QLabel, QFrame, QHBoxLayout, QPushButton, QGraphicsOpacityEffect, 
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent
 from PyQt6.QtGui import QColor
+
+
+class NoWheelComboBox(QComboBox):
+    """휠 스크롤로 값이 변경되지 않는 ComboBox"""
+    
+    def wheelEvent(self, event):
+        # 휠 이벤트 무시 (부모에게 전달)
+        event.ignore()
+
+
+class NoWheelSpinBox(QSpinBox):
+    """휠 스크롤로 값이 변경되지 않는 SpinBox"""
+    
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class NoWheelDoubleSpinBox(QDoubleSpinBox):
+    """휠 스크롤로 값이 변경되지 않는 DoubleSpinBox"""
+    
+    def wheelEvent(self, event):
+        event.ignore()
+
 
 
 class ToastWidget(QFrame):

@@ -4,7 +4,7 @@ XPath Explorer Constants & Presets
 """
 
 # 버전 정보
-APP_VERSION = "v3.3"
+APP_VERSION = "v3.5"
 APP_TITLE = f"티켓 사이트 XPath 탐색기 {APP_VERSION}"
 
 # 브라우저 스크립트
@@ -439,4 +439,108 @@ SITE_PRESETS = {
         "description": "사용자 정의 사이트",
         "items": []
     }
+}
+
+# =============================================================================
+# Playwright & 탐지 우회 관련 상수
+# =============================================================================
+
+# UI 상수
+BROWSER_CHECK_INTERVAL = 2000  # ms - 브라우저 연결 상태 확인 주기
+SEARCH_DEBOUNCE_MS = 300       # ms - 검색 입력 디바운스
+DEFAULT_WINDOW_SIZE = (1400, 900)
+MAX_FRAME_DEPTH = 5            # 프레임 재귀 탐색 최대 깊이
+WORKER_WAIT_TIMEOUT = 2000     # ms - 워커 종료 대기 시간
+
+# 실제 브라우저 User-Agent 목록
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
+
+# 탐지 우회 스크립트 (WebDriver 플래그 숨김, fingerprint 위장)
+STEALTH_SCRIPT = """
+() => {
+    // WebDriver 플래그 제거
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+    });
+    
+    // Chrome 속성 추가 (자동화 도구 탐지 우회)
+    window.chrome = {
+        runtime: {},
+        loadTimes: function() {},
+        csi: function() {},
+        app: {}
+    };
+    
+    // Permissions 위장
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+    
+    // Languages 설정
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['ko-KR', 'ko', 'en-US', 'en']
+    });
+    
+    // 플러그인 위장
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+            { name: 'Native Client', filename: 'internal-nacl-plugin' }
+        ]
+    });
+    
+    // Canvas fingerprint 랜덤화
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, attributes) {
+        const context = originalGetContext.call(this, type, attributes);
+        if (type === '2d') {
+            const originalGetImageData = context.getImageData;
+            context.getImageData = function(x, y, width, height) {
+                const imageData = originalGetImageData.call(this, x, y, width, height);
+                // 약간의 노이즈 추가
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    imageData.data[i] = Math.max(0, Math.min(255, imageData.data[i] + (Math.random() * 2 - 1)));
+                }
+                return imageData;
+            };
+        }
+        return context;
+    };
+    
+    // WebGL 렌더러 위장
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) return 'Intel Inc.';
+        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+        return getParameter.call(this, parameter);
+    };
+    
+    // Headless 탐지 우회
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+        get: () => 8
+    });
+    
+    Object.defineProperty(navigator, 'deviceMemory', {
+        get: () => 8
+    });
+}
+"""
+
+# 스캔할 요소 셀렉터
+SCAN_SELECTORS = {
+    'button': 'button, [role="button"], input[type="button"], input[type="submit"]',
+    'input': 'input:not([type="hidden"]), textarea, select',
+    'link': 'a[href]',
+    'interactive': 'button, a[href], input:not([type="hidden"]), select, textarea, [onclick], [role="button"]',
+    'form': 'form, input, select, textarea',
+    'all': '*'
 }

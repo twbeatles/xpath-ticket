@@ -448,9 +448,29 @@ QLabel {
 QLabel#title {
     font-size: 22px;
     font-weight: 800;
-    color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-          stop:0 #89b4fa, stop:1 #cba6f7);
+    color: #89b4fa;
     padding: 12px 0;
+}
+
+/* ============================================
+   Search Input - Enhanced Style
+   ============================================ */
+QLineEdit#search_input {
+    background-color: rgba(49, 50, 68, 0.9);
+    border: 2px solid #45475a;
+    border-radius: 10px;
+    padding: 10px 16px;
+    color: #cdd6f4;
+    font-size: 14px;
+}
+
+QLineEdit#search_input:focus {
+    border: 2px solid #89b4fa;
+    background-color: rgba(49, 50, 68, 1);
+}
+
+QLineEdit#search_input:hover {
+    border: 2px solid #585b70;
 }
 
 QLabel#subtitle {

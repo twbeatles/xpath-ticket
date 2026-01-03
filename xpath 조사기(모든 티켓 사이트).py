@@ -36,7 +36,7 @@ from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySe
 from xpath_constants import APP_TITLE, APP_VERSION, SITE_PRESETS
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
-from xpath_widgets import ToastWidget
+from xpath_widgets import ToastWidget, NoWheelComboBox
 from xpath_browser import BrowserManager
 from xpath_workers import PickerWatcher, ValidateWorker
 
@@ -92,6 +92,9 @@ class XPathExplorer(QMainWindow):
         # v3.3 신규: 통계 관리자 및 코드 생성기
         self.stats_manager = StatisticsManager()
         self.code_generator = CodeGenerator()
+        
+        # v3.4 신규: Playwright 매니저 (자동 요소 탐색용)
+        self.pw_manager = None  # 지연 초기화
         
         # 워커 스레드 관리
         self.picker_watcher = None
@@ -299,92 +302,161 @@ class XPathExplorer(QMainWindow):
         help_menu.addAction(about_action)
 
     def _create_browser_panel(self):
-        """브라우저 컨트롤 패널 - [UX] 개선"""
-        self.browser_layout = QHBoxLayout()
+        """브라우저 컨트롤 패널 - v3.5: 2행 구조로 개선"""
+        self.browser_layout = QVBoxLayout()
+        self.browser_layout.setSpacing(8)
+        
+        # =====================================================================
+        # Row 1: 브라우저 컨트롤 + 사이트 선택 + 창/프레임 관리
+        # =====================================================================
+        control_row = QHBoxLayout()
+        control_row.setSpacing(10)
         
         # 브라우저 제어 그룹
-        self.btn_open = QPushButton("브라우저 열기")
+        browser_group = QGroupBox("🌐 브라우저")
+        browser_group_layout = QHBoxLayout()
+        browser_group_layout.setContentsMargins(10, 8, 10, 8)
+        browser_group_layout.setSpacing(8)
+        
+        self.btn_open = QPushButton("▶ 열기")
         self.btn_open.setObjectName("primary")
         self.btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_open.setToolTip("크롬 브라우저를 실행합니다.") # [UX-004] 툴팁
+        self.btn_open.setToolTip("크롬 브라우저를 실행합니다.")
         self.btn_open.clicked.connect(self._toggle_browser)
-        self.browser_layout.addWidget(self.btn_open)
+        browser_group_layout.addWidget(self.btn_open)
         
-        # 시각적 구분선 1
-        sep1 = QFrame()
-        sep1.setFrameShape(QFrame.Shape.VLine)
-        sep1.setObjectName("separator")
-        self.browser_layout.addWidget(sep1)
+        self.lbl_status = QLabel("● 대기 중")
+        self.lbl_status.setObjectName("status_disconnected")
+        browser_group_layout.addWidget(self.lbl_status)
         
-        # 사이트 프리셋
-        self.browser_layout.addWidget(QLabel("사이트:"))
-        self.combo_preset = QComboBox()
+        browser_group.setLayout(browser_group_layout)
+        control_row.addWidget(browser_group)
+        
+        # 사이트 프리셋 그룹
+        site_group = QGroupBox("📌 사이트")
+        site_group_layout = QHBoxLayout()
+        site_group_layout.setContentsMargins(10, 8, 10, 8)
+        site_group_layout.setSpacing(8)
+        
+        self.combo_preset = NoWheelComboBox()
         self.combo_preset.addItems(SITE_PRESETS.keys())
-        # [BUG-004] 시그널 연결을 _on_preset_changed 에서 처리 (currentIndexChanged 대신 텍스트로)
+        self.combo_preset.setMinimumWidth(130)
         self.combo_preset.currentTextChanged.connect(self._on_preset_changed)
-        self.browser_layout.addWidget(self.combo_preset)
+        site_group_layout.addWidget(self.combo_preset)
         
-        self.browser_layout.addWidget(QLabel("URL"))
-        self.input_url = QLineEdit()
-        self.input_url.setPlaceholderText("https://example.com")
-        self.input_url.returnPressed.connect(self._navigate)
-        self.browser_layout.addWidget(self.input_url, 1)
+        site_group.setLayout(site_group_layout)
+        control_row.addWidget(site_group)
         
-        self.btn_go = QPushButton("이동")
-        self.btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_go.clicked.connect(self._navigate)
-        self.browser_layout.addWidget(self.btn_go)
+        # 창/프레임 관리 그룹
+        window_group = QGroupBox("🪟 창/프레임")
+        window_group_layout = QHBoxLayout()
+        window_group_layout.setContentsMargins(10, 8, 10, 8)
+        window_group_layout.setSpacing(6)
         
-        # 시각적 구분선 2
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.Shape.VLine)
-        sep2.setObjectName("separator")
-        self.browser_layout.addWidget(sep2)
-        
-        self.browser_layout.addWidget(QLabel("창:"))
-        self.combo_windows = QComboBox()
-        self.combo_windows.setMinimumWidth(150)
+        window_group_layout.addWidget(QLabel("창:"))
+        self.combo_windows = NoWheelComboBox()
+        self.combo_windows.setMinimumWidth(120)
         self.combo_windows.currentIndexChanged.connect(self._on_window_changed)
-        self.browser_layout.addWidget(self.combo_windows)
+        window_group_layout.addWidget(self.combo_windows)
         
         self.btn_refresh_wins = QPushButton("🔄")
         self.btn_refresh_wins.setObjectName("icon_btn")
-        self.btn_refresh_wins.setToolTip("창 목록 새로고침") # [UX-004]
+        self.btn_refresh_wins.setToolTip("창 목록 새로고침")
         self.btn_refresh_wins.clicked.connect(self._refresh_windows)
-        self.browser_layout.addWidget(self.btn_refresh_wins)
+        window_group_layout.addWidget(self.btn_refresh_wins)
         
-        # 시각적 구분선 3
-        sep3 = QFrame()
-        sep3.setFrameShape(QFrame.Shape.VLine)
-        sep3.setObjectName("separator")
-        self.browser_layout.addWidget(sep3)
-        
-        self.browser_layout.addWidget(QLabel("프레임:"))
-        self.combo_frames = QComboBox()
-        self.combo_frames.setMinimumWidth(150)
-        self.browser_layout.addWidget(self.combo_frames)
+        window_group_layout.addWidget(QLabel("프레임:"))
+        self.combo_frames = NoWheelComboBox()
+        self.combo_frames.setMinimumWidth(120)
+        window_group_layout.addWidget(self.combo_frames)
         
         self.btn_scan_frames = QPushButton("🔍")
         self.btn_scan_frames.setObjectName("icon_btn")
-        self.btn_scan_frames.setToolTip("iframe 스캔") # [UX-004]
+        self.btn_scan_frames.setToolTip("iframe 스캔")
         self.btn_scan_frames.clicked.connect(self._scan_frames)
-        self.browser_layout.addWidget(self.btn_scan_frames)
+        window_group_layout.addWidget(self.btn_scan_frames)
         
-        # 상태 표시용 라벨 (우측 끝)
-        self.lbl_status = QLabel("● 대기 중")
-        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.lbl_status.setMinimumWidth(100)
-        self.lbl_status.setObjectName("status_disconnected")
-        self.browser_layout.addWidget(self.lbl_status)
+        window_group.setLayout(window_group_layout)
+        control_row.addWidget(window_group, 1)
+        
+        self.browser_layout.addLayout(control_row)
+        
+        # =====================================================================
+        # Row 2: URL 네비게이션 (더 크게 분리)
+        # =====================================================================
+        url_group = QGroupBox("🔗 URL 네비게이션")
+        url_layout = QHBoxLayout()
+        url_layout.setContentsMargins(12, 10, 12, 10)
+        url_layout.setSpacing(10)
+        
+        # 뒤로가기/앞으로가기 버튼
+        self.btn_back = QPushButton("◀")
+        self.btn_back.setObjectName("icon_btn")
+        self.btn_back.setToolTip("뒤로가기")
+        self.btn_back.setFixedWidth(36)
+        self.btn_back.clicked.connect(lambda: self.browser.driver.back() if self.browser.is_alive() else None)
+        url_layout.addWidget(self.btn_back)
+        
+        self.btn_forward = QPushButton("▶")
+        self.btn_forward.setObjectName("icon_btn")
+        self.btn_forward.setToolTip("앞으로가기")
+        self.btn_forward.setFixedWidth(36)
+        self.btn_forward.clicked.connect(lambda: self.browser.driver.forward() if self.browser.is_alive() else None)
+        url_layout.addWidget(self.btn_forward)
+        
+        self.btn_refresh_page = QPushButton("🔄")
+        self.btn_refresh_page.setObjectName("icon_btn")
+        self.btn_refresh_page.setToolTip("페이지 새로고침")
+        self.btn_refresh_page.setFixedWidth(36)
+        self.btn_refresh_page.clicked.connect(lambda: self.browser.driver.refresh() if self.browser.is_alive() else None)
+        url_layout.addWidget(self.btn_refresh_page)
+        
+        # URL 입력창 (확대)
+        self.input_url = QLineEdit()
+        self.input_url.setPlaceholderText("https://example.com - URL을 입력하고 Enter 또는 이동 클릭")
+        self.input_url.setMinimumHeight(36)
+        self.input_url.returnPressed.connect(self._navigate)
+        url_layout.addWidget(self.input_url, 1)
+        
+        self.btn_go = QPushButton("이동")
+        self.btn_go.setObjectName("primary")
+        self.btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_go.setMinimumWidth(80)
+        self.btn_go.clicked.connect(self._navigate)
+        url_layout.addWidget(self.btn_go)
+        
+        url_group.setLayout(url_layout)
+        self.browser_layout.addWidget(url_group)
+
 
     def _create_list_panel(self):
-        """XPath 목록 패널"""
+        """XPath 목록 패널 - v3.5: 스크롤 추가"""
         layout = QVBoxLayout(self.left_panel)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 스크롤 영역 생성
+        list_scroll = QScrollArea()
+        list_scroll.setWidgetResizable(True)
+        list_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        list_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+        """)
+        
+        list_content = QWidget()
+        list_layout = QVBoxLayout(list_content)
+        list_layout.setContentsMargins(0, 0, 10, 0)
+        list_layout.setSpacing(10)
         
         # 헤더
         header_layout = QHBoxLayout()
-        title = QLabel("XPath 목록")
+        title = QLabel("📋 XPath 목록")
         title.setObjectName("title")
         header_layout.addWidget(title)
         
@@ -396,35 +468,48 @@ class XPathExplorer(QMainWindow):
         btn_add.setToolTip("새로운 빈 항목 추가 (Ctrl+N)")
         btn_add.clicked.connect(self._add_new_item)
         header_layout.addWidget(btn_add)
-        layout.addLayout(header_layout)
+        list_layout.addLayout(header_layout)
         
-        # 필터링 Row 1
+        # 검색창 (독립적으로 배치, 더 크게)
+        search_group = QGroupBox("🔍 검색")
+        search_layout = QHBoxLayout()
+        search_layout.setContentsMargins(10, 8, 10, 8)
+        
+        self.input_search = QLineEdit()
+        self.input_search.setObjectName("search_input")
+        self.input_search.setPlaceholderText("이름, 설명, XPath 검색...")
+        self.input_search.setMinimumHeight(32)
+        self.input_search.textChanged.connect(self._on_search_text_changed)
+        search_layout.addWidget(self.input_search)
+        
+        search_group.setLayout(search_layout)
+        list_layout.addWidget(search_group)
+        
+        # 필터 영역 (컴팩트하게)
         filter_layout = QHBoxLayout()
-        self.combo_filter = QComboBox()
+        filter_layout.setSpacing(8)
+        
+        filter_layout.addWidget(QLabel("카테고리:"))
+        self.combo_filter = NoWheelComboBox()
         self.combo_filter.addItem("전체")
+        self.combo_filter.setMinimumWidth(90)
         self.combo_filter.currentTextChanged.connect(lambda t: self._refresh_table(t))
         filter_layout.addWidget(self.combo_filter)
         
-        # v3.3: 태그 필터
-        self.combo_tag_filter = QComboBox()
+        filter_layout.addWidget(QLabel("태그:"))
+        self.combo_tag_filter = NoWheelComboBox()
         self.combo_tag_filter.addItem("모든 태그")
         self.combo_tag_filter.currentTextChanged.connect(self._on_tag_filter_changed)
-        self.combo_tag_filter.setMinimumWidth(100)
+        self.combo_tag_filter.setMinimumWidth(90)
         filter_layout.addWidget(self.combo_tag_filter)
         
-        # v3.3: 즐겨찾기 필터
-        self.chk_favorites_only = QCheckBox("⭐ 즐겨찾기만")
+        self.chk_favorites_only = QCheckBox("⭐ 즐겨찾기")
         self.chk_favorites_only.stateChanged.connect(self._on_favorites_filter_changed)
         filter_layout.addWidget(self.chk_favorites_only)
         
-        # 검색 기능 개선 (Debounce 적용)
-        self.input_search = QLineEdit()
-        self.input_search.setPlaceholderText("🔍 검색 (이름, 설명, XPath)...")
-        # [BUG-003] textChanged -> 타이머 시작 (Debounce)
-        self.input_search.textChanged.connect(self._on_search_text_changed)
-        filter_layout.addWidget(self.input_search, 2)
+        filter_layout.addStretch()
         
-        layout.addLayout(filter_layout)
+        list_layout.addLayout(filter_layout)
         
         # 테이블 - v3.3: 컬럼 확장 (즐겨찾기, 성공률 추가)
         self.table = QTableWidget()
@@ -458,18 +543,47 @@ class XPathExplorer(QMainWindow):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         
-        layout.addWidget(self.table)
+        list_layout.addWidget(self.table, 1)
         
         # 요약 정보
         self.lbl_summary = QLabel("총 0개")
         self.lbl_summary.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.lbl_summary.setObjectName("info_label")
-        layout.addWidget(self.lbl_summary)
+        list_layout.addWidget(self.lbl_summary)
+        
+        list_scroll.setWidget(list_content)
+        layout.addWidget(list_scroll)
 
     def _create_editor_panel(self):
-        """편집기 패널"""
+        """편집기 패널 - v3.4: 탭 구조 및 휠 스크롤 방지"""
         layout = QVBoxLayout(self.right_panel)
         layout.setContentsMargins(10, 0, 0, 0)
+        
+        # 탭 위젯 생성
+        self.right_tabs = QTabWidget()
+        self.right_tabs.setDocumentMode(True)
+        
+        # =====================================================================
+        # 탭 1: 편집기
+        # =====================================================================
+        editor_tab = QWidget()
+        editor_scroll = QScrollArea()
+        editor_scroll.setWidgetResizable(True)
+        editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        editor_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+        """)
+        
+        editor_content = QWidget()
+        editor_layout = QVBoxLayout(editor_content)
+        editor_layout.setContentsMargins(5, 10, 5, 10)
+        editor_layout.setSpacing(10)
         
         # 1. 요소 선택기 (크게 강조)
         group_picker = QGroupBox("요소 선택기")
@@ -488,7 +602,7 @@ class XPathExplorer(QMainWindow):
         picker_layout.addWidget(self.chk_overlay)
         
         group_picker.setLayout(picker_layout)
-        layout.addWidget(group_picker)
+        editor_layout.addWidget(group_picker)
         
         # 2. 상세 편집
         group_edit = QGroupBox("상세 편집")
@@ -499,8 +613,8 @@ class XPathExplorer(QMainWindow):
         self.input_name.setPlaceholderText("예: login_btn")
         form_layout.addRow(QLabel("이름:"), self.input_name)
         
-        # 카테고리 (Editable ComboBox)
-        self.input_category = QComboBox()
+        # 카테고리 (NoWheelComboBox 사용)
+        self.input_category = NoWheelComboBox()
         self.input_category.setEditable(True)
         self.input_category.addItems(["login", "booking", "seat", "captcha", "popup", "common"])
         form_layout.addRow(QLabel("카테고리:"), self.input_category)
@@ -516,7 +630,7 @@ class XPathExplorer(QMainWindow):
         form_layout.addRow(QLabel("태그:"), self.input_tags)
         
         group_edit.setLayout(form_layout)
-        layout.addWidget(group_edit)
+        editor_layout.addWidget(group_edit)
         
         # 3. XPath & CSS
         group_code = QGroupBox("선택자 (Selectors)")
@@ -578,7 +692,7 @@ class XPathExplorer(QMainWindow):
         
         code_layout.addLayout(btn_row)
         group_code.setLayout(code_layout)
-        layout.addWidget(group_code)
+        editor_layout.addWidget(group_code)
         
         # 4. 검증 결과
         group_result = QGroupBox("검증 결과")
@@ -591,9 +705,123 @@ class XPathExplorer(QMainWindow):
         result_layout.addWidget(self.txt_result)
         
         group_result.setLayout(result_layout)
-        layout.addWidget(group_result)
+        editor_layout.addWidget(group_result)
         
-        layout.addStretch()
+        editor_layout.addStretch()
+        
+        editor_scroll.setWidget(editor_content)
+        editor_tab_layout = QVBoxLayout(editor_tab)
+        editor_tab_layout.setContentsMargins(0, 0, 0, 0)
+        editor_tab_layout.addWidget(editor_scroll)
+        
+        self.right_tabs.addTab(editor_tab, "📝 편집기")
+        
+        # =====================================================================
+        # 탭 2: 자동 탐색 (Playwright) - v3.5: 스크롤 추가
+        # =====================================================================
+        scan_tab = QWidget()
+        scan_scroll = QScrollArea()
+        scan_scroll.setWidgetResizable(True)
+        scan_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scan_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+        """)
+        
+        scan_content = QWidget()
+        scan_inner_layout = QVBoxLayout(scan_content)
+        scan_inner_layout.setContentsMargins(10, 10, 10, 10)
+        scan_inner_layout.setSpacing(15)
+        
+        # Playwright 상태 및 컨트롤
+        pw_status_group = QGroupBox("🎭 Playwright 브라우저")
+        pw_status_layout = QHBoxLayout()
+        pw_status_layout.setContentsMargins(12, 10, 12, 10)
+        
+        self.lbl_pw_status = QLabel("● 미연결")
+        self.lbl_pw_status.setStyleSheet("color: #f38ba8; font-weight: bold;")
+        pw_status_layout.addWidget(self.lbl_pw_status)
+        pw_status_layout.addStretch()
+        
+        self.btn_pw_toggle = QPushButton("▶ Playwright 시작")
+        self.btn_pw_toggle.setObjectName("primary")
+        self.btn_pw_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pw_toggle.clicked.connect(self._toggle_playwright)
+        pw_status_layout.addWidget(self.btn_pw_toggle)
+        
+        pw_status_group.setLayout(pw_status_layout)
+        scan_inner_layout.addWidget(pw_status_group)
+        
+        # 스캔 설정
+        scan_settings_group = QGroupBox("⚙️ 스캔 설정")
+        scan_settings_layout = QVBoxLayout()
+        scan_settings_layout.setContentsMargins(12, 10, 12, 10)
+        scan_settings_layout.setSpacing(12)
+        
+        # 스캔 타입 선택
+        type_row = QHBoxLayout()
+        type_row.addWidget(QLabel("스캔 타입:"))
+        self.combo_scan_type = NoWheelComboBox()
+        self.combo_scan_type.addItems(["interactive", "button", "input", "link", "form"])
+        self.combo_scan_type.setToolTip("interactive: 버튼, 링크, 입력 필드 등 상호작용 가능한 요소")
+        type_row.addWidget(self.combo_scan_type, 1)
+        scan_settings_layout.addLayout(type_row)
+        
+        # 스캔 버튼
+        self.btn_scan = QPushButton("🔍 페이지 스캔")
+        self.btn_scan.setObjectName("warning")
+        self.btn_scan.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_scan.setMinimumHeight(40)
+        self.btn_scan.clicked.connect(self._scan_page_elements)
+        scan_settings_layout.addWidget(self.btn_scan)
+        
+        scan_settings_group.setLayout(scan_settings_layout)
+        scan_inner_layout.addWidget(scan_settings_group)
+        
+        # 스캔 결과 테이블
+        results_group = QGroupBox("📋 스캔 결과")
+        results_layout = QVBoxLayout()
+        results_layout.setContentsMargins(12, 10, 12, 10)
+        
+        self.table_scan_results = QTableWidget()
+        self.table_scan_results.setColumnCount(4)
+        self.table_scan_results.setHorizontalHeaderLabels(["XPath", "Tag", "Text", "사용"])
+        self.table_scan_results.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table_scan_results.setColumnWidth(1, 60)
+        self.table_scan_results.setColumnWidth(2, 120)
+        self.table_scan_results.setColumnWidth(3, 60)
+        self.table_scan_results.verticalHeader().setVisible(False)
+        self.table_scan_results.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_scan_results.setAlternatingRowColors(True)
+        self.table_scan_results.setMinimumHeight(200)
+        results_layout.addWidget(self.table_scan_results)
+        
+        # 스캔 결과 요약
+        self.lbl_scan_summary = QLabel("스캔된 요소: 0개")
+        self.lbl_scan_summary.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.lbl_scan_summary.setStyleSheet("color: #6c7086; font-size: 11px;")
+        results_layout.addWidget(self.lbl_scan_summary)
+        
+        results_group.setLayout(results_layout)
+        scan_inner_layout.addWidget(results_group)
+        
+        scan_inner_layout.addStretch()
+        
+        scan_scroll.setWidget(scan_content)
+        scan_tab_layout = QVBoxLayout(scan_tab)
+        scan_tab_layout.setContentsMargins(0, 0, 0, 0)
+        scan_tab_layout.addWidget(scan_scroll)
+        
+        self.right_tabs.addTab(scan_tab, "🔍 자동 탐색")
+        
+        layout.addWidget(self.right_tabs)
+
+
 
     def _create_status_panel(self):
         """상태 패널"""
@@ -1842,6 +2070,107 @@ class XPathExplorer(QMainWindow):
         
         dialog.exec()
 
+    # =========================================================================
+    # v3.4 신규: Playwright 자동 요소 탐색
+    # =========================================================================
+    
+    def _toggle_playwright(self):
+        """Playwright 브라우저 토글"""
+        try:
+            from xpath_playwright import PlaywrightManager
+            
+            if self.pw_manager is None:
+                self.pw_manager = PlaywrightManager()
+            
+            if self.pw_manager.is_alive():
+                self.pw_manager.close()
+                self.lbl_pw_status.setText("● 미연결")
+                self.lbl_pw_status.setStyleSheet("color: #f38ba8;")
+                self.btn_pw_toggle.setText("Playwright 시작")
+                self._show_toast("Playwright 브라우저가 종료되었습니다.", "info")
+            else:
+                url = self.input_url.text().strip() or "about:blank"
+                if self.pw_manager.launch(headless=False, stealth=True):
+                    if url != "about:blank":
+                        self.pw_manager.navigate(url)
+                    self.lbl_pw_status.setText("● 연결됨")
+                    self.lbl_pw_status.setStyleSheet("color: #a6e3a1;")
+                    self.btn_pw_toggle.setText("Playwright 종료")
+                    self._show_toast("Playwright 브라우저가 시작되었습니다.", "success")
+                else:
+                    self._show_toast("Playwright 시작 실패. playwright install을 실행하세요.", "error")
+        except ImportError:
+            self._show_toast("Playwright가 설치되지 않았습니다. pip install playwright", "error")
+        except Exception as e:
+            self._show_toast(f"Playwright 오류: {e}", "error")
+    
+    def _scan_page_elements(self):
+        """Playwright로 페이지 요소 자동 스캔"""
+        if self.pw_manager is None or not self.pw_manager.is_alive():
+            self._show_toast("Playwright 브라우저가 실행되지 않았습니다.", "warning")
+            return
+        
+        scan_type = self.combo_scan_type.currentText()
+        self._show_toast(f"{scan_type} 요소 스캔 중...", "info", 2000)
+        QApplication.processEvents()
+        
+        try:
+            elements = self.pw_manager.scan_elements(scan_type, max_count=50)
+            
+            self.table_scan_results.setRowCount(0)
+            
+            for elem in elements:
+                row = self.table_scan_results.rowCount()
+                self.table_scan_results.insertRow(row)
+                
+                # XPath (최대 80자)
+                xpath = elem.xpath
+                if len(xpath) > 80:
+                    xpath = xpath[:77] + "..."
+                self.table_scan_results.setItem(row, 0, QTableWidgetItem(xpath))
+                
+                # Tag
+                self.table_scan_results.setItem(row, 1, QTableWidgetItem(elem.tag))
+                
+                # Text (최대 30자)
+                text = elem.text[:30] + "..." if len(elem.text) > 30 else elem.text
+                self.table_scan_results.setItem(row, 2, QTableWidgetItem(text))
+                
+                # 사용 버튼
+                btn_use = QPushButton("사용")
+                btn_use.setObjectName("success")
+                btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_use.clicked.connect(lambda checked, e=elem: self._use_scanned_element(e))
+                self.table_scan_results.setCellWidget(row, 3, btn_use)
+            
+            self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
+            self._show_toast(f"{len(elements)}개의 {scan_type} 요소를 찾았습니다.", "success")
+            
+        except Exception as e:
+            self._show_toast(f"스캔 실패: {e}", "error")
+    
+    def _use_scanned_element(self, element):
+        """스캔된 요소를 편집기로 로드"""
+        self.input_xpath.setPlainText(element.xpath)
+        self.input_css.setText(element.css_selector)
+        
+        # 자동 이름 생성 (태그 + ID 또는 이름)
+        if element.element_id:
+            suggested_name = element.element_id
+        elif element.element_name:
+            suggested_name = element.element_name
+        else:
+            suggested_name = f"{element.tag}_{self.table.rowCount() + 1}"
+        
+        self.input_name.setText(suggested_name)
+        self.input_desc.setText(element.text[:50] if element.text else "")
+        
+        self._show_toast(f"'{suggested_name}' 요소를 로드했습니다.", "success")
+        
+        # Playwright에서 하이라이트
+        if self.pw_manager and self.pw_manager.is_alive():
+            self.pw_manager.highlight(element.xpath, 2000)
+
     def closeEvent(self, event):
         """종료 처리"""
         self.settings.setValue("geometry", self.saveGeometry())
@@ -1853,6 +2182,13 @@ class XPathExplorer(QMainWindow):
         if self.validate_worker:
             self.validate_worker.cancel()
             self.validate_worker.wait(1000)
+        
+        # v3.4: Playwright 종료
+        if self.pw_manager:
+            try:
+                self.pw_manager.close()
+            except:
+                pass
             
         self.browser.close()
         event.accept()

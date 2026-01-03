@@ -1,13 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v3.3 - PyInstaller Spec File
+XPath Explorer v3.5 - PyInstaller Spec File (Optimized)
 빌드 명령: pyinstaller xpath_explorer.spec
+경량화 최적화 적용
 """
 
 import sys
 from PyInstaller.utils.hooks import collect_submodules
 
-# 히든 임포트 수집
+# ============================================================================
+# 히든 임포트 (필수 모듈만)
+# ============================================================================
 hiddenimports = [
     # 사용자 모듈
     'xpath_constants',
@@ -16,55 +19,68 @@ hiddenimports = [
     'xpath_widgets',
     'xpath_browser',
     'xpath_workers',
-    'xpath_codegen',      # v3.3 신규
-    'xpath_statistics',   # v3.3 신규
-    'xpath_playwright',   # Playwright 지원
+    'xpath_codegen',
+    'xpath_statistics',
+    'xpath_playwright',
     
-    # PyQt6 관련
-    'PyQt6',
+    # PyQt6 (필수 컴포넌트만)
     'PyQt6.QtWidgets',
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     
-    # Selenium 관련
-    'selenium',
+    # Selenium (필수만)
     'selenium.webdriver',
     'selenium.webdriver.chrome.service',
     'selenium.webdriver.chrome.options',
     'selenium.webdriver.common.by',
     'selenium.webdriver.support.ui',
     'selenium.webdriver.support.expected_conditions',
+    'selenium.common.exceptions',
     
     # UC Driver
     'undetected_chromedriver',
-    
-    # Playwright 관련 (선택적)
-    'playwright',
-    'playwright.sync_api',
     
     # 표준 라이브러리
     'logging',
     'json',
     'pathlib',
+    'dataclasses',
 ]
 
-# 제외할 모듈 (빌드 크기 최적화)
+# ============================================================================
+# 제외 모듈 (경량화 - 확장된 목록)
+# ============================================================================
 excludes = [
-    'matplotlib',
-    'numpy',
-    'pandas',
-    'scipy',
-    'tkinter',
-    'PIL',
-    'cv2',
-    'tensorflow',
-    'torch',
-    'IPython',
-    'notebook',
-    'pytest',
-    'unittest',
+    # 데이터 과학
+    'matplotlib', 'numpy', 'pandas', 'scipy', 'sklearn',
+    
+    # 이미지/비디오
+    'PIL', 'Pillow', 'cv2', 'opencv',
+    
+    # 머신러닝
+    'tensorflow', 'torch', 'keras', 'transformers',
+    
+    # 개발/테스트 도구
+    'IPython', 'notebook', 'jupyter', 'pytest', 'unittest', 'sphinx',
+    
+    # 기타 GUI
+    'tkinter', 'wx', 'PySide6', 'PyQt5',
+    
+    # 웹 프레임워크
+    'flask', 'django', 'fastapi', 'aiohttp',
+    
+    # 불필요한 표준 라이브러리
+    'test', 'tests', 'distutils', 'setuptools', 'pip',
+    
+    # Playwright (선택적 - 런타임 설치 권장)
+    'playwright',
+    'playwright.sync_api',
+    'playwright.async_api',
 ]
 
+# ============================================================================
+# Analysis
+# ============================================================================
 block_cipher = None
 
 a = Analysis(
@@ -83,6 +99,20 @@ a = Analysis(
     noarchive=False,
 )
 
+# ============================================================================
+# 불필요한 바이너리 제거 (경량화)
+# ============================================================================
+# Qt 관련 불필요 파일 제거
+a.binaries = [b for b in a.binaries if not any(x in b[0].lower() for x in [
+    'qt5', 'qt6webengine', 'qt6quick', 'qt6qml', 'qt6pdf',
+    'qt6designer', 'qt6help', 'qt6sql', 'qt6network',
+    'qt6multimedia', 'qt6dbus', 'qt6test', 'qt6xml',
+    'opengl32sw', 'd3dcompiler',
+])]
+
+# ============================================================================
+# PYZ & EXE
+# ============================================================================
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -92,20 +122,25 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='XPathExplorer_v3.3',
+    name='XPathExplorer_v3.5',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
+    strip=True,  # 심볼 제거 (경량화)
+    upx=True,    # UPX 압축 활성화
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=False,  # GUI 앱이므로 콘솔 숨김
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
-    # Windows 버전 정보
-    version_info=None,
 )
+
+# ============================================================================
+# 빌드 후 정리 팁:
+# - dist 폴더의 실행 파일만 배포
+# - Playwright 기능 필요 시: pip install playwright && playwright install chromium
+# - 예상 크기: 약 50-80MB (UPX 적용 시)
+# ============================================================================
