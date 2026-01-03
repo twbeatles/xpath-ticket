@@ -302,131 +302,114 @@ class XPathExplorer(QMainWindow):
         help_menu.addAction(about_action)
 
     def _create_browser_panel(self):
-        """브라우저 컨트롤 패널 - v3.5: 2행 구조로 개선"""
-        self.browser_layout = QVBoxLayout()
+        """브라우저 컨트롤 패널 - v3.6: 1행 컴팩트 레이아웃"""
+        self.browser_layout = QHBoxLayout()
         self.browser_layout.setSpacing(8)
         
-        # =====================================================================
-        # Row 1: 브라우저 컨트롤 + 사이트 선택 + 창/프레임 관리
-        # =====================================================================
-        control_row = QHBoxLayout()
-        control_row.setSpacing(10)
-        
-        # 브라우저 제어 그룹
-        browser_group = QGroupBox("🌐 브라우저")
-        browser_group_layout = QHBoxLayout()
-        browser_group_layout.setContentsMargins(10, 8, 10, 8)
-        browser_group_layout.setSpacing(8)
-        
-        self.btn_open = QPushButton("▶ 열기")
+        # 브라우저 열기/상태 - 아이콘 + 짧은 텍스트
+        self.btn_open = QPushButton("🌐 열기")
         self.btn_open.setObjectName("primary")
         self.btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_open.setToolTip("크롬 브라우저를 실행합니다.")
+        self.browser_layout.addWidget(self.btn_open)
         self.btn_open.clicked.connect(self._toggle_browser)
-        browser_group_layout.addWidget(self.btn_open)
         
-        self.lbl_status = QLabel("● 대기 중")
+        self.lbl_status = QLabel("● 끊김")
         self.lbl_status.setObjectName("status_disconnected")
-        browser_group_layout.addWidget(self.lbl_status)
+        self.lbl_status.setToolTip("브라우저 연결 상태")
+        self.browser_layout.addWidget(self.lbl_status)
         
-        browser_group.setLayout(browser_group_layout)
-        control_row.addWidget(browser_group)
+        # 구분선
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.Shape.VLine)
+        sep1.setStyleSheet("color: #45475a;")
+        self.browser_layout.addWidget(sep1)
         
-        # 사이트 프리셋 그룹
-        site_group = QGroupBox("📌 사이트")
-        site_group_layout = QHBoxLayout()
-        site_group_layout.setContentsMargins(10, 8, 10, 8)
-        site_group_layout.setSpacing(8)
-        
+        # 사이트 프리셋
         self.combo_preset = NoWheelComboBox()
         self.combo_preset.addItems(SITE_PRESETS.keys())
-        self.combo_preset.setMinimumWidth(130)
+        self.combo_preset.setMinimumWidth(90)
+        self.combo_preset.setToolTip("사이트 프리셋 선택")
         self.combo_preset.currentTextChanged.connect(self._on_preset_changed)
-        site_group_layout.addWidget(self.combo_preset)
+        self.browser_layout.addWidget(self.combo_preset)
         
-        site_group.setLayout(site_group_layout)
-        control_row.addWidget(site_group)
+        # 구분선
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.VLine)
+        sep2.setStyleSheet("color: #45475a;")
+        self.browser_layout.addWidget(sep2)
         
-        # 창/프레임 관리 그룹
-        window_group = QGroupBox("🪟 창/프레임")
-        window_group_layout = QHBoxLayout()
-        window_group_layout.setContentsMargins(10, 8, 10, 8)
-        window_group_layout.setSpacing(6)
-        
-        window_group_layout.addWidget(QLabel("창:"))
+        # 창/프레임 (컴팩트)
+        lbl_win = QLabel("창")
+        lbl_win.setToolTip("브라우저 창/탭 선택")
+        self.browser_layout.addWidget(lbl_win)
         self.combo_windows = NoWheelComboBox()
-        self.combo_windows.setMinimumWidth(120)
+        self.combo_windows.setMinimumWidth(70)
         self.combo_windows.currentIndexChanged.connect(self._on_window_changed)
-        window_group_layout.addWidget(self.combo_windows)
+        self.browser_layout.addWidget(self.combo_windows)
         
-        self.btn_refresh_wins = QPushButton("🔄")
+        self.btn_refresh_wins = QPushButton("↻")
         self.btn_refresh_wins.setObjectName("icon_btn")
         self.btn_refresh_wins.setToolTip("창 목록 새로고침")
+        self.btn_refresh_wins.setFixedSize(26, 26)
         self.btn_refresh_wins.clicked.connect(self._refresh_windows)
-        window_group_layout.addWidget(self.btn_refresh_wins)
+        self.browser_layout.addWidget(self.btn_refresh_wins)
         
-        window_group_layout.addWidget(QLabel("프레임:"))
+        lbl_frame = QLabel("프레임")
+        lbl_frame.setToolTip("iframe 선택")
+        self.browser_layout.addWidget(lbl_frame)
         self.combo_frames = NoWheelComboBox()
-        self.combo_frames.setMinimumWidth(120)
-        window_group_layout.addWidget(self.combo_frames)
+        self.combo_frames.setMinimumWidth(70)
+        self.browser_layout.addWidget(self.combo_frames)
         
         self.btn_scan_frames = QPushButton("🔍")
         self.btn_scan_frames.setObjectName("icon_btn")
         self.btn_scan_frames.setToolTip("iframe 스캔")
+        self.btn_scan_frames.setFixedSize(26, 26)
         self.btn_scan_frames.clicked.connect(self._scan_frames)
-        window_group_layout.addWidget(self.btn_scan_frames)
+        self.browser_layout.addWidget(self.btn_scan_frames)
         
-        window_group.setLayout(window_group_layout)
-        control_row.addWidget(window_group, 1)
+        # 구분선
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.Shape.VLine)
+        sep3.setStyleSheet("color: #45475a;")
+        self.browser_layout.addWidget(sep3)
         
-        self.browser_layout.addLayout(control_row)
-        
-        # =====================================================================
-        # Row 2: URL 네비게이션 (더 크게 분리)
-        # =====================================================================
-        url_group = QGroupBox("🔗 URL 네비게이션")
-        url_layout = QHBoxLayout()
-        url_layout.setContentsMargins(12, 10, 12, 10)
-        url_layout.setSpacing(10)
-        
-        # 뒤로가기/앞으로가기 버튼
+        # URL 네비게이션 (컴팩트)
         self.btn_back = QPushButton("◀")
         self.btn_back.setObjectName("icon_btn")
         self.btn_back.setToolTip("뒤로가기")
-        self.btn_back.setFixedWidth(36)
+        self.btn_back.setFixedSize(26, 26)
         self.btn_back.clicked.connect(lambda: self.browser.driver.back() if self.browser.is_alive() else None)
-        url_layout.addWidget(self.btn_back)
+        self.browser_layout.addWidget(self.btn_back)
         
         self.btn_forward = QPushButton("▶")
         self.btn_forward.setObjectName("icon_btn")
         self.btn_forward.setToolTip("앞으로가기")
-        self.btn_forward.setFixedWidth(36)
+        self.btn_forward.setFixedSize(26, 26)
         self.btn_forward.clicked.connect(lambda: self.browser.driver.forward() if self.browser.is_alive() else None)
-        url_layout.addWidget(self.btn_forward)
+        self.browser_layout.addWidget(self.btn_forward)
         
-        self.btn_refresh_page = QPushButton("🔄")
+        self.btn_refresh_page = QPushButton("↻")
         self.btn_refresh_page.setObjectName("icon_btn")
         self.btn_refresh_page.setToolTip("페이지 새로고침")
-        self.btn_refresh_page.setFixedWidth(36)
+        self.btn_refresh_page.setFixedSize(26, 26)
         self.btn_refresh_page.clicked.connect(lambda: self.browser.driver.refresh() if self.browser.is_alive() else None)
-        url_layout.addWidget(self.btn_refresh_page)
+        self.browser_layout.addWidget(self.btn_refresh_page)
         
-        # URL 입력창 (확대)
+        # URL 입력창 (확장)
         self.input_url = QLineEdit()
-        self.input_url.setPlaceholderText("https://example.com - URL을 입력하고 Enter 또는 이동 클릭")
-        self.input_url.setMinimumHeight(36)
+        self.input_url.setPlaceholderText("URL 입력 후 Enter")
+        self.input_url.setMinimumHeight(28)
         self.input_url.returnPressed.connect(self._navigate)
-        url_layout.addWidget(self.input_url, 1)
+        self.browser_layout.addWidget(self.input_url, 1)
         
         self.btn_go = QPushButton("이동")
         self.btn_go.setObjectName("primary")
         self.btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_go.setMinimumWidth(80)
+        self.btn_go.setFixedWidth(50)
         self.btn_go.clicked.connect(self._navigate)
-        url_layout.addWidget(self.btn_go)
-        
-        url_group.setLayout(url_layout)
-        self.browser_layout.addWidget(url_group)
+        self.browser_layout.addWidget(self.btn_go)
 
 
     def _create_list_panel(self):

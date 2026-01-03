@@ -1,11 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v3.5 - PyInstaller Spec File (Optimized)
+XPath Explorer v3.6 - PyInstaller Spec File (Optimized)
 빌드 명령: pyinstaller xpath_explorer.spec
 경량화 최적화 적용
+Python 3.14+ 호환
 """
 
 import sys
+import os
+
+# Python 3.12+에서 distutils가 표준 라이브러리에서 제거됨
+# PyInstaller 훅 충돌 방지를 위해 setuptools의 vendored distutils 사용 강제
+os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
+
 from PyInstaller.utils.hooks import collect_submodules
 
 # ============================================================================
@@ -48,7 +55,7 @@ hiddenimports = [
 ]
 
 # ============================================================================
-# 제외 모듈 (경량화 - 확장된 목록)
+# 제외 모듈 (경량화 - Python 3.12+ 호환)
 # ============================================================================
 excludes = [
     # 데이터 과학
@@ -69,8 +76,9 @@ excludes = [
     # 웹 프레임워크
     'flask', 'django', 'fastapi', 'aiohttp',
     
-    # 불필요한 표준 라이브러리
-    'test', 'tests', 'distutils', 'setuptools', 'pip',
+    # 불필요한 표준 라이브러리 (Python 3.12+ 호환)
+    'test', 'tests',
+    # 주의: distutils, setuptools, pip는 제외하지 않음 (PyInstaller 내부 사용)
     
     # Playwright (선택적 - 런타임 설치 권장)
     'playwright',
@@ -79,13 +87,13 @@ excludes = [
 ]
 
 # ============================================================================
-# Analysis
+# Analysis - Python 3.14+ 호환성 개선
 # ============================================================================
 block_cipher = None
 
 a = Analysis(
     ['xpath 조사기(모든 티켓 사이트).py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[],
     hiddenimports=hiddenimports,
@@ -125,7 +133,7 @@ exe = EXE(
     name='XPathExplorer_v3.5',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,  # 심볼 제거 (경량화)
+    strip=False,  # Windows 호환성 (strip 명령 없음)
     upx=True,    # UPX 압축 활성화
     upx_exclude=[],
     runtime_tmpdir=None,
