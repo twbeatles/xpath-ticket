@@ -9,6 +9,9 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import json
 from pathlib import Path
+import time
+
+from xpath_constants import STATISTICS_SAVE_INTERVAL
 
 
 @dataclass
@@ -56,6 +59,8 @@ class StatisticsManager:
         
         self._stats: Dict[str, ItemStatistics] = {}
         self._history: List[TestRecord] = []
+        self._last_save_time = 0
+        self._save_interval = STATISTICS_SAVE_INTERVAL  # 배치/스로틀링
         self._load()
     
     def _load(self):
@@ -76,8 +81,12 @@ class StatisticsManager:
             except Exception as e:
                 print(f"통계 로드 실패: {e}")
     
-    def _save(self):
-        """통계 데이터 저장"""
+    def save(self):
+        """통계 데이터 즉시 저장 (public)"""
+        self._save_internal()
+
+    def _save_internal(self):
+        """통계 데이터 저장 (내부용)"""
         try:
             data = {
                 'stats': {name: asdict(stat) for name, stat in self._stats.items()},
@@ -85,8 +94,15 @@ class StatisticsManager:
             }
             with open(self.storage_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            self._last_save_time = time.time()
         except Exception as e:
             print(f"통계 저장 실패: {e}")
+            
+    def _schedule_save(self):
+        """저장 스케줄링 (스로틀링 적용)"""
+        now = time.time()
+        if now - self._last_save_time > self._save_interval:
+            self._save_internal()
     
     def record_test(self, item_name: str, xpath: str, success: bool, 
                     frame_path: str = "", error_msg: str = ""):
@@ -128,8 +144,8 @@ class StatisticsManager:
         )
         self._history.append(record)
         
-        # 자동 저장
-        self._save()
+        # 자동 저장 (스로틀링)
+        self._schedule_save()
     
     def get_item_stats(self, item_name: str) -> Optional[ItemStatistics]:
         """항목별 통계 조회"""

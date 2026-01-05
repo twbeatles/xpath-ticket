@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v3.6 - PyInstaller Spec File (Optimized)
+XPath Explorer v4.0 - PyInstaller Spec File (Optimized)
 빌드 명령: pyinstaller xpath_explorer.spec
 경량화 최적화 적용
 Python 3.14+ 호환
@@ -19,6 +19,13 @@ from PyInstaller.utils.hooks import collect_submodules
 # 히든 임포트 (필수 모듈만)
 # ============================================================================
 hiddenimports = [
+    # v4.0 신규 모듈
+    'xpath_ai',
+    'xpath_diff',
+    'xpath_history',
+    'xpath_optimizer',
+    'xpath_explorer_v4', # 메인 파일명이 다르다면 수정 필요
+
     # 사용자 모듈
     'xpath_constants',
     'xpath_styles',
@@ -29,6 +36,11 @@ hiddenimports = [
     'xpath_codegen',
     'xpath_statistics',
     'xpath_playwright',
+    
+    # EXTERNAL: AI & API
+    'openai',
+    'google.generativeai',
+    'google.ai.generativelanguage',
     
     # PyQt6 (필수 컴포넌트만)
     'PyQt6.QtWidgets',
@@ -52,6 +64,9 @@ hiddenimports = [
     'json',
     'pathlib',
     'dataclasses',
+    'threading',
+    'time',
+    'datetime',
 ]
 
 # ============================================================================
@@ -80,14 +95,13 @@ excludes = [
     'test', 'tests',
     # 주의: distutils, setuptools, pip는 제외하지 않음 (PyInstaller 내부 사용)
     
-    # Playwright (선택적 - 런타임 설치 권장)
-    'playwright',
-    'playwright.sync_api',
-    'playwright.async_api',
+    # Playwright (런타임 설치 권장, 빌드 크기 최적화)
+    # 필요한 경우 주석 해제하여 포함시킬 수 있음
+    # 'playwright',
 ]
 
 # ============================================================================
-# Analysis - Python 3.14+ 호환성 개선
+# Analysis
 # ============================================================================
 block_cipher = None
 
@@ -95,7 +109,7 @@ a = Analysis(
     ['xpath 조사기(모든 티켓 사이트).py'],
     pathex=['.'],
     binaries=[],
-    datas=[],
+    datas=[], # 필요한 JSON 프리셋 파일 등이 있다면 여기에 추가: [('preset.json', '.')]
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -130,20 +144,20 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='XPathExplorer_v3.5',
+    name='XPathExplorer_v4.0',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,  # Windows 호환성 (strip 명령 없음)
-    upx=True,    # UPX 압축 활성화
+    upx=True,    # UPX 압축 활성화 (설치되어 있어야 함)
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # GUI 앱이므로 콘솔 숨김
+    console=False,  # GUI 앱이므로 콘솔 숨김 (디버깅 시 True)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=None, # 아이콘 파일이 있다면 'icon.ico' 로 지정
 )
 
 # ============================================================================

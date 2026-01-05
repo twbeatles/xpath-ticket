@@ -28,6 +28,11 @@ class XPathItem:
     success_count: int = 0                       # 성공 횟수 (#14)
     last_tested: str = ""                        # 마지막 테스트 시간 (#14)
     sort_order: int = 0                          # 정렬 순서 (#13)
+    # v4.0 신규 필드
+    alternatives: List[str] = field(default_factory=list)  # 대안 XPath 목록
+    element_attributes: Dict[str, str] = field(default_factory=dict)  # 저장된 속성
+    screenshot_path: str = ""                    # 스크린샷 경로
+    ai_generated: bool = False                   # AI 생성 여부
     
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -97,7 +102,12 @@ class SiteConfig:
                 test_count=item_data.get('test_count', 0),
                 success_count=item_data.get('success_count', 0),
                 last_tested=item_data.get('last_tested', ''),
-                sort_order=item_data.get('sort_order', 0)
+                sort_order=item_data.get('sort_order', 0),
+                # v4.0 신규 필드
+                alternatives=item_data.get('alternatives', []),
+                element_attributes=item_data.get('element_attributes', {}),
+                screenshot_path=item_data.get('screenshot_path', ''),
+                ai_generated=item_data.get('ai_generated', False)
             )
             items.append(item)
         return cls(

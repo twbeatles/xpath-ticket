@@ -110,7 +110,13 @@ class ToastWidget(QFrame):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._start_fade_out)
         
-        # 애니메이션 객체 (재사용)
+        # 애니메이션 객체 (재사용을 위해 None 초기화)
+        self._fade_anim = None
+        self._slide_anim = None
+        self._fade_out_anim = None
+        self._slide_up_anim = None
+        
+        # 그래픽 효과 객체
         self._opacity_effect = QGraphicsOpacityEffect(self)
         self._opacity_effect.setOpacity(1.0)
         
@@ -200,6 +206,9 @@ class ToastWidget(QFrame):
         self.show()
         self.raise_()
         
+        # 기존 애니메이션 정리 (메모리 누수 방지)
+        self._cleanup_animations()
+        
         # 투명도 효과 설정
         self.setGraphicsEffect(self._opacity_effect)
         self._opacity_effect.setOpacity(0)
@@ -229,6 +238,9 @@ class ToastWidget(QFrame):
     
     def _start_fade_out(self):
         """페이드 아웃 + 슬라이드 업 애니메이션"""
+        # 기존 애니메이션 정리
+        self._cleanup_animations()
+        
         # 투명도 효과로 전환
         self.setGraphicsEffect(self._opacity_effect)
         self._opacity_effect.setOpacity(1.0)
@@ -249,6 +261,19 @@ class ToastWidget(QFrame):
         self._slide_up_anim.setEndValue(QPoint(self.x(), self._start_y))
         self._slide_up_anim.setEasingCurve(QEasingCurve.Type.InCubic)
         self._slide_up_anim.start()
+    
+    def _cleanup_animations(self):
+        """기존 애니메이션 정리 (메모리 누수 방지)"""
+        for anim in [self._fade_anim, self._slide_anim, 
+                     self._fade_out_anim, self._slide_up_anim]:
+            if anim is not None:
+                anim.stop()
+                anim.deleteLater()
+        
+        self._fade_anim = None
+        self._slide_anim = None
+        self._fade_out_anim = None
+        self._slide_up_anim = None
     
     def _close_toast(self):
         """Toast 즉시 닫기"""

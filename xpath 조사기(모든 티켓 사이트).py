@@ -44,6 +44,12 @@ from xpath_workers import PickerWatcher, ValidateWorker
 from xpath_codegen import CodeGenerator, CodeTemplate
 from xpath_statistics import StatisticsManager
 
+# v4.0 신규 모듈
+from xpath_optimizer import XPathOptimizer, XPathAlternative
+from xpath_history import HistoryManager
+from xpath_ai import XPathAIAssistant
+from xpath_diff import XPathDiffAnalyzer
+
 import logging
 
 def setup_logger():
@@ -96,6 +102,12 @@ class XPathExplorer(QMainWindow):
         # v3.4 신규: Playwright 매니저 (자동 요소 탐색용)
         self.pw_manager = None  # 지연 초기화
         
+        # v4.0 신규 모듈
+        self.optimizer = XPathOptimizer()
+        self.history_manager = HistoryManager()
+        self.ai_assistant = XPathAIAssistant()
+        self.diff_analyzer = XPathDiffAnalyzer()
+        
         # 워커 스레드 관리
         self.picker_watcher = None
         self.validate_worker = None
@@ -110,10 +122,19 @@ class XPathExplorer(QMainWindow):
         self._search_timer.setInterval(300) # [PERF-003] 300ms Debounce
         self._search_timer.timeout.connect(self._perform_search)
         
+        # v4.0: 실시간 미리보기 타이머
+        self._live_preview_timer = QTimer()
+        self._live_preview_timer.setSingleShot(True)
+        self._live_preview_timer.setInterval(500)  # 500ms debounce
+        self._live_preview_timer.timeout.connect(self._update_live_preview)
+        
         self.init_settings()
         self._init_ui()
         self._load_settings()
         self._setup_timers()
+        
+        # v4.0: 히스토리 초기화
+        self.history_manager.initialize(self.config.items)
         
     def init_settings(self):
         self.settings = QSettings("MyCompany", "XPathExplorer")
@@ -214,6 +235,21 @@ class XPathExplorer(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
+        # v4.0 편집 메뉴 (Undo/Redo)
+        edit_menu = menubar.addMenu('편집(&E)')
+        
+        self.undo_action = QAction('↩️ 실행 취소', self)
+        self.undo_action.setShortcut('Ctrl+Z')
+        self.undo_action.triggered.connect(self._undo)
+        self.undo_action.setEnabled(False)
+        edit_menu.addAction(self.undo_action)
+        
+        self.redo_action = QAction('↪️ 다시 실행', self)
+        self.redo_action.setShortcut('Ctrl+Y')
+        self.redo_action.triggered.connect(self._redo)
+        self.redo_action.setEnabled(False)
+        edit_menu.addAction(self.redo_action)
+        
         # 도구 메뉴
         tools_menu = menubar.addMenu('도구(&T)')
         
@@ -264,6 +300,21 @@ class XPathExplorer(QMainWindow):
         network_action = QAction('🌐 네트워크 분석...', self)
         network_action.triggered.connect(self._show_network_analyzer)
         tools_menu.addAction(network_action)
+        
+        tools_menu.addSeparator()
+        
+        # v4.0 신규 도구
+        ai_action = QAction('🤖 AI XPath 추천...', self)
+        ai_action.triggered.connect(self._show_ai_assistant)
+        tools_menu.addAction(ai_action)
+        
+        diff_action = QAction('🔍 Diff 분석 (변경 감지)...', self)
+        diff_action.triggered.connect(self._show_diff_analyzer)
+        tools_menu.addAction(diff_action)
+        
+        screenshot_action = QAction('📸 요소 스크린샷...', self)
+        screenshot_action.triggered.connect(self._screenshot_current_element)
+        tools_menu.addAction(screenshot_action)
         
         tools_menu.addSeparator()
         
@@ -620,20 +671,43 @@ class XPathExplorer(QMainWindow):
         code_layout = QVBoxLayout()
         
         # XPath
-        code_layout.addWidget(QLabel("XPath:"))
+        xpath_header = QHBoxLayout()
+        xpath_header.addWidget(QLabel("XPath:"))
+        
+        # v4.0: 실시간 매칭 미리보기
+        self.lbl_live_preview = QLabel("🔍 매칭: -")
+        self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+        self.lbl_live_preview.setToolTip("입력 중인 XPath에 매칭되는 요소 수")
+        xpath_header.addStretch()
+        xpath_header.addWidget(self.lbl_live_preview)
+        code_layout.addLayout(xpath_header)
+        
         xpath_row = QHBoxLayout()
         self.input_xpath = QPlainTextEdit()
         self.input_xpath.setMaximumHeight(60)
         self.input_xpath.setPlaceholderText("//div[@id='example']")
+        # v4.0: 실시간 미리보기 연결
+        self.input_xpath.textChanged.connect(self._on_xpath_text_changed)
         xpath_row.addWidget(self.input_xpath)
         
-        # XPath 복사 버튼
+        # XPath 버튼 그룹
+        xpath_btn_layout = QVBoxLayout()
+        xpath_btn_layout.setSpacing(4)
+        
         btn_copy_xpath = QPushButton("📋")
         btn_copy_xpath.setObjectName("icon_btn")
         btn_copy_xpath.setToolTip("XPath 복사")
         btn_copy_xpath.clicked.connect(self._copy_xpath)
-        xpath_row.addWidget(btn_copy_xpath)
+        xpath_btn_layout.addWidget(btn_copy_xpath)
         
+        # v4.0: XPath 대안 제안 버튼
+        self.btn_alternatives = QPushButton("💡")
+        self.btn_alternatives.setObjectName("icon_btn")
+        self.btn_alternatives.setToolTip("XPath 대안 제안")
+        self.btn_alternatives.clicked.connect(self._show_xpath_alternatives)
+        xpath_btn_layout.addWidget(self.btn_alternatives)
+        
+        xpath_row.addLayout(xpath_btn_layout)
         code_layout.addLayout(xpath_row)
         
         # CSS
@@ -1189,7 +1263,7 @@ class XPathExplorer(QMainWindow):
         self.input_category.setCurrentText("common")
 
     def _save_item(self):
-        """항목 저장 - v3.3: 태그 및 통계 보존"""
+        """항목 저장 - v3.3: 태그 및 통계 보존, v4.0: 히스토리 기록"""
         name = self.input_name.text().strip()
         xpath = self.input_xpath.toPlainText().strip()
         
@@ -1199,6 +1273,13 @@ class XPathExplorer(QMainWindow):
         
         # 기존 항목이 있는지 확인 (통계 보존용)
         existing = self.config.get_item(name)
+        
+        # v4.0: 변경 전 상태 히스토리에 저장
+        action = "update" if existing else "add"
+        self.history_manager.push_state(
+            self.config.items, action, name,
+            f"{name} 항목 {'수정' if existing else '추가'}"
+        )
         
         # v3.3: 태그 파싱
         tags_text = self.input_tags.text().strip()
@@ -1229,15 +1310,22 @@ class XPathExplorer(QMainWindow):
              
         self.config.add_or_update(item)
         self._refresh_table()
+        self._update_undo_redo_actions()  # v4.0
         self._show_toast(f"'{name}' 저장 완료", "success")
 
     def _delete_item(self, name):
-        """항목 삭제"""
+        """항목 삭제 - v4.0: 히스토리 기록"""
         if QMessageBox.question(self, "삭제", f"'{name}' 항목을 삭제하시겠습니까?", 
                               QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+            # v4.0: 삭제 전 히스토리 저장
+            self.history_manager.push_state(
+                self.config.items, "delete", name,
+                f"{name} 항목 삭제"
+            )
             self.config.remove_item(name)
             self._refresh_table()
             self._clear_editor()
+            self._update_undo_redo_actions()  # v4.0
 
     # =========================================================================
     # 로직 핸들러: 테스트 및 검증
@@ -2154,6 +2242,527 @@ class XPathExplorer(QMainWindow):
         if self.pw_manager and self.pw_manager.is_alive():
             self.pw_manager.highlight(element.xpath, 2000)
 
+    # =========================================================================
+    # v4.0 신규 기능: Undo/Redo
+    # =========================================================================
+    
+    def _update_undo_redo_actions(self):
+        """Undo/Redo 액션 상태 업데이트"""
+        self.undo_action.setEnabled(self.history_manager.can_undo())
+        self.redo_action.setEnabled(self.history_manager.can_redo())
+        
+        if self.history_manager.can_undo():
+            self.undo_action.setText(f"↩️ 실행 취소 ({self.history_manager.get_undo_description()})")
+        else:
+            self.undo_action.setText("↩️ 실행 취소")
+    
+    def _undo(self):
+        """실행 취소"""
+        restored = self.history_manager.undo()
+        if restored:
+            self._restore_items_from_dicts(restored)
+            self._refresh_table()
+            self._update_undo_redo_actions()
+            self._show_toast("실행 취소됨", "info")
+    
+    def _redo(self):
+        """다시 실행"""
+        restored = self.history_manager.redo()
+        if restored:
+            self._restore_items_from_dicts(restored)
+            self._refresh_table()
+            self._update_undo_redo_actions()
+            self._show_toast("다시 실행됨", "info")
+    
+    def _restore_items_from_dicts(self, item_dicts: list):
+        """딕셔너리 리스트에서 XPathItem 복원"""
+        self.config.items = []
+        for d in item_dicts:
+            item = XPathItem(
+                name=d.get('name', ''),
+                xpath=d.get('xpath', ''),
+                category=d.get('category', 'common'),
+                description=d.get('description', ''),
+                css_selector=d.get('css_selector', ''),
+                is_verified=d.get('is_verified', False),
+                element_tag=d.get('element_tag', ''),
+                element_text=d.get('element_text', ''),
+                found_window=d.get('found_window', ''),
+                found_frame=d.get('found_frame', ''),
+                is_favorite=d.get('is_favorite', False),
+                tags=d.get('tags', []),
+                test_count=d.get('test_count', 0),
+                success_count=d.get('success_count', 0),
+                last_tested=d.get('last_tested', ''),
+                sort_order=d.get('sort_order', 0),
+                alternatives=d.get('alternatives', []),
+                element_attributes=d.get('element_attributes', {}),
+                screenshot_path=d.get('screenshot_path', ''),
+                ai_generated=d.get('ai_generated', False)
+            )
+            self.config.items.append(item)
+    
+    def _save_item_with_history(self):
+        """항목 저장 (히스토리 기록 포함)"""
+        name = self.input_name.text().strip()
+        existing = self.config.get_item(name)
+        action = "update" if existing else "add"
+        
+        # 변경 전 상태 저장
+        self.history_manager.push_state(
+            self.config.items, action, name,
+            f"{name} 항목 {'수정' if existing else '추가'}"
+        )
+        
+        # 원래 저장 로직은 _save_item()에서 처리
+        self._update_undo_redo_actions()
+
+    # =========================================================================
+    # v4.0 신규 기능: 실시간 미리보기
+    # =========================================================================
+    
+    def _on_xpath_text_changed(self):
+        """XPath 입력 변경 시 실시간 미리보기 타이머 시작"""
+        self._live_preview_timer.start()
+    
+    def _update_live_preview(self):
+        """실시간 매칭 요소 수 업데이트"""
+        xpath = self.input_xpath.toPlainText().strip()
+        
+        if not xpath:
+            self.lbl_live_preview.setText("🔍 매칭: -")
+            self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+            return
+        
+        if not self.browser.is_alive():
+            self.lbl_live_preview.setText("🔍 매칭: (브라우저 없음)")
+            self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+            return
+        
+        try:
+            count = self.browser.count_elements(xpath)
+            
+            if count < 0:
+                self.lbl_live_preview.setText("⚠️ 오류")
+                self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+            elif count == 0:
+                self.lbl_live_preview.setText("❌ 매칭: 0개")
+                self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+            elif count == 1:
+                self.lbl_live_preview.setText("✅ 매칭: 1개")
+                self.lbl_live_preview.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+            else:
+                self.lbl_live_preview.setText(f"🔍 매칭: {count}개")
+                self.lbl_live_preview.setStyleSheet("color: #fab387; font-size: 11px;")
+        except Exception:
+            self.lbl_live_preview.setText("⚠️ 오류")
+            self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+
+    # =========================================================================
+    # v4.0 신규 기능: XPath 대안 제안
+    # =========================================================================
+    
+    def _show_xpath_alternatives(self):
+        """XPath 대안 제안 다이얼로그"""
+        xpath = self.input_xpath.toPlainText().strip()
+        
+        if not xpath:
+            self._show_toast("XPath를 먼저 입력하세요.", "warning")
+            return
+        
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            return
+        
+        # 요소 정보 가져오기
+        element_info = self.browser.get_element_info(xpath)
+        
+        if not element_info or not element_info.get('found'):
+            self._show_toast("요소를 찾을 수 없습니다.", "error")
+            return
+        
+        # 대안 생성
+        element_info['original_xpath'] = xpath
+        alternatives = self.optimizer.generate_alternatives(element_info)
+        
+        if not alternatives:
+            self._show_toast("대안을 생성할 수 없습니다.", "warning")
+            return
+        
+        # 다이얼로그 표시
+        dialog = QDialog(self)
+        dialog.setWindowTitle("💡 XPath 대안 제안")
+        dialog.resize(700, 500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 요소 정보 요약
+        info_text = f"요소: <{element_info.get('tag', '?')}>"
+        if element_info.get('id'):
+            info_text += f" id='{element_info['id']}'"
+        if element_info.get('class'):
+            info_text += f" class='{element_info['class'][:30]}...'" if len(element_info.get('class', '')) > 30 else f" class='{element_info.get('class', '')}'"
+        
+        lbl_info = QLabel(info_text)
+        lbl_info.setWordWrap(True)
+        lbl_info.setStyleSheet("color: #89b4fa; padding: 5px;")
+        layout.addWidget(lbl_info)
+        
+        # 대안 테이블
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["점수", "전략", "XPath", "사용"])
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        table.setColumnWidth(0, 50)
+        table.setColumnWidth(1, 100)
+        table.setColumnWidth(3, 60)
+        table.verticalHeader().setVisible(False)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        
+        for alt in alternatives:
+            row = table.rowCount()
+            table.insertRow(row)
+            
+            # 점수
+            score_item = QTableWidgetItem(f"{alt.robustness_score:.0f}")
+            score_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if alt.robustness_score >= 80:
+                score_item.setForeground(QColor("#a6e3a1"))
+            elif alt.robustness_score >= 50:
+                score_item.setForeground(QColor("#fab387"))
+            else:
+                score_item.setForeground(QColor("#f38ba8"))
+            table.setItem(row, 0, score_item)
+            
+            # 전략
+            table.setItem(row, 1, QTableWidgetItem(alt.strategy))
+            
+            # XPath
+            xpath_item = QTableWidgetItem(alt.xpath)
+            xpath_item.setToolTip(alt.description)
+            table.setItem(row, 2, xpath_item)
+            
+            # 사용 버튼
+            btn_use = QPushButton("사용")
+            btn_use.setObjectName("success")
+            btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_use.clicked.connect(lambda checked, x=alt.xpath: (
+                self.input_xpath.setPlainText(x),
+                self._show_toast("XPath 적용됨", "success"),
+                dialog.accept()
+            ))
+            table.setCellWidget(row, 3, btn_use)
+        
+        layout.addWidget(table)
+        
+        # 닫기 버튼
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        layout.addWidget(btn_close)
+        
+        dialog.exec()
+
+    # =========================================================================
+    # v4.0 신규 기능: AI 어시스턴트
+    # =========================================================================
+    
+    def _show_ai_assistant(self):
+        """AI XPath 추천 다이얼로그"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🤖 AI XPath 추천")
+        dialog.resize(600, 450)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # API 상태
+        if self.ai_assistant.is_available():
+            provider = self.ai_assistant._provider.capitalize()
+            status_text = f"✅ {provider} API 연결됨"
+            status_color = "#a6e3a1"
+        else:
+            status_text = "⚠️ API 키 미설정 (규칙 기반 모드)"
+            status_color = "#fab387"
+        
+        lbl_status = QLabel(status_text)
+        lbl_status.setStyleSheet(f"color: {status_color}; font-weight: bold;")
+        layout.addWidget(lbl_status)
+        
+        # 입력
+        layout.addWidget(QLabel("찾고자 하는 요소를 설명하세요:"))
+        self._ai_input = QPlainTextEdit()
+        self._ai_input.setMaximumHeight(80)
+        self._ai_input.setPlaceholderText("예: 로그인 버튼, 이메일 입력창, 예매하기 링크...")
+        layout.addWidget(self._ai_input)
+        
+        # 생성 버튼
+        btn_generate = QPushButton("🔮 XPath 생성")
+        btn_generate.setObjectName("primary")
+        btn_generate.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(btn_generate)
+        
+        # 결과 영역
+        layout.addWidget(QLabel("추천 결과:"))
+        self._ai_result_text = QPlainTextEdit()
+        self._ai_result_text.setReadOnly(True)
+        self._ai_result_text.setStyleSheet("font-family: 'Consolas', monospace; background-color: #181825;")
+        layout.addWidget(self._ai_result_text)
+        
+        # 신뢰도 라벨
+        self._ai_confidence_label = QLabel("")
+        layout.addWidget(self._ai_confidence_label)
+        
+        def generate():
+            desc = self._ai_input.toPlainText().strip()
+            if not desc:
+                self._show_toast("설명을 입력하세요.", "warning")
+                return
+            
+            self._ai_result_text.setPlainText("생성 중...")
+            QApplication.processEvents()
+            
+            result = self.ai_assistant.generate_xpath_from_description(desc)
+            
+            output = f"추천 XPath:\n{result.xpath}\n\n"
+            if result.alternative_xpaths:
+                output += "대안:\n" + "\n".join(f"  - {x}" for x in result.alternative_xpaths) + "\n\n"
+            output += f"설명:\n{result.explanation}"
+            
+            self._ai_result_text.setPlainText(output)
+            
+            conf = result.confidence * 100
+            if conf >= 70:
+                self._ai_confidence_label.setText(f"신뢰도: {conf:.0f}% (높음)")
+                self._ai_confidence_label.setStyleSheet("color: #a6e3a1;")
+            elif conf >= 40:
+                self._ai_confidence_label.setText(f"신뢰도: {conf:.0f}% (보통)")
+                self._ai_confidence_label.setStyleSheet("color: #fab387;")
+            else:
+                self._ai_confidence_label.setText(f"신뢰도: {conf:.0f}% (낮음)")
+                self._ai_confidence_label.setStyleSheet("color: #f38ba8;")
+        
+        btn_generate.clicked.connect(generate)
+        
+        # 적용 버튼
+        btn_layout = QHBoxLayout()
+        
+        btn_apply = QPushButton("📋 편집기에 적용")
+        btn_apply.clicked.connect(lambda: (
+            self.input_xpath.setPlainText(self._ai_result_text.toPlainText().split('\n')[1] if self._ai_result_text.toPlainText() else ""),
+            self._show_toast("XPath 적용됨", "success")
+        ))
+        btn_layout.addWidget(btn_apply)
+        
+        btn_settings = QPushButton("⚙️ API 설정")
+        btn_settings.clicked.connect(lambda: self._configure_ai_api(dialog))
+        btn_layout.addWidget(btn_settings)
+        
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        btn_layout.addWidget(btn_close)
+        
+        layout.addLayout(btn_layout)
+        dialog.exec()
+    
+    def _configure_ai_api(self, parent_dialog):
+        """AI API 설정 (Provider 지원)"""
+        dialog = QDialog(parent_dialog)
+        dialog.setWindowTitle("⚙️ AI 설정")
+        dialog.resize(400, 300)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Provider 선택
+        layout.addWidget(QLabel("AI Provider:"))
+        combo_provider = QComboBox()
+        combo_provider.addItems(["openai", "gemini"])
+        combo_provider.setCurrentText(self.ai_assistant._provider)
+        layout.addWidget(combo_provider)
+        
+        # API Key 입력
+        layout.addWidget(QLabel("API Key:"))
+        input_key = QLineEdit()
+        input_key.setEchoMode(QLineEdit.EchoMode.Password)
+        if self.ai_assistant._provider == "openai":
+            input_key.setText(self.ai_assistant._config.get('openai_api_key', ''))
+        else:
+            input_key.setText(self.ai_assistant._config.get('gemini_api_key', ''))
+        layout.addWidget(input_key)
+        
+        # Model 입력
+        layout.addWidget(QLabel("Model:"))
+        input_model = QLineEdit()
+        input_model.setText(self.ai_assistant._model)
+        layout.addWidget(input_model)
+        
+        # 힌트
+        lbl_hint = QLabel("OpenAI: gpt-4o-mini, gpt-4o\nGemini: gemini-1.5-flash, gemini-1.5-pro")
+        lbl_hint.setStyleSheet("color: #7f849c; font-size: 11px;")
+        layout.addWidget(lbl_hint)
+        
+        # Provider 변경 시 처리
+        def on_provider_change(text):
+            input_key.clear()
+            if text == "openai":
+                input_key.setText(self.ai_assistant._config.get('openai_api_key', ''))
+                input_model.setText("gpt-4o-mini")
+            else:
+                input_key.setText(self.ai_assistant._config.get('gemini_api_key', ''))
+                input_model.setText("gemini-1.5-flash")
+                
+        combo_provider.currentTextChanged.connect(on_provider_change)
+        
+        # 저장 버튼
+        btn_save = QPushButton("저장")
+        def save():
+            provider = combo_provider.currentText()
+            key = input_key.text().strip()
+            model = input_model.text().strip()
+            
+            if not key:
+                self._show_toast("API 키를 입력하세요.", "warning")
+                return
+                
+            self.ai_assistant.configure(key, model, provider)
+            self._show_toast(f"{provider} 설정이 저장되었습니다.", "success")
+            dialog.accept()
+            
+            # 부모 다이얼로그 갱신 (꼼수: 닫았다 다시 열기보다 상태 텍스트 갱신이 좋음)
+            # 여기서는 간단히 안내만
+            
+        btn_save.clicked.connect(save)
+        layout.addWidget(btn_save)
+        
+        dialog.exec()
+
+    # =========================================================================
+    # v4.0 신규 기능: Diff 분석
+    # =========================================================================
+    
+    def _show_diff_analyzer(self):
+        """Diff 분석 다이얼로그"""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            return
+        
+        if not self.config.items:
+            self._show_toast("분석할 항목이 없습니다.", "warning")
+            return
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔍 XPath 변경 감지 (Diff 분석)")
+        dialog.resize(800, 550)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 분석 버튼
+        btn_analyze = QPushButton("🔍 전체 분석 실행")
+        btn_analyze.setObjectName("warning")
+        btn_analyze.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(btn_analyze)
+        
+        # 요약 라벨
+        lbl_summary = QLabel("분석 버튼을 클릭하여 시작하세요.")
+        lbl_summary.setStyleSheet("font-size: 14px; padding: 10px;")
+        layout.addWidget(lbl_summary)
+        
+        # 결과 테이블
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["상태", "항목", "변경 사항", "XPath"])
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        table.setColumnWidth(0, 50)
+        table.setColumnWidth(1, 120)
+        table.setColumnWidth(3, 200)
+        table.verticalHeader().setVisible(False)
+        layout.addWidget(table)
+        
+        def run_analysis():
+            lbl_summary.setText("분석 중...")
+            QApplication.processEvents()
+            
+            results = self.diff_analyzer.compare_all(self.config.items, self.browser)
+            
+            table.setRowCount(0)
+            unchanged = modified = missing = 0
+            
+            for result in results:
+                row = table.rowCount()
+                table.insertRow(row)
+                
+                # 상태
+                status_item = QTableWidgetItem(result.status_icon)
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 0, status_item)
+                
+                # 항목 이름
+                table.setItem(row, 1, QTableWidgetItem(result.item_name))
+                
+                # 변경 사항
+                changes_text = ", ".join(result.changes) if result.changes else "-"
+                table.setItem(row, 2, QTableWidgetItem(changes_text))
+                
+                # XPath
+                xpath_short = result.xpath[:40] + "..." if len(result.xpath) > 40 else result.xpath
+                xpath_item = QTableWidgetItem(xpath_short)
+                xpath_item.setToolTip(result.xpath)
+                table.setItem(row, 3, xpath_item)
+                
+                if result.status == "unchanged":
+                    unchanged += 1
+                elif result.status == "modified":
+                    modified += 1
+                elif result.status == "missing":
+                    missing += 1
+            
+            lbl_summary.setText(f"분석 완료: ✅ 변경없음 {unchanged}개 | ⚠️ 수정됨 {modified}개 | ❌ 찾지못함 {missing}개")
+        
+        btn_analyze.clicked.connect(run_analysis)
+        
+        # 닫기 버튼
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        layout.addWidget(btn_close)
+        
+        dialog.exec()
+
+    # =========================================================================
+    # v4.0 신규 기능: 스크린샷
+    # =========================================================================
+    
+    def _screenshot_current_element(self):
+        """현재 선택된 요소 스크린샷 저장"""
+        xpath = self.input_xpath.toPlainText().strip()
+        
+        if not xpath:
+            self._show_toast("XPath를 먼저 입력하세요.", "warning")
+            return
+        
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            return
+        
+        # 저장 경로 선택
+        fname, _ = QFileDialog.getSaveFileName(
+            self, "스크린샷 저장", "element_screenshot.png", "PNG (*.png)"
+        )
+        
+        if not fname:
+            return
+        
+        # 스크린샷 저장
+        success = self.browser.screenshot_element(xpath, fname)
+        
+        if success:
+            self._show_toast(f"스크린샷 저장 완료: {fname}", "success")
+            
+            # 현재 항목에 스크린샷 경로 저장
+            name = self.input_name.text().strip()
+            item = self.config.get_item(name)
+            if item:
+                item.screenshot_path = fname
+        else:
+            self._show_toast("스크린샷 저장 실패", "error")
+
     def closeEvent(self, event):
         """종료 처리"""
         self.settings.setValue("geometry", self.saveGeometry())
@@ -2172,6 +2781,10 @@ class XPathExplorer(QMainWindow):
                 self.pw_manager.close()
             except:
                 pass
+            
+        # 통계 저장
+        if hasattr(self, 'stats_manager'):
+            self.stats_manager.save()
             
         self.browser.close()
         event.accept()

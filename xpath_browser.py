@@ -48,6 +48,8 @@ class BrowserManager:
         self.driver = None
         self.current_frame_path = ""  # 현재 활성 프레임 경로
         self.frame_cache = []  # 캐시된 프레임 목록
+        self.frame_cache_time = 0  # 캐시 생성 시간
+        self.FRAME_CACHE_DURATION = 2.0  # 캐시 유효 시간 (초)
     
     def create_driver(self, use_undetected: bool = True) -> bool:
         """드라이버 생성"""
@@ -85,8 +87,9 @@ class BrowserManager:
         if self.driver:
             try:
                 self.driver.quit()
-            except Exception:
-                pass  # 종료 시 예외 무시
+            except Exception as e:
+                logger.debug(f"드라이버 종료 중 오류 (무시됨): {e}")
+                pass
             self.driver = None
             
     def is_alive(self) -> bool:
@@ -115,7 +118,8 @@ class BrowserManager:
             else:
                 logger.error("사용 가능한 윈도우가 없습니다.")
                 return False
-        except Exception:
+        except Exception as e:
+            logger.debug(f"윈도우 복구 중 오류: {e}")
             return False
 
     def ensure_valid_window(self):
@@ -138,6 +142,12 @@ class BrowserManager:
     def get_all_frames(self, max_depth: int = 5) -> List[tuple]:
         """모든 iframe을 재귀적으로 탐색 (인터파크 중첩 iframe 지원)"""
         self.ensure_valid_window()
+        # 캐시 확인
+        current_time = time.time()
+        if (self.frame_cache and 
+            current_time - self.frame_cache_time < self.FRAME_CACHE_DURATION):
+            return self.frame_cache.copy()
+            
         frames_list = []
         original_handle = self.driver.current_window_handle
         
@@ -145,6 +155,16 @@ class BrowserManager:
             # 메인 컨텐츠로 초기화
             self.driver.switch_to.default_content()
             self._scan_frames(frames_list, "", 0, max_depth)
+            
+            # 캐시 업데이트
+            self.frame_cache = frames_list.copy()
+            self.frame_cache_time = current_time
+            
+        except Exception as e:
+            logger.error(f"프레임 스캔 중 오류: {e}")
+            # 오류 발생 시 캐시 초기화
+            self.frame_cache = []
+            self.frame_cache_time = 0
         except Exception as e:
             logger.error(f"프레임 스캔 중 오류: {e}")
         finally:
@@ -152,8 +172,9 @@ class BrowserManager:
             try:
                 self.driver.switch_to.window(original_handle)
                 self.driver.switch_to.default_content()
-            except Exception:
-                pass  # 복구 실패 무시
+            except Exception as e:
+                logger.debug(f"프레임 복구 중 오류: {e}")
+                pass
                 
         return frames_list
 
@@ -195,8 +216,9 @@ class BrowserManager:
                 logger.debug(f"프레임 내부 스캔 실패 ({identifier}): {e}")
                 try:
                     self.driver.switch_to.parent_frame()
-                except Exception:
-                    pass  # 부모 프레임 복귀 실패 무시
+                except Exception as e:
+                    logger.debug(f"부모 프레임 복귀 실패: {e}")
+                    pass
 
     def switch_to_frame_by_path(self, frame_path: str) -> bool:
         """프레임 경로로 전환 (예: 'ifrmSeat/ifrmSeatDetail')"""
@@ -269,8 +291,9 @@ class BrowserManager:
                 try:
                     self.driver.switch_to.window(original_handle)
                     self.driver.switch_to.default_content()
-                except Exception:
-                    pass  # 복구 실패 무시
+                except Exception as e:
+                    logger.debug(f"윈도우/컨텐츠 복구 실패: {e}")
+                    pass
         
         return found_element, found_path
 
@@ -311,8 +334,9 @@ class BrowserManager:
             except Exception:
                 try:
                     self.driver.switch_to.parent_frame()
-                except Exception:
-                    pass  # 부모 프레임 복귀 실패 무시
+                except Exception as e:
+                    logger.debug(f"부모 프레임 복귀 실패 (재귀): {e}")
+                    pass
                     
         return None, ""
 
@@ -325,8 +349,9 @@ class BrowserManager:
         current_handle = ""
         try:
             current_handle = self.driver.current_window_handle
-        except Exception:
-            pass  # 현재 핸들 확인 실패 무시
+        except Exception as e:
+            logger.debug(f"현재 윈도우 핸들 확인 실패 (무시): {e}")
+            pass
             
         for handle in self.driver.window_handles:
             try:
@@ -346,8 +371,9 @@ class BrowserManager:
         if current_handle:
             try:
                 self.driver.switch_to.window(current_handle)
-            except Exception:
+            except Exception as e:
                 # 원래 윈도우가 닫혔으면 마지막으로
+                logger.debug(f"원래 윈도우 복귀 실패: {e}")
                 if self.driver.window_handles:
                     self.driver.switch_to.window(self.driver.window_handles[-1])
                     
@@ -384,7 +410,7 @@ class BrowserManager:
         # 다시 메인으로 복귀
         self.driver.switch_to.default_content()
 
-    def _inject_to_frames(self, depth=0, max_depth=5, path=""):
+    def _inject_to_frames(self, depth=0, max_depth=5):
         if depth > max_depth:
             return
 
@@ -404,7 +430,7 @@ class BrowserManager:
                     pass # 보안 제한 등으로 실패할 수 있음
                 
                 # 재귀 탐색
-                self._inject_to_frames(depth + 1, max_depth, path)
+                self._inject_to_frames(depth + 1, max_depth)
                 
                 # 부모로 복귀
                 self.driver.switch_to.parent_frame()
@@ -576,3 +602,179 @@ class BrowserManager:
                 return {"found": True, "msg": "요소 찾음 (상세 정보 읽기 실패)"}
         
         return {"found": False, "msg": "요소를 찾을 수 없음"}
+
+    # =========================================================================
+    # v4.0 신규: 스크린샷, 요소 카운트, 상세 정보
+    # =========================================================================
+    
+    def count_elements(self, xpath: str, frame_path: str = None) -> int:
+        """
+        XPath에 매칭되는 모든 요소 개수 반환 (실시간 미리보기용)
+        
+        Args:
+            xpath: 검색할 XPath
+            frame_path: 프레임 경로 (None이면 현재 프레임)
+        
+        Returns:
+            매칭 요소 개수 (오류 시 -1)
+        """
+        if not self.is_alive():
+            return -1
+        
+        try:
+            if frame_path:
+                self.switch_to_frame_by_path(frame_path)
+            
+            elements = self.driver.find_elements(By.XPATH, xpath)
+            return len(elements)
+        except Exception as e:
+            logger.debug(f"요소 카운트 실패: {e}")
+            return -1
+    
+    def get_element_info(self, xpath: str, frame_path: str = None) -> Optional[Dict]:
+        """
+        요소의 상세 정보 반환 (Diff 분석용)
+        
+        Args:
+            xpath: 요소 XPath
+            frame_path: 프레임 경로
+        
+        Returns:
+            {
+                'found': bool,
+                'tag': str,
+                'id': str,
+                'name': str,
+                'class': str,
+                'text': str,
+                'attributes': dict,
+                'count': int,
+                'parent_tag': str,
+                'parent_id': str,
+                'parent_class': str,
+                'index': int
+            }
+        """
+        if not self.is_alive():
+            return {'found': False, 'msg': '브라우저 연결 안됨'}
+        
+        try:
+            # 프레임 전환
+            if frame_path:
+                if not self.switch_to_frame_by_path(frame_path):
+                    return {'found': False, 'msg': f'프레임 전환 실패: {frame_path}'}
+            
+            # 요소 찾기
+            try:
+                element = self.driver.find_element(By.XPATH, xpath)
+            except NoSuchElementException:
+                return {'found': False, 'msg': '요소를 찾을 수 없음'}
+            
+            # 요소 정보 수집
+            info = {
+                'found': True,
+                'tag': element.tag_name.lower(),
+                'id': element.get_attribute('id') or '',
+                'name': element.get_attribute('name') or '',
+                'class': element.get_attribute('class') or '',
+                'text': (element.text[:100] if element.text else ''),
+                'count': len(self.driver.find_elements(By.XPATH, xpath))
+            }
+            
+            # 모든 속성 수집
+            try:
+                attrs_script = """
+                var el = arguments[0];
+                var attrs = {};
+                for (var i = 0; i < el.attributes.length; i++) {
+                    var attr = el.attributes[i];
+                    attrs[attr.name] = attr.value;
+                }
+                return attrs;
+                """
+                info['attributes'] = self.driver.execute_script(attrs_script, element)
+            except Exception:
+                info['attributes'] = {}
+            
+            # 부모 정보
+            try:
+                parent_script = """
+                var el = arguments[0].parentElement;
+                if (!el) return null;
+                return {
+                    tag: el.tagName.toLowerCase(),
+                    id: el.id || '',
+                    class: el.className || ''
+                };
+                """
+                parent_info = self.driver.execute_script(parent_script, element)
+                if parent_info:
+                    info['parent_tag'] = parent_info.get('tag', '')
+                    info['parent_id'] = parent_info.get('id', '')
+                    info['parent_class'] = parent_info.get('class', '')
+            except Exception:
+                info['parent_tag'] = ''
+                info['parent_id'] = ''
+                info['parent_class'] = ''
+            
+            # 형제 중 인덱스
+            try:
+                index_script = """
+                var el = arguments[0];
+                var siblings = el.parentElement.children;
+                for (var i = 0; i < siblings.length; i++) {
+                    if (siblings[i] === el) return i + 1;
+                }
+                return 0;
+                """
+                info['index'] = self.driver.execute_script(index_script, element)
+            except Exception:
+                info['index'] = 0
+            
+            return info
+            
+        except Exception as e:
+            logger.error(f"요소 정보 조회 실패: {e}")
+            return {'found': False, 'msg': str(e)}
+    
+    def screenshot_element(self, xpath: str, save_path: str, frame_path: str = None) -> bool:
+        """
+        요소 스크린샷 저장
+        
+        Args:
+            xpath: 요소 XPath
+            save_path: 저장할 경로 (.png)
+            frame_path: 프레임 경로
+        
+        Returns:
+            성공 여부
+        """
+        if not self.is_alive():
+            return False
+        
+        try:
+            # 프레임 전환
+            if frame_path:
+                if not self.switch_to_frame_by_path(frame_path):
+                    return False
+            
+            # 요소 찾기
+            try:
+                element = self.driver.find_element(By.XPATH, xpath)
+            except NoSuchElementException:
+                logger.error(f"스크린샷 대상 요소 없음: {xpath}")
+                return False
+            
+            # 스크롤하여 요소 표시
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+            import time
+            time.sleep(0.3)  # 스크롤 완료 대기
+            
+            # 스크린샷 저장
+            element.screenshot(save_path)
+            logger.info(f"요소 스크린샷 저장: {save_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"스크린샷 저장 실패: {e}")
+            return False

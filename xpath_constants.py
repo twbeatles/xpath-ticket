@@ -452,6 +452,10 @@ DEFAULT_WINDOW_SIZE = (1400, 900)
 MAX_FRAME_DEPTH = 5            # 프레임 재귀 탐색 최대 깊이
 WORKER_WAIT_TIMEOUT = 2000     # ms - 워커 종료 대기 시간
 
+# 통계 및 히스토리 설정
+HISTORY_MAX_SIZE = 50          # Undo/Redo 최대 저장 개수
+STATISTICS_SAVE_INTERVAL = 5.0 # 통계 저장 간격 (초)
+
 # 실제 브라우저 User-Agent 목록
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
