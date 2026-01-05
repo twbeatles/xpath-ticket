@@ -86,7 +86,7 @@ class XPathAIAssistant:
             self._model = model
         else:
             # 기본 모델 설정
-            self._model = "gpt-4o-mini" if provider == "openai" else "gemini-1.5-flash"
+            self._model = "gpt-4o-mini" if provider == "openai" else "gemini-flash-latest"
             
         self._client = None  # 재초기화
         

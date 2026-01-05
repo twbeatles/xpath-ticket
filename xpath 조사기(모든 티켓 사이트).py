@@ -2595,7 +2595,7 @@ class XPathExplorer(QMainWindow):
         layout.addWidget(input_model)
         
         # 힌트
-        lbl_hint = QLabel("OpenAI: gpt-4o-mini, gpt-4o\nGemini: gemini-1.5-flash, gemini-1.5-pro")
+        lbl_hint = QLabel("OpenAI: gpt-4o-mini, gpt-4o\nGemini: gemini-flash-latest, gemini-pro")
         lbl_hint.setStyleSheet("color: #7f849c; font-size: 11px;")
         layout.addWidget(lbl_hint)
         
@@ -2607,7 +2607,7 @@ class XPathExplorer(QMainWindow):
                 input_model.setText("gpt-4o-mini")
             else:
                 input_key.setText(self.ai_assistant._config.get('gemini_api_key', ''))
-                input_model.setText("gemini-1.5-flash")
+                input_model.setText("gemini-flash-latest")
                 
         combo_provider.currentTextChanged.connect(on_provider_change)
         
