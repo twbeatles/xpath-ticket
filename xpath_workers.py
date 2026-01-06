@@ -85,8 +85,8 @@ class ValidateWorker(QThread):
         original_window = ""
         try:
             original_window = self.browser.driver.current_window_handle
-        except:
-            pass
+        except Exception:
+            pass  # 윈도우 핸들 가져오기 실패 시 무시
             
         total = len(self.items)
         found_total = 0

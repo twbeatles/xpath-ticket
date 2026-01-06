@@ -31,19 +31,21 @@ class XPathAIAssistant:
         """
         self._client = None
         self._provider = "openai"  # "openai" or "gemini"
-        self._model = "gpt-4o-mini"
-        
-        # 설정 로드 (먼저 실행해야 함)
         self._config = self._load_config()
         
-        # 설정 파일에서 provider/model 복원
+        # API 키 및 모델 설정
+        self._api_key = api_key
+        self._model = "gpt-4o-mini"
+        
+        # 설정 로드 시 이전 설정 확인
         if self._config.get('provider'):
             self._provider = self._config.get('provider')
             self._model = self._config.get('model', self._model)
-        
-        # API 키 설정 (인자 > 설정 파일 > 환경변수 순서)
-        self._api_key = api_key or self._config.get(f'{self._provider}_api_key')
-
+            if not self._api_key:
+                self._api_key = self._config.get(f'{self._provider}_api_key')
+        else:
+            if not self._api_key:
+                 self._api_key = self._config.get(f'{self._provider}_api_key')
         
     def _load_config(self) -> Dict:
         """설정 로드"""
@@ -70,8 +72,6 @@ class XPathAIAssistant:
 
     def _load_api_key(self) -> Optional[str]:
         """Deprecated: Use _load_config instead"""
-        if not hasattr(self, '_config') or not hasattr(self, '_provider'):
-            return None
         return self._config.get(f'{self._provider}_api_key')
     
     def configure(self, api_key: str, model: str = None, provider: str = "openai"):

@@ -229,13 +229,14 @@ QPushButton#icon_btn {
     background-color: transparent;
     border: none;
     padding: 8px;
-    border-radius: 6px;
+    border-radius: 8px;
 }
 QPushButton#icon_btn:hover {
-    background-color: rgba(69, 71, 90, 0.7);
+    background-color: rgba(137, 180, 250, 0.25);
+    border: 1px solid rgba(137, 180, 250, 0.4);
 }
 QPushButton#icon_btn:pressed {
-    background-color: rgba(49, 50, 68, 0.9);
+    background-color: rgba(137, 180, 250, 0.35);
 }
 
 /* ============================================
@@ -316,12 +317,13 @@ QTableWidget::item {
 }
 
 QTableWidget::item:selected {
-    background-color: rgba(137, 180, 250, 0.35);
+    background-color: rgba(137, 180, 250, 0.45);
     color: #ffffff;
+    border-left: 3px solid #89b4fa;
 }
 
 QTableWidget::item:hover {
-    background-color: rgba(69, 71, 90, 0.4);
+    background-color: rgba(88, 91, 112, 0.5);
 }
 
 QHeaderView::section {
@@ -483,6 +485,7 @@ QLabel#status_connected {
     color: #a6e3a1;
     font-weight: bold;
     font-size: 13px;
+    text-shadow: 0 0 8px rgba(166, 227, 161, 0.6);
 }
 
 QLabel#status_disconnected {

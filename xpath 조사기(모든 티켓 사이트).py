@@ -516,6 +516,16 @@ class XPathExplorer(QMainWindow):
         self.input_search.textChanged.connect(self._on_search_text_changed)
         search_layout.addWidget(self.input_search)
         
+        # 검색 초기화 버튼
+        self.btn_clear_search = QPushButton("✕")
+        self.btn_clear_search.setObjectName("icon_btn")
+        self.btn_clear_search.setFixedSize(28, 28)
+        self.btn_clear_search.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear_search.setToolTip("검색어 초기화")
+        self.btn_clear_search.clicked.connect(lambda: self.input_search.clear())
+        self.btn_clear_search.setVisible(False)  # 기본 숨김
+        search_layout.addWidget(self.btn_clear_search)
+        
         search_group.setLayout(search_layout)
         list_layout.addWidget(search_group)
         
@@ -918,8 +928,17 @@ class XPathExplorer(QMainWindow):
     # =========================================================================
 
     def _check_browser(self):
-        """브라우저 연결 상태 주기적 확인"""
-        if self.browser.is_alive():
+        """브라우저 연결 상태 주기적 확인 (최적화됨)"""
+        is_alive = self.browser.is_alive()
+        current_state = getattr(self, '_last_browser_state', None)
+        
+        # 상태 변경 시에만 UI 업데이트
+        if current_state == is_alive:
+            return
+            
+        self._last_browser_state = is_alive
+        
+        if is_alive:
             self.lbl_status.setText(f"● 연결됨 ({self.config.name})")
             self.lbl_status.setObjectName("status_connected")
             self.btn_open.setText("브라우저 닫기")
@@ -1180,11 +1199,19 @@ class XPathExplorer(QMainWindow):
             self.table.setCellWidget(row, 6, btn_del)
 
         self.lbl_summary.setText(f"총 {len(self.config.items)}개 (필터됨: {len(items_to_show)}개) | ✅ {verified_count}")
+        
+        # 빈 상태 메시지 표시
+        if len(items_to_show) == 0 and len(self.config.items) > 0:
+            self.lbl_summary.setText(f"검색 결과 없음 (전체: {len(self.config.items)}개)")
+        elif len(self.config.items) == 0:
+            self.lbl_summary.setText("항목이 없습니다. '+ 새 항목' 버튼을 클릭하여 추가하세요.")
 
     def _on_search_text_changed(self, text):
         """[BUG-003] 검색어 변경 시 타이머 시작 (Debounce)"""
         self._search_text = text.strip()
         self._search_timer.start()
+        # X 버튼 표시/숨김
+        self.btn_clear_search.setVisible(bool(text.strip()))
         
     def _perform_search(self):
         """Debounce 후 실제 검색"""
@@ -1344,43 +1371,58 @@ class XPathExplorer(QMainWindow):
         QApplication.processEvents()
         
         # 테스트 전 현재 선택된 프레임이 있다면 반영
-        # (드롭다운에서 선택한 프레임 경로 사용)
         selected_frame_idx = self.combo_frames.currentIndex()
+        target_frame = None
         if selected_frame_idx > 0:
             target_frame = self.combo_frames.itemData(selected_frame_idx)
             self.browser.switch_to_frame_by_path(target_frame)
-            
-        result = self.browser.validate_xpath(xpath)
         
-        if result['found']:
-            msg = f"✅ 발견! (Count: {result.get('count', 1)})"
-            detail = f"Tag: {result.get('tag')}\nText: {result.get('text')}\nFrame: {result.get('frame_path')}"
-            self.txt_result.setPlainText(msg + "\n" + detail)
-            self._show_toast("요소를 찾았습니다!", "success")
+        try:
+            result = self.browser.validate_xpath(xpath)
             
-            # 하이라이트
-            if result.get('frame_path'):
-                self.browser.highlight(xpath, frame_path=result['frame_path'])
-            else:
-                self.browser.highlight(xpath)
+            if result['found']:
+                msg = f"✅ 발견! (Count: {result.get('count', 1)})"
+                detail = f"Tag: {result.get('tag')}\nText: {result.get('text')}\nFrame: {result.get('frame_path')}"
+                self.txt_result.setPlainText(msg + "\n" + detail)
+                self._show_toast("요소를 찾았습니다!", "success")
                 
-            # 검증 성공 상태 업데이트 (저장된 항목인 경우)
-            name = self.input_name.text().strip()
-            item = self.config.get_item(name)
-            if item and item.xpath == xpath:
-                item.is_verified = True
-                item.element_tag = result.get('tag', '')
-                item.found_frame = result.get('frame_path', '')
-                self._refresh_table()
-        else:
-            self.txt_result.setPlainText(f"❌ 실패\n{result.get('msg')}")
-            self._show_toast("요소를 찾을 수 없습니다.", "error")
+                # 하이라이트
+                if result.get('frame_path'):
+                    self.browser.highlight(xpath, frame_path=result['frame_path'])
+                else:
+                    self.browser.highlight(xpath)
+                    
+                # 검증 성공 상태 업데이트 (저장된 항목인 경우)
+                name = self.input_name.text().strip()
+                item = self.config.get_item(name)
+                if item and item.xpath == xpath:
+                    item.is_verified = True
+                    item.element_tag = result.get('tag', '')
+                    item.found_frame = result.get('frame_path', '')
+                    item.record_test(True)  # 통계 기록
+                    self._refresh_table()
+            else:
+                self.txt_result.setPlainText(f"❌ 실패\n{result.get('msg')}")
+                self._show_toast("요소를 찾을 수 없습니다.", "error")
+                # 실패 통계 기록
+                name = self.input_name.text().strip()
+                item = self.config.get_item(name)
+                if item and item.xpath == xpath:
+                    item.record_test(False)
+        finally:
+            # 프레임 복구
+            if target_frame:
+                self.browser.switch_to_frame_by_path("main")
 
     def _highlight_xpath(self):
         """현재 XPath 하이라이트"""
         xpath = self.input_xpath.toPlainText().strip()
-        if xpath:
-            self.browser.highlight(xpath)
+        if not xpath:
+            return
+        if not self.browser.is_alive():
+            self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
+            return
+        self.browser.highlight(xpath)
 
     def _start_picker(self):
         """요소 선택기 시작"""
@@ -1401,7 +1443,10 @@ class XPathExplorer(QMainWindow):
     def _on_picked(self, result):
         """요소 선택 완료"""
         self.show()
-        self.picker_watcher.stop()
+        if self.picker_watcher:
+            self.picker_watcher.stop()
+            self.picker_watcher.wait(1000)
+            self.picker_watcher = None
         
         if not result or not isinstance(result, dict):
             return
@@ -1437,6 +1482,8 @@ class XPathExplorer(QMainWindow):
         self.show()
         if self.picker_watcher:
             self.picker_watcher.stop()
+            self.picker_watcher.wait(1000)  # 스레드 완료 대기
+            self.picker_watcher = None
         self._show_toast("요소 선택이 취소되었습니다.", "warning")
 
     def _validate_all(self):
@@ -1466,6 +1513,7 @@ class XPathExplorer(QMainWindow):
         item = self.config.get_item(name)
         if item:
             item.is_verified = result['found']
+            item.record_test(result['found'])  # 통계 기록
             if result['found']:
                 item.element_tag = result.get('tag', '')
                 item.found_frame = result.get('frame_path', '')
@@ -1753,7 +1801,8 @@ class XPathExplorer(QMainWindow):
                 for cookie in cookies:
                     try:
                         self.browser.driver.add_cookie(cookie)
-                    except: pass
+                    except Exception:
+                        pass  # 개별 쿠키 추가 실패 시 무시
                 self._show_toast(f"쿠키 {len(cookies)}개 로드됨", "success")
                 self.browser.driver.refresh()
             except Exception as e:
@@ -2611,8 +2660,11 @@ class XPathExplorer(QMainWindow):
                 
         combo_provider.currentTextChanged.connect(on_provider_change)
         
-        # 저장 버튼
+        # 버튼 레이아웃
+        btn_layout = QHBoxLayout()
+        
         btn_save = QPushButton("저장")
+        btn_save.setObjectName("success")
         def save():
             provider = combo_provider.currentText()
             key = input_key.text().strip()
@@ -2626,11 +2678,14 @@ class XPathExplorer(QMainWindow):
             self._show_toast(f"{provider} 설정이 저장되었습니다.", "success")
             dialog.accept()
             
-            # 부모 다이얼로그 갱신 (꼼수: 닫았다 다시 열기보다 상태 텍스트 갱신이 좋음)
-            # 여기서는 간단히 안내만
-            
         btn_save.clicked.connect(save)
-        layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_save)
+        
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        btn_layout.addWidget(btn_close)
+        
+        layout.addLayout(btn_layout)
         
         dialog.exec()
 
@@ -2779,8 +2834,8 @@ class XPathExplorer(QMainWindow):
         if self.pw_manager:
             try:
                 self.pw_manager.close()
-            except:
-                pass
+            except Exception:
+                pass  # Playwright 종료 실패 시 무시
             
         # 통계 저장
         if hasattr(self, 'stats_manager'):

@@ -165,8 +165,6 @@ class BrowserManager:
             # 오류 발생 시 캐시 초기화
             self.frame_cache = []
             self.frame_cache_time = 0
-        except Exception as e:
-            logger.error(f"프레임 스캔 중 오류: {e}")
         finally:
             # 복구
             try:
