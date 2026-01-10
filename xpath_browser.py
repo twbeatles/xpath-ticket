@@ -91,6 +91,12 @@ class BrowserManager:
                 logger.debug(f"드라이버 종료 중 오류 (무시됨): {e}")
                 pass
             self.driver = None
+    
+    def _invalidate_frame_cache(self):
+        """프레임 캐시 무효화"""
+        self.frame_cache = []
+        self.frame_cache_time = 0
+        self.current_frame_path = ""
             
     def is_alive(self) -> bool:
         """연결 상태 확인 - 현재 윈도우가 닫혀도 다른 윈도우로 자동 전환"""
@@ -101,7 +107,11 @@ class BrowserManager:
             _ = self.driver.current_window_handle
             return True
         except NoSuchWindowException:
-            logger.warning("현재 윈도우가 가 닫혔습니다. 다른 윈도우로 전환을 시도합니다.")
+            logger.warning("현재 윈도우가 닫혀습니다. 다른 윈도우로 전환을 시도합니다.")
+            return self._recover_to_available_window()
+        except WebDriverException as e:
+            # 브라우저 연결 끊김, 세션 종료 등
+            logger.warning(f"WebDriver 연결 문제: {e}")
             return self._recover_to_available_window()
         except Exception as e:
             logger.error(f"브라우저 연결 확인 실패: {e}")
@@ -132,6 +142,7 @@ class BrowserManager:
         if self.is_alive():
             try:
                 self.driver.get(url)
+                self._invalidate_frame_cache()  # 네비게이션 시 캐시 무효화
             except Exception as e:
                 logger.error(f"이동 실패: {e}")
 
@@ -170,9 +181,13 @@ class BrowserManager:
             try:
                 self.driver.switch_to.window(original_handle)
                 self.driver.switch_to.default_content()
+                self.current_frame_path = ""  # 프레임 경로 초기화
             except Exception as e:
                 logger.debug(f"프레임 복구 중 오류: {e}")
-                pass
+                # 복구 실패 시 캐시 무효화 및 프레임 경로 초기화
+                self.frame_cache = []
+                self.frame_cache_time = 0
+                self.current_frame_path = ""
                 
         return frames_list
 
@@ -585,9 +600,13 @@ class BrowserManager:
         if element:
             try:
                 tag = element.tag_name
-                text = element.text[:50]
-                count = 1 # find_element는 하나만 찾으므로
-                # count = len(self.driver.find_elements(By.XPATH, xpath)) # 정확한 count를 위해선 동일 프레임에서 재검색 필요
+                text = element.text[:50] if element.text else ""
+                
+                # 정확한 count를 위해 동일 프레임에서 find_elements로 재검색
+                try:
+                    count = len(self.driver.find_elements(By.XPATH, xpath))
+                except Exception:
+                    count = 1  # count 조회 실패 시 기본값
                 
                 return {
                     "found": True,

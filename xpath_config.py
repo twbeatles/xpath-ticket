@@ -49,7 +49,6 @@ class XPathItem:
         self.test_count += 1
         if success:
             self.success_count += 1
-        from datetime import datetime
         self.last_tested = datetime.now().isoformat()
 
 

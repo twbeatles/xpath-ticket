@@ -102,7 +102,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='XPathExplorer_v4.1',
+    name='XPathExplorer_v4.2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

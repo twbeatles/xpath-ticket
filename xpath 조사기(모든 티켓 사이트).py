@@ -36,7 +36,7 @@ from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySe
 from xpath_constants import APP_TITLE, APP_VERSION, SITE_PRESETS
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
-from xpath_widgets import ToastWidget, NoWheelComboBox
+from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton
 from xpath_browser import BrowserManager
 from xpath_workers import PickerWatcher, ValidateWorker
 
@@ -353,19 +353,25 @@ class XPathExplorer(QMainWindow):
         help_menu.addAction(about_action)
 
     def _create_browser_panel(self):
-        """브라우저 컨트롤 패널 - v3.6: 1행 컴팩트 레이아웃"""
+        """브라우저 컨트롤 패널 - v3.6: 개선된 레이아웃"""
         self.browser_layout = QHBoxLayout()
-        self.browser_layout.setSpacing(8)
+        self.browser_layout.setSpacing(10)
         
-        # 브라우저 열기/상태 - 아이콘 + 짧은 텍스트
-        self.btn_open = QPushButton("🌐 열기")
+        # 애니메이션 상태 인디케이터
+        self.status_indicator = AnimatedStatusIndicator()
+        self.browser_layout.addWidget(self.status_indicator)
+        
+        # 브라우저 열기/닫기 버튼
+        self.btn_open = QPushButton("🌐 브라우저 열기")
         self.btn_open.setObjectName("primary")
         self.btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_open.setToolTip("크롬 브라우저를 실행합니다.")
+        self.btn_open.setMinimumWidth(120)
         self.browser_layout.addWidget(self.btn_open)
         self.btn_open.clicked.connect(self._toggle_browser)
         
-        self.lbl_status = QLabel("● 끊김")
+        # 상태 텍스트 라벨
+        self.lbl_status = QLabel("연결 안됨")
         self.lbl_status.setObjectName("status_disconnected")
         self.lbl_status.setToolTip("브라우저 연결 상태")
         self.browser_layout.addWidget(self.lbl_status)
@@ -373,7 +379,7 @@ class XPathExplorer(QMainWindow):
         # 구분선
         sep1 = QFrame()
         sep1.setFrameShape(QFrame.Shape.VLine)
-        sep1.setStyleSheet("color: #45475a;")
+        sep1.setStyleSheet("color: rgba(69, 71, 90, 0.5); max-width: 1px;")
         self.browser_layout.addWidget(sep1)
         
         # 사이트 프리셋
@@ -928,7 +934,7 @@ class XPathExplorer(QMainWindow):
     # =========================================================================
 
     def _check_browser(self):
-        """브라우저 연결 상태 주기적 확인 (최적화됨)"""
+        """브라우저 연결 상태 주기적 확인 (v3.6: AnimatedStatusIndicator 사용)"""
         is_alive = self.browser.is_alive()
         current_state = getattr(self, '_last_browser_state', None)
         
@@ -938,19 +944,22 @@ class XPathExplorer(QMainWindow):
             
         self._last_browser_state = is_alive
         
+        # AnimatedStatusIndicator 업데이트
+        self.status_indicator.set_connected(is_alive)
+        
         if is_alive:
-            self.lbl_status.setText(f"● 연결됨 ({self.config.name})")
+            self.lbl_status.setText(f"{self.config.name}")
             self.lbl_status.setObjectName("status_connected")
-            self.btn_open.setText("브라우저 닫기")
+            self.btn_open.setText("🔴 브라우저 닫기")
             self.btn_open.setObjectName("danger")
             
             # 윈도우 목록이 비어있으면 갱신 (최초 연결 시)
             if self.combo_windows.count() == 0:
                 self._refresh_windows()
         else:
-            self.lbl_status.setText("● 연결 끊김")
+            self.lbl_status.setText("연결 안됨")
             self.lbl_status.setObjectName("status_disconnected")
-            self.btn_open.setText("브라우저 열기")
+            self.btn_open.setText("🌐 브라우저 열기")
             self.btn_open.setObjectName("primary")
             self.combo_windows.clear()
             self.combo_frames.clear()
@@ -2820,15 +2829,24 @@ class XPathExplorer(QMainWindow):
 
     def closeEvent(self, event):
         """종료 처리"""
-        self.settings.setValue("geometry", self.saveGeometry())
+        logger.info("앱 종료 시작...")
         
-        if self.picker_watcher:
+        # 설정 저장
+        self.settings.setValue("geometry", self.saveGeometry())
+        self._save_settings()  # 추가 설정 저장
+        
+        # 워커 스레드 정리 (대기 시간 증가)
+        if self.picker_watcher and self.picker_watcher.isRunning():
+            logger.debug("PickerWatcher 종료 대기 중...")
             self.picker_watcher.stop()
-            self.picker_watcher.wait(1000)
+            if not self.picker_watcher.wait(2000):  # 2초 대기
+                logger.warning("PickerWatcher 강제 종료")
             
-        if self.validate_worker:
+        if self.validate_worker and self.validate_worker.isRunning():
+            logger.debug("ValidateWorker 종료 대기 중...")
             self.validate_worker.cancel()
-            self.validate_worker.wait(1000)
+            if not self.validate_worker.wait(2000):  # 2초 대기
+                logger.warning("ValidateWorker 강제 종료")
         
         # v3.4: Playwright 종료
         if self.pw_manager:
@@ -2842,6 +2860,7 @@ class XPathExplorer(QMainWindow):
             self.stats_manager.save()
             
         self.browser.close()
+        logger.info("앱 종료 완료")
         event.accept()
 
 def main():

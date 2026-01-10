@@ -191,13 +191,21 @@ class HistoryManager:
             self._redo_stack.clear()
     
     def _items_to_dicts(self, items: List[Any]) -> List[Dict]:
-        """XPathItem 객체 리스트를 딕셔너리 리스트로 변환"""
+        """XPathItem 객체 리스트를 딕셔너리 리스트로 변환 (메모리 최적화)"""
+        # 메모리 절약을 위해 대용량 필드 제외
+        EXCLUDE_FIELDS = {'alternatives', 'element_attributes', 'screenshot_path'}
+        
         result = []
         for item in items:
             if hasattr(item, 'to_dict'):
-                result.append(item.to_dict())
+                item_dict = item.to_dict()
+                # 대용량 필드 제외
+                optimized = {k: v for k, v in item_dict.items() if k not in EXCLUDE_FIELDS}
+                result.append(optimized)
             elif hasattr(item, '__dict__'):
-                result.append(dict(item.__dict__))
+                item_dict = dict(item.__dict__)
+                optimized = {k: v for k, v in item_dict.items() if k not in EXCLUDE_FIELDS}
+                result.append(optimized)
             else:
                 result.append(dict(item))
         return result

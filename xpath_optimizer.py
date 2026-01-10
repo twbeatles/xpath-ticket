@@ -35,6 +35,27 @@ class XPathOptimizer:
             "index": 30,    # 인덱스 기반 - 가장 취약
         }
     
+    def _escape_xpath_text(self, text: str) -> str:
+        """
+        XPath 문자열에서 따옴표 이스케이프
+        
+        두 종류의 따옴표가 모두 포함된 경우 concat 함수 사용
+        """
+        if not text:
+            return '""'
+        
+        if '"' in text and "'" in text:
+            # 둘 다 있으면 concat 사용
+            parts = text.split('"')
+            escaped_parts = [f'"{p}"' if p else '' for p in parts]
+            return 'concat(' + ', \'"\', '.join(filter(None, escaped_parts)) + ')'
+        elif '"' in text:
+            # 큰따옴표만 있으면 작은따옴표로 감죄
+            return f"'{text}'"
+        else:
+            # 기본: 큰따옴표로 감죄
+            return f'"{text}"'
+    
     def generate_alternatives(self, element_info: Dict) -> List[XPathAlternative]:
         """
         요소 정보를 바탕으로 여러 XPath 대안 생성
@@ -130,11 +151,12 @@ class XPathOptimizer:
         # 5. 텍스트 기반
         if elem_text and len(elem_text.strip()) > 0:
             text = elem_text.strip()
+            escaped_text = self._escape_xpath_text(text)
             
             # 정확한 텍스트 일치 (짧은 경우)
             if len(text) <= 30:
                 alternatives.append(XPathAlternative(
-                    xpath=f'//{tag}[text()="{text}"]',
+                    xpath=f'//{tag}[text()={escaped_text}]',
                     strategy="text",
                     robustness_score=self.strategy_weights["text"],
                     description="정확한 텍스트 일치"
@@ -142,8 +164,9 @@ class XPathOptimizer:
             
             # 텍스트 포함 (긴 경우)
             short_text = text[:20] if len(text) > 20 else text
+            short_escaped = self._escape_xpath_text(short_text)
             alternatives.append(XPathAlternative(
-                xpath=f'//{tag}[contains(text(), "{short_text}")]',
+                xpath=f'//{tag}[contains(text(), {short_escaped})]',
                 strategy="text",
                 robustness_score=self.strategy_weights["text"] - 5,
                 description=f"텍스트 포함: {short_text}..."
@@ -151,7 +174,7 @@ class XPathOptimizer:
             
             # normalize-space 사용
             alternatives.append(XPathAlternative(
-                xpath=f'//{tag}[normalize-space()="{text}"]',
+                xpath=f'//{tag}[normalize-space()={escaped_text}]',
                 strategy="text",
                 robustness_score=self.strategy_weights["text"] - 3,
                 description="정규화된 텍스트 일치"

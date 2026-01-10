@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-XPath Explorer Stylesheet (Modern Dark Theme v3.3)
-- Glassmorphism effects
-- Gradient buttons
-- Enhanced hover/focus states
-- Refined shadows and transitions
+XPath Explorer Stylesheet (Modern Dark Theme v3.6)
+- Glassmorphism effects with enhanced depth
+- Gradient buttons with animation
+- Enhanced hover/focus states with smooth transitions
+- Refined shadows and micro-interactions
+- Improved accessibility contrast
 """
 
 STYLE = """
@@ -303,42 +304,59 @@ QComboBox QAbstractItemView::item:hover {
    Table Widget - Enhanced Rows
    ============================================ */
 QTableWidget {
-    background-color: rgba(30, 30, 46, 0.8);
-    alternate-background-color: rgba(37, 37, 56, 0.6);
-    gridline-color: rgba(49, 50, 68, 0.5);
-    border: 1px solid #45475a;
-    border-radius: 10px;
-    selection-background-color: rgba(137, 180, 250, 0.4);
+    background-color: rgba(30, 30, 46, 0.85);
+    alternate-background-color: rgba(37, 37, 56, 0.65);
+    gridline-color: rgba(49, 50, 68, 0.4);
+    border: 1px solid rgba(69, 71, 90, 0.6);
+    border-radius: 12px;
+    selection-background-color: rgba(137, 180, 250, 0.35);
+    outline: none;
 }
 
 QTableWidget::item {
-    padding: 10px 8px;
-    border-bottom: 1px solid rgba(49, 50, 68, 0.4);
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(49, 50, 68, 0.3);
+    border-radius: 0;
 }
 
 QTableWidget::item:selected {
-    background-color: rgba(137, 180, 250, 0.45);
+    background-color: rgba(137, 180, 250, 0.5);
     color: #ffffff;
-    border-left: 3px solid #89b4fa;
+    border-left: 4px solid #89b4fa;
 }
 
-QTableWidget::item:hover {
-    background-color: rgba(88, 91, 112, 0.5);
+QTableWidget::item:hover:!selected {
+    background-color: rgba(69, 71, 90, 0.6);
+}
+
+QTableWidget::item:focus {
+    outline: none;
+    border: none;
 }
 
 QHeaderView::section {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #252538, stop:1 #1e1e2e);
-    padding: 12px 10px;
+                stop:0 rgba(37, 37, 56, 0.95), stop:1 rgba(30, 30, 46, 0.95));
+    padding: 14px 12px;
     border: none;
     border-bottom: 2px solid #89b4fa;
     color: #cdd6f4;
     font-weight: bold;
     font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+QHeaderView::section:first {
+    border-top-left-radius: 10px;
+}
+
+QHeaderView::section:last {
+    border-top-right-radius: 10px;
 }
 
 QHeaderView::section:hover {
-    background: #313244;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #313244, stop:1 #252538);
 }
 
 /* ============================================
@@ -455,13 +473,13 @@ QLabel#title {
 }
 
 /* ============================================
-   Search Input - Enhanced Style
+   Search Input - Premium Style
    ============================================ */
 QLineEdit#search_input {
-    background-color: rgba(49, 50, 68, 0.9);
-    border: 2px solid #45475a;
-    border-radius: 10px;
-    padding: 10px 16px;
+    background-color: rgba(37, 37, 56, 0.95);
+    border: 2px solid rgba(69, 71, 90, 0.7);
+    border-radius: 12px;
+    padding: 12px 18px 12px 40px;
     color: #cdd6f4;
     font-size: 14px;
 }
@@ -471,8 +489,9 @@ QLineEdit#search_input:focus {
     background-color: rgba(49, 50, 68, 1);
 }
 
-QLineEdit#search_input:hover {
-    border: 2px solid #585b70;
+QLineEdit#search_input:hover:!focus {
+    border: 2px solid rgba(137, 180, 250, 0.5);
+    background-color: rgba(37, 37, 56, 1);
 }
 
 QLabel#subtitle {
@@ -644,4 +663,182 @@ QSpinBox::up-button, QSpinBox::down-button {
     border: none;
     width: 20px;
 }
+
+/* ============================================
+   Status Indicator - Animated Pulse
+   ============================================ */
+QLabel#status_connected {
+    color: #a6e3a1;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 4px 12px;
+    background: rgba(166, 227, 161, 0.15);
+    border-radius: 16px;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+QLabel#status_disconnected {
+    color: #f38ba8;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 4px 12px;
+    background: rgba(243, 139, 168, 0.15);
+    border-radius: 16px;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+/* ============================================
+   Modern Card - Glassmorphism
+   ============================================ */
+QFrame#card {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(49, 50, 68, 0.9), stop:1 rgba(37, 37, 56, 0.85));
+    border: 1px solid rgba(69, 71, 90, 0.6);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+QFrame#card:hover {
+    border: 1px solid rgba(137, 180, 250, 0.5);
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(49, 50, 68, 0.95), stop:1 rgba(37, 37, 56, 0.9));
+}
+
+/* ============================================
+   Empty State - Centered Message
+   ============================================ */
+QLabel#empty_state {
+    color: #7f849c;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 40px;
+    qproperty-alignment: 'AlignCenter';
+}
+
+QLabel#empty_state_icon {
+    font-size: 48px;
+    color: #585b70;
+    qproperty-alignment: 'AlignCenter';
+}
+
+/* ============================================
+   Action Button Group
+   ============================================ */
+QPushButton#action_btn {
+    background: transparent;
+    border: 1px solid rgba(69, 71, 90, 0.6);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: #a6adc8;
+    font-weight: 600;
+}
+
+QPushButton#action_btn:hover {
+    background: rgba(137, 180, 250, 0.15);
+    border: 1px solid rgba(137, 180, 250, 0.5);
+    color: #89b4fa;
+}
+
+QPushButton#action_btn:pressed {
+    background: rgba(137, 180, 250, 0.25);
+}
+
+/* ============================================
+   Badge Styles
+   ============================================ */
+QLabel#badge_success {
+    background: rgba(166, 227, 161, 0.2);
+    color: #a6e3a1;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLabel#badge_warning {
+    background: rgba(250, 179, 135, 0.2);
+    color: #fab387;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLabel#badge_error {
+    background: rgba(243, 139, 168, 0.2);
+    color: #f38ba8;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLabel#badge_info {
+    background: rgba(137, 180, 250, 0.2);
+    color: #89b4fa;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+/* ============================================
+   Toolbar - Modern Style
+   ============================================ */
+QToolBar {
+    background: transparent;
+    border: none;
+    spacing: 8px;
+    padding: 4px;
+}
+
+QToolButton {
+    background: rgba(49, 50, 68, 0.7);
+    border: 1px solid rgba(69, 71, 90, 0.5);
+    border-radius: 8px;
+    padding: 8px;
+    color: #cdd6f4;
+}
+
+QToolButton:hover {
+    background: rgba(137, 180, 250, 0.2);
+    border: 1px solid #89b4fa;
+}
+
+QToolButton:pressed {
+    background: rgba(137, 180, 250, 0.35);
+}
+
+/* ============================================
+   Enhanced Dialogs
+   ============================================ */
+QDialog {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #1e1e2e, stop:1 #181825);
+}
+
+QDialog QLabel {
+    color: #cdd6f4;
+}
+
+QDialog QGroupBox {
+    border: 1px solid rgba(69, 71, 90, 0.5);
+    border-radius: 10px;
+    margin-top: 24px;
+    padding: 16px 12px 12px 12px;
+    background: rgba(37, 37, 56, 0.6);
+}
+
+QDialog QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 6px 14px;
+    background: rgba(137, 180, 250, 0.2);
+    border-radius: 8px;
+    color: #89b4fa;
+    font-weight: bold;
+    font-size: 12px;
+    left: 12px;
+}
 """
+

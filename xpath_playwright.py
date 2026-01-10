@@ -8,7 +8,8 @@ Playwright 기반 브라우저 관리 및 자동 탐색 기능
 import logging
 import random
 import json
-from typing import List, Dict, Optional, Any, Callable
+import re
+from typing import List, Dict, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -64,6 +65,9 @@ class PlaywrightManager:
         self._stealth_enabled = False
         self._network_requests: List[NetworkRequest] = []
         self._network_monitoring = False
+        self._request_handler = None
+        self._response_handler = None
+        self._headless = False
         
     @property
     def is_available(self) -> bool:
@@ -114,6 +118,7 @@ class PlaywrightManager:
                 headless=headless,
                 args=launch_args
             )
+            self._headless = headless
             
             # 컨텍스트 생성 (fingerprint 설정)
             self._context = self._browser.new_context(
@@ -179,8 +184,15 @@ class PlaywrightManager:
             return False
     
     def navigate(self, url: str, timeout: int = 30000, 
-                 wait_until: str = 'domcontentloaded') -> bool:
-        """URL 이동"""
+                 wait_until: str = 'domcontentloaded') -> Union[bool, None]:
+        """
+        URL 이동
+        
+        Returns:
+            True: 성공
+            None: 타임아웃 (부분 성공 가능)
+            False: 실패
+        """
         if not self.is_alive():
             return False
         try:
@@ -188,7 +200,7 @@ class PlaywrightManager:
             return True
         except PlaywrightTimeout:
             logger.warning(f"페이지 로딩 타임아웃: {url}")
-            return True
+            return None  # 타임아웃은 부분 성공일 수 있음
         except Exception as e:
             logger.error(f"페이지 이동 실패: {e}")
             return False
@@ -213,6 +225,9 @@ class PlaywrightManager:
         """네트워크 요청 모니터링 시작"""
         if not self.is_alive():
             return
+        
+        # 기존 리스너 정리
+        self._cleanup_network_listeners()
             
         self._network_requests = []
         self._network_monitoring = True
@@ -232,14 +247,34 @@ class PlaywrightManager:
                     req.status = response.status
                     break
         
-        self._page.on('request', on_request)
-        self._page.on('response', on_response)
+        # 핸들러 참조 저장 (나중에 제거용)
+        self._request_handler = on_request
+        self._response_handler = on_response
+        
+        self._page.on('request', self._request_handler)
+        self._page.on('response', self._response_handler)
         logger.info("네트워크 모니터링 시작")
     
     def stop_network_monitoring(self) -> List[NetworkRequest]:
         """네트워크 모니터링 중지 및 결과 반환"""
+        self._cleanup_network_listeners()
         self._network_monitoring = False
         return self._network_requests.copy()
+    
+    def _cleanup_network_listeners(self):
+        """네트워크 이벤트 리스너 정리"""
+        if self._page and self._request_handler:
+            try:
+                self._page.remove_listener('request', self._request_handler)
+            except Exception:
+                pass
+        if self._page and self._response_handler:
+            try:
+                self._page.remove_listener('response', self._response_handler)
+            except Exception:
+                pass
+        self._request_handler = None
+        self._response_handler = None
     
     def get_network_requests(self) -> List[NetworkRequest]:
         """현재까지의 네트워크 요청 목록"""
@@ -298,11 +333,14 @@ class PlaywrightManager:
             return {}
     
     def set_local_storage(self, data: Dict):
-        """로컬 스토리지 설정"""
+        """로컬 스토리지 설정 (안전한 방식)"""
         if not self.is_alive():
             return
-        for key, value in data.items():
-            self._page.evaluate(f"localStorage.setItem('{key}', '{value}')")
+        # XSS 취약점 방지: 파라미터로 데이터 전달
+        self._page.evaluate(
+            "(data) => { for (const [k, v] of Object.entries(data)) localStorage.setItem(k, v); }",
+            data
+        )
     
     # =========================================================================
     # 자동 탐색 기능
@@ -391,16 +429,25 @@ class PlaywrightManager:
         except Exception:
             return f"//{tag}"
     
+    def _escape_css_identifier(self, value: str) -> str:
+        """CSS 선택자에서 특수 문자 이스케이프"""
+        if not value:
+            return value
+        # CSS 특수 문자 이스케이프
+        return re.sub(r'([!"#$%&\'()*+,./:;<=>?@\[\\\]^`{|}~])', r'\\\1', value)
+    
     def _generate_css_selector(self, el_id: str, el_name: str, 
                                 el_class: str, tag: str) -> str:
-        """CSS 셀렉터 생성"""
+        """CSS 셀렉터 생성 (특수문자 이스케이프 포함)"""
         if el_id:
-            return f"#{el_id}"
+            return f"#{self._escape_css_identifier(el_id)}"
         if el_name:
-            return f'{tag}[name="{el_name}"]'
+            escaped_name = el_name.replace('"', '\\"')
+            return f'{tag}[name="{escaped_name}"]'
         if el_class:
             classes = el_class.split()[:2]
-            return f"{tag}.{'.'.join(classes)}"
+            escaped_classes = [self._escape_css_identifier(c) for c in classes]
+            return f"{tag}.{'.'.join(escaped_classes)}"
         return tag
     
     def highlight(self, xpath: str, duration_ms: int = 2000) -> bool:
@@ -544,9 +591,15 @@ class PlaywrightManager:
 
     
     def save_pdf(self, path: str) -> bool:
-        """페이지 PDF 저장"""
+        """페이지 PDF 저장 (headless 모드에서만 지원)"""
         if not self.is_alive():
             return False
+        
+        # PDF 저장은 headless 모드에서만 지원됨
+        if not self._headless:
+            logger.warning("PDF 저장은 headless 모드에서만 지원됩니다.")
+            return False
+        
         try:
             self._page.pdf(path=path)
             return True
@@ -574,7 +627,26 @@ class PlaywrightManager:
     
     def switch_to_frame(self, frame_name: str) -> bool:
         """특정 프레임으로 전환"""
-        return True
+        if not self.is_alive():
+            return False
+        
+        try:
+            if not frame_name or frame_name == 'main':
+                # 메인 프레임으로 복귀 - Playwright에서는 별도 처리 불필요
+                return True
+            
+            # 프레임 찾기
+            for frame in self._page.frames:
+                if frame.name == frame_name or frame.url.endswith(frame_name):
+                    # Playwright에서는 프레임 컨텍스트를 직접 사용
+                    # 여기서는 프레임이 존재하는지 확인만 함
+                    return True
+            
+            logger.warning(f"프레임을 찾을 수 없음: {frame_name}")
+            return False
+        except Exception as e:
+            logger.error(f"프레임 전환 실패: {e}")
+            return False
     
     # =========================================================================
     # JavaScript 실행

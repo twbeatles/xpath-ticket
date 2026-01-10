@@ -4,7 +4,7 @@ XPath Explorer Constants & Presets
 """
 
 # 버전 정보
-APP_VERSION = "v3.5"
+APP_VERSION = "v4.2"
 APP_TITLE = f"티켓 사이트 XPath 탐색기 {APP_VERSION}"
 
 # 브라우저 스크립트
@@ -450,6 +450,7 @@ BROWSER_CHECK_INTERVAL = 2000  # ms - 브라우저 연결 상태 확인 주기
 SEARCH_DEBOUNCE_MS = 300       # ms - 검색 입력 디바운스
 DEFAULT_WINDOW_SIZE = (1400, 900)
 MAX_FRAME_DEPTH = 5            # 프레임 재귀 탐색 최대 깊이
+FRAME_CACHE_DURATION = 2.0     # 프레임 캐시 유효 시간 (초)
 WORKER_WAIT_TIMEOUT = 2000     # ms - 워커 종료 대기 시간
 
 # 통계 및 히스토리 설정

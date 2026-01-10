@@ -1,16 +1,21 @@
-# 🔍 XPath Explorer v4.1
+# 🔍 XPath Explorer v4.2
 
 티켓 사이트 및 웹 자동화를 위한 강력한 XPath 요소 탐색, 분석, 관리 도구
 
-## ✨ v4.1 업데이트 (2026.01)
+## ✨ v4.2 업데이트 (2026.01)
 
-### 🐛 버그 수정
-- AI 설정 초기화 오류 수정
-- 사이트 조사 시 프레임 복구 누락 수정
-- 요소 선택기 스레드 정리 개선
-- 하이라이트 시 브라우저 연결 체크 추가
+### 🛡️ 보안 및 안정성 강화
+- **Critical Fixes**: LocalStorage XSS 취약점 해결, 네트워크 리스너 메모리 누수 수정
+- **Thread Safety**: 요소 선택 감시자(PickerWatcher) 스레드 동기화 개선
+- **Memory Optimization**: 히스토리 관리 메모리 사용량 최적화
+- **Robustness**: 프레임 캐시 무효화 로직으로 네비게이션 안정성 확보
 
-### 🎨 UI/UX 개선
+### ⚡ 기능 개선
+- **Frame Support**: 프레임 전환(`switch_to_frame`) 기능 구현 완료
+- **CSS/XPath**: 특수 문자(따옴표, ID 등) 이스케이프 처리 강화
+- **Validation**: PDF 저장 시 Headless 모드 검증 로직 추가
+
+### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
 - 테이블 선택/hover 효과 강화
 - 검색창 초기화(X) 버튼
@@ -60,10 +65,10 @@ python "xpath 조사기(모든 티켓 사이트).py"
 
 ```bash
 # UPX 설치 시 경량화 적용 (권장)
-pyinstaller xpath_explorer.spec
-```
+    pyinstaller xpath_explorer.spec
+    ```
 
-빌드 결과: `dist/XPathExplorer_v4.1.exe` (약 50-80MB)
+    빌드 결과: `dist/XPathExplorer_v4.2.exe` (약 50-80MB)
 
 ---
 

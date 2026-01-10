@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-XPath Explorer Widgets v3.4
+XPath Explorer Widgets v3.6
 - Enhanced Toast notifications with slide animation
 - Modern styling and effects
 - NoWheel widgets for better UX
+- AnimatedStatusIndicator with pulse effect
+- ModernSearchInput with focus animation
 """
 
 from PyQt6.QtWidgets import (
-    QLabel, QFrame, QHBoxLayout, QPushButton, QGraphicsOpacityEffect, 
-    QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox
+    QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, 
+    QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
+    QWidget, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QSize, pyqtProperty
 from PyQt6.QtGui import QColor
 
 
@@ -137,6 +140,13 @@ class ToastWidget(QFrame):
         """
         # 이전 타이머 정지
         self._timer.stop()
+        
+        # 진행 중인 애니메이션 즉시 정리 (중복 방지)
+        self._cleanup_animations()
+        
+        # 위젯이 보이는 상태면 즉시 숨김 후 재표시
+        if self.isVisible():
+            self.hide()
         
         # 테마 가져오기
         theme = self.THEMES.get(toast_type, self.THEMES["info"])
@@ -360,3 +370,265 @@ class GradientButton(QPushButton):
                 background: {c1};
             }}
         """)
+
+
+class AnimatedStatusIndicator(QFrame):
+    """
+    펄스 애니메이션이 있는 상태 인디케이터
+    - 연결/해제 상태에 따른 색상 변경
+    - 부드러운 펄스 효과
+    """
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(16, 16)
+        self._connected = False
+        self._pulse_opacity = 1.0
+        
+        # 펄스 애니메이션
+        self._pulse_timer = QTimer(self)
+        self._pulse_timer.timeout.connect(self._do_pulse)
+        self._pulse_direction = -1
+        
+        self._update_style()
+    
+    def set_connected(self, connected: bool):
+        """연결 상태 설정"""
+        if self._connected == connected:
+            return
+            
+        self._connected = connected
+        self._update_style()
+        
+        # 연결 시 펄스 애니메이션 시작
+        if connected:
+            self._pulse_timer.start(50)
+        else:
+            self._pulse_timer.stop()
+            self._pulse_opacity = 1.0
+    
+    def is_connected(self) -> bool:
+        return self._connected
+    
+    def _do_pulse(self):
+        """펄스 애니메이션 프레임"""
+        self._pulse_opacity += self._pulse_direction * 0.03
+        
+        if self._pulse_opacity <= 0.4:
+            self._pulse_direction = 1
+        elif self._pulse_opacity >= 1.0:
+            self._pulse_direction = -1
+            
+        self._update_style()
+    
+    def _update_style(self):
+        """스타일 업데이트"""
+        if self._connected:
+            color = "#a6e3a1"
+            glow_base = (166, 227, 161)
+        else:
+            color = "#f38ba8"
+            glow_base = (243, 139, 168)
+        
+        glow = f"rgba({glow_base[0]}, {glow_base[1]}, {glow_base[2]}, {self._pulse_opacity * 0.6:.2f})"
+        
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {color};
+                border-radius: 8px;
+                border: 2px solid {glow};
+            }}
+        """)
+
+
+class ModernSearchInput(QFrame):
+    """
+    모던 검색 입력창
+    - 검색 아이콘 내장
+    - 포커스 시 시각적 효과
+    - 클리어 버튼
+    """
+    
+    def __init__(self, placeholder: str = "검색...", parent=None):
+        super().__init__(parent)
+        self.setObjectName("modern_search")
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 8, 0)
+        layout.setSpacing(8)
+        
+        # 검색 아이콘
+        self.lbl_icon = QLabel("🔍")
+        self.lbl_icon.setStyleSheet("font-size: 14px; background: transparent; color: #6c7086;")
+        layout.addWidget(self.lbl_icon)
+        
+        # 입력창
+        self.input = QLineEdit()
+        self.input.setPlaceholderText(placeholder)
+        self.input.setStyleSheet("""
+            QLineEdit {
+                border: none;
+                background: transparent;
+                color: #cdd6f4;
+                font-size: 14px;
+                padding: 10px 0;
+            }
+        """)
+        self.input.textChanged.connect(self._on_text_changed)
+        layout.addWidget(self.input, 1)
+        
+        # 클리어 버튼
+        self.btn_clear = QPushButton("✕")
+        self.btn_clear.setFixedSize(24, 24)
+        self.btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear.setStyleSheet("""
+            QPushButton {
+                background: rgba(108, 112, 134, 0.3);
+                border: none;
+                border-radius: 12px;
+                color: #a6adc8;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: rgba(243, 139, 168, 0.3);
+                color: #f38ba8;
+            }
+        """)
+        self.btn_clear.clicked.connect(self.clear)
+        self.btn_clear.hide()
+        layout.addWidget(self.btn_clear)
+        
+        # 프레임 스타일
+        self._apply_base_style()
+        
+        # 포커스 이벤트
+        self.input.installEventFilter(self)
+    
+    def _apply_base_style(self):
+        self.setStyleSheet("""
+            QFrame#modern_search {
+                background: rgba(37, 37, 56, 0.95);
+                border: 2px solid rgba(69, 71, 90, 0.7);
+                border-radius: 12px;
+            }
+            QFrame#modern_search:hover {
+                border: 2px solid rgba(137, 180, 250, 0.5);
+            }
+        """)
+    
+    def eventFilter(self, obj, event):
+        if obj == self.input:
+            if event.type() == QEvent.Type.FocusIn:
+                self.setStyleSheet("""
+                    QFrame#modern_search {
+                        background: rgba(49, 50, 68, 1);
+                        border: 2px solid #89b4fa;
+                        border-radius: 12px;
+                    }
+                """)
+            elif event.type() == QEvent.Type.FocusOut:
+                self._apply_base_style()
+        return super().eventFilter(obj, event)
+    
+    def _on_text_changed(self, text):
+        self.btn_clear.setVisible(bool(text))
+    
+    def text(self) -> str:
+        return self.input.text()
+    
+    def setText(self, text: str):
+        self.input.setText(text)
+    
+    def clear(self):
+        self.input.clear()
+    
+    def setPlaceholderText(self, text: str):
+        self.input.setPlaceholderText(text)
+
+
+class EmptyStateWidget(QFrame):
+    """
+    빈 상태를 표시하는 위젯
+    - 아이콘 + 메시지 + 액션 버튼
+    """
+    
+    def __init__(self, icon: str = "📭", message: str = "데이터가 없습니다.", 
+                 action_text: str = None, parent=None):
+        super().__init__(parent)
+        self.setObjectName("empty_state_widget")
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(16)
+        
+        # 아이콘
+        self.lbl_icon = QLabel(icon)
+        self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_icon.setStyleSheet("font-size: 48px; background: transparent;")
+        layout.addWidget(self.lbl_icon)
+        
+        # 메시지
+        self.lbl_message = QLabel(message)
+        self.lbl_message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_message.setWordWrap(True)
+        self.lbl_message.setStyleSheet("""
+            color: #7f849c;
+            font-size: 15px;
+            font-weight: 600;
+            background: transparent;
+        """)
+        layout.addWidget(self.lbl_message)
+        
+        # 액션 버튼 (옵션)
+        self.btn_action = None
+        if action_text:
+            self.btn_action = QPushButton(action_text)
+            self.btn_action.setObjectName("primary")
+            self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
+            layout.addWidget(self.btn_action, 0, Qt.AlignmentFlag.AlignCenter)
+        
+        self.setStyleSheet("""
+            QFrame#empty_state_widget {
+                background: transparent;
+                padding: 40px;
+            }
+        """)
+    
+    def set_icon(self, icon: str):
+        self.lbl_icon.setText(icon)
+    
+    def set_message(self, message: str):
+        self.lbl_message.setText(message)
+
+
+class IconButton(QPushButton):
+    """
+    아이콘 버튼 (호버 효과 강화)
+    """
+    
+    def __init__(self, icon: str = "", size: int = 28, parent=None):
+        super().__init__(icon, parent)
+        self.setFixedSize(size, size)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._size = size
+        self._apply_style()
+    
+    def _apply_style(self):
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: {self._size // 2}px;
+                font-size: {self._size // 2 + 2}px;
+                color: #a6adc8;
+            }}
+            QPushButton:hover {{
+                background: rgba(137, 180, 250, 0.2);
+                border: 1px solid rgba(137, 180, 250, 0.4);
+                color: #89b4fa;
+            }}
+            QPushButton:pressed {{
+                background: rgba(137, 180, 250, 0.35);
+            }}
+        """)
+
