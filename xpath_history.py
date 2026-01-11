@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from copy import deepcopy
-from threading import Lock
+from threading import RLock  # RLock으로 변경하여 재진입 가능하도록 함
 import json
 
 from xpath_constants import HISTORY_MAX_SIZE
@@ -43,7 +43,7 @@ class HistoryManager:
         self._redo_stack: List[HistoryState] = []
         self._max_history = max_history
         self._current_state: Optional[List[Dict]] = None
-        self._lock = Lock()  # 스레드 안전성을 위한 Lock
+        self._lock = RLock()  # RLock으로 변경하여 재진입 가능 (데드락 방지)
     
     def initialize(self, items: List[Any]):
         """
@@ -147,25 +147,29 @@ class HistoryManager:
     
     def can_undo(self) -> bool:
         """Undo 가능 여부"""
-        return len(self._undo_stack) > 0
+        with self._lock:
+            return len(self._undo_stack) > 0
     
     def can_redo(self) -> bool:
         """Redo 가능 여부"""
-        return len(self._redo_stack) > 0
+        with self._lock:
+            return len(self._redo_stack) > 0
     
     def get_undo_description(self) -> str:
         """다음 Undo 동작 설명"""
-        if self.can_undo():
-            state = self._undo_stack[-1]
-            return f"{state.action}: {state.item_name}"
-        return ""
+        with self._lock:
+            if len(self._undo_stack) > 0:
+                state = self._undo_stack[-1]
+                return f"{state.action}: {state.item_name}"
+            return ""
     
     def get_redo_description(self) -> str:
         """다음 Redo 동작 설명"""
-        if self.can_redo():
-            state = self._redo_stack[-1]
-            return f"Redo: {state.item_name}"
-        return ""
+        with self._lock:
+            if len(self._redo_stack) > 0:
+                state = self._redo_stack[-1]
+                return f"Redo: {state.item_name}"
+            return ""
     
     def get_history_list(self, limit: int = 20) -> List[Dict]:
         """
@@ -174,15 +178,16 @@ class HistoryManager:
         Returns:
             [{timestamp, action, item_name, description}, ...]
         """
-        history = []
-        for state in reversed(self._undo_stack[-limit:]):
-            history.append({
-                'timestamp': state.timestamp,
-                'action': state.action,
-                'item_name': state.item_name,
-                'description': state.description
-            })
-        return history
+        with self._lock:
+            history = []
+            for state in reversed(self._undo_stack[-limit:]):
+                history.append({
+                    'timestamp': state.timestamp,
+                    'action': state.action,
+                    'item_name': state.item_name,
+                    'description': state.description
+                })
+            return history
     
     def clear(self):
         """히스토리 초기화"""
@@ -213,12 +218,14 @@ class HistoryManager:
     @property
     def undo_count(self) -> int:
         """Undo 가능 횟수"""
-        return len(self._undo_stack)
+        with self._lock:
+            return len(self._undo_stack)
     
     @property
     def redo_count(self) -> int:
         """Redo 가능 횟수"""
-        return len(self._redo_stack)
+        with self._lock:
+            return len(self._redo_stack)
 
 
 # 테스트용

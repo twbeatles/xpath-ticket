@@ -494,6 +494,30 @@ QLineEdit#search_input:hover:!focus {
     background-color: rgba(37, 37, 56, 1);
 }
 
+/* ============================================
+   Large URL Input - High Visibility
+   ============================================ */
+QLineEdit#url_input_large {
+    background-color: rgba(30, 30, 46, 0.95);
+    border: 2px solid #585b70;
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: #cdd6f4;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+QLineEdit#url_input_large:focus {
+    border: 2px solid #89b4fa;
+    background-color: rgba(49, 50, 68, 1);
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.3);
+}
+
+QLineEdit#url_input_large:hover:!focus {
+    border: 2px solid #7f849c;
+}
+
+
 QLabel#subtitle {
     font-size: 14px;
     font-weight: 600;

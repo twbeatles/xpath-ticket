@@ -73,14 +73,21 @@ class ElementSnapshot:
 
 
 class XPathDiffAnalyzer:
-    """XPath 비교 분석기"""
+    """
+    XPath 비交 분석기
+    스냅샷 기반으로 요소 변경 사항 추적
+    """
+    
+    MAX_SNAPSHOTS = 100  # 최대 스냅샷 저장 개수
     
     def __init__(self):
         self._snapshots: Dict[str, ElementSnapshot] = {}
+        self._snapshot_order: List[str] = []  # 삽입 순서 추적
     
     def save_snapshot(self, item_name: str, element_info: Dict):
         """
         현재 요소 상태 저장 (나중에 비교용)
+        크기 제한 적용됨
         
         Args:
             item_name: 항목 이름
@@ -95,7 +102,42 @@ class XPathDiffAnalyzer:
             attributes=element_info.get('attributes', {}),
             timestamp=datetime.now().isoformat()
         )
+        
+        # 기존에 있으면 순서 유지, 없으면 새로 추가
+        if item_name not in self._snapshots:
+            self._snapshot_order.append(item_name)
+        
         self._snapshots[item_name] = snapshot
+        
+        # 크기 제한 적용
+        self._enforce_size_limit()
+    
+    def _enforce_size_limit(self):
+        """스냅샷 크기 제한 강제 (오래된 것부터 제거)"""
+        while len(self._snapshots) > self.MAX_SNAPSHOTS:
+            if self._snapshot_order:
+                oldest_key = self._snapshot_order.pop(0)
+                self._snapshots.pop(oldest_key, None)
+            else:
+                # _snapshot_order가 비어있으면 dict에서 직접 제거
+                if self._snapshots:
+                    oldest_key = next(iter(self._snapshots))
+                    del self._snapshots[oldest_key]
+                else:
+                    break
+    
+    def clear_old_snapshots(self, keep_count: int = 50):
+        """
+        오래된 스냅샷 정리 (수동 호출용)
+        
+        Args:
+            keep_count: 유지할 스냅샷 개수
+        """
+        while len(self._snapshots) > keep_count:
+            if self._snapshot_order:
+                oldest_key = self._snapshot_order.pop(0)
+                if oldest_key in self._snapshots:
+                    del self._snapshots[oldest_key]
     
     def get_snapshot(self, item_name: str) -> Optional[ElementSnapshot]:
         """저장된 스냅샷 조회"""
@@ -119,9 +161,11 @@ class XPathDiffAnalyzer:
         item_name = getattr(stored_item, 'name', 'unknown')
         xpath = getattr(stored_item, 'xpath', '')
         
-        # 저장된 속성
-        stored_attrs = getattr(stored_item, 'element_attributes', {})
-        stored_tag = getattr(stored_item, 'element_tag', '')
+        # 저장된 속성 (안전한 접근)
+        stored_attrs = getattr(stored_item, 'element_attributes', None) or {}
+        if not isinstance(stored_attrs, dict):
+            stored_attrs = {}
+        stored_tag = getattr(stored_item, 'element_tag', '') or ''
         
         # 현재 속성
         current_attrs = current_element_info.get('attributes', {})

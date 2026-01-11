@@ -61,9 +61,11 @@ class PlaywrightManager:
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
+        self._current_frame = None  # 현재 활성 프레임 컨텍스트
         self._is_initialized = False
         self._stealth_enabled = False
         self._network_requests: List[NetworkRequest] = []
+        self._max_network_requests = 1000  # 네트워크 요청 제한
         self._network_monitoring = False
         self._request_handler = None
         self._response_handler = None
@@ -155,23 +157,42 @@ class PlaywrightManager:
             logger.debug("Stealth 스크립트 적용됨")
     
     def close(self):
-        """브라우저 종료"""
+        """브라우저 종료 (안전한 리소스 정리)"""
+        # 1. 네트워크 리스너 먼저 정리
+        try:
+            self._cleanup_network_listeners()
+        except Exception as e:
+            logger.debug(f"네트워크 리스너 정리 중 예외: {e}")
+        
+        # 2. 컨텍스트 종료
         try:
             if self._context:
                 self._context.close()
+        except Exception as e:
+            logger.debug(f"컨텍스트 종료 중 예외: {e}")
+        
+        # 3. 브라우저 종료
+        try:
             if self._browser:
                 self._browser.close()
+        except Exception as e:
+            logger.debug(f"브라우저 종료 중 예외: {e}")
+        
+        # 4. Playwright 인스턴스 종료
+        try:
             if self._playwright:
                 self._playwright.stop()
         except Exception as e:
             logger.debug(f"Playwright 종료 중 예외: {e}")
-        finally:
-            self._page = None
-            self._context = None
-            self._browser = None
-            self._playwright = None
-            self._is_initialized = False
-            self._network_requests = []
+        
+        # 5. 상태 초기화 (finally 역할)
+        self._page = None
+        self._context = None
+        self._browser = None
+        self._playwright = None
+        self._is_initialized = False
+        self._network_requests = []
+        self._current_frame = None
     
     def is_alive(self) -> bool:
         """연결 상태 확인"""
@@ -235,6 +256,9 @@ class PlaywrightManager:
         
         def on_request(request):
             if request.resource_type in filter_types:
+                # 리스트 크기 제한
+                if len(self._network_requests) >= self._max_network_requests:
+                    self._network_requests.pop(0)  # 가장 오래된 요청 제거
                 self._network_requests.append(NetworkRequest(
                     url=request.url,
                     method=request.method,
@@ -242,8 +266,9 @@ class PlaywrightManager:
                 ))
         
         def on_response(response):
-            for req in self._network_requests:
-                if req.url == response.url:
+            # 역방향 검색으로 최근 요청 우선 매칭 (성능 최적화)
+            for req in reversed(self._network_requests):
+                if req.url == response.url and req.status == 0:
                     req.status = response.status
                     break
         
@@ -632,14 +657,15 @@ class PlaywrightManager:
         
         try:
             if not frame_name or frame_name == 'main':
-                # 메인 프레임으로 복귀 - Playwright에서는 별도 처리 불필요
+                # 메인 프레임으로 복귀
+                self._current_frame = self._page.main_frame
                 return True
             
             # 프레임 찾기
             for frame in self._page.frames:
                 if frame.name == frame_name or frame.url.endswith(frame_name):
-                    # Playwright에서는 프레임 컨텍스트를 직접 사용
-                    # 여기서는 프레임이 존재하는지 확인만 함
+                    self._current_frame = frame
+                    logger.debug(f"프레임 전환 성공: {frame_name}")
                     return True
             
             logger.warning(f"프레임을 찾을 수 없음: {frame_name}")
@@ -647,6 +673,12 @@ class PlaywrightManager:
         except Exception as e:
             logger.error(f"프레임 전환 실패: {e}")
             return False
+    
+    def get_current_frame(self):
+        """현재 활성 프레임 반환"""
+        if self._current_frame is None and self._page:
+            return self._page.main_frame
+        return self._current_frame
     
     # =========================================================================
     # JavaScript 실행

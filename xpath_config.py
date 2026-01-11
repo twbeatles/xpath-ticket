@@ -81,43 +81,67 @@ class SiteConfig:
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'SiteConfig':
-        items = []
-        for item_data in data.get('items', []):
-            # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
-            item = XPathItem(
-                name=item_data.get('name', ''),
-                xpath=item_data.get('xpath', ''),
-                category=item_data.get('category', 'common'),
-                description=item_data.get('description', ''),
-                css_selector=item_data.get('css_selector', ''),
-                is_verified=item_data.get('is_verified', False),
-                element_tag=item_data.get('element_tag', ''),
-                element_text=item_data.get('element_text', ''),
-                found_window=item_data.get('found_window', ''),
-                found_frame=item_data.get('found_frame', ''),
-                # v3.3 신규 필드 (기본값 처리)
-                is_favorite=item_data.get('is_favorite', False),
-                tags=item_data.get('tags', []),
-                test_count=item_data.get('test_count', 0),
-                success_count=item_data.get('success_count', 0),
-                last_tested=item_data.get('last_tested', ''),
-                sort_order=item_data.get('sort_order', 0),
-                # v4.0 신규 필드
-                alternatives=item_data.get('alternatives', []),
-                element_attributes=item_data.get('element_attributes', {}),
-                screenshot_path=item_data.get('screenshot_path', ''),
-                ai_generated=item_data.get('ai_generated', False)
+        """
+        딕셔너리에서 SiteConfig 생성 (예외 처리 포함)
+        
+        Args:
+            data: 설정 딕셔너리
+            
+        Returns:
+            SiteConfig 객체
+            
+        Raises:
+            ValueError: 데이터 형식이 잘못된 경우
+        """
+        if not isinstance(data, dict):
+            raise ValueError(f"SiteConfig.from_dict: dict 타입이 필요하지만 {type(data).__name__} 타입이 전달되었습니다")
+        
+        try:
+            items = []
+            for i, item_data in enumerate(data.get('items', [])):
+                if not isinstance(item_data, dict):
+                    raise ValueError(f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다")
+                
+                # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
+                item = XPathItem(
+                    name=item_data.get('name', ''),
+                    xpath=item_data.get('xpath', ''),
+                    category=item_data.get('category', 'common'),
+                    description=item_data.get('description', ''),
+                    css_selector=item_data.get('css_selector', ''),
+                    is_verified=item_data.get('is_verified', False),
+                    element_tag=item_data.get('element_tag', ''),
+                    element_text=item_data.get('element_text', ''),
+                    found_window=item_data.get('found_window', ''),
+                    found_frame=item_data.get('found_frame', ''),
+                    # v3.3 신규 필드 (기본값 처리)
+                    is_favorite=item_data.get('is_favorite', False),
+                    tags=item_data.get('tags', []),
+                    test_count=item_data.get('test_count', 0),
+                    success_count=item_data.get('success_count', 0),
+                    last_tested=item_data.get('last_tested', ''),
+                    sort_order=item_data.get('sort_order', 0),
+                    # v4.0 신규 필드
+                    alternatives=item_data.get('alternatives', []),
+                    element_attributes=item_data.get('element_attributes', {}),
+                    screenshot_path=item_data.get('screenshot_path', ''),
+                    ai_generated=item_data.get('ai_generated', False)
+                )
+                items.append(item)
+            
+            return cls(
+                name=data.get('name', ''),
+                url=data.get('url', ''),
+                login_url=data.get('login_url', ''),
+                description=data.get('description', ''),
+                items=items,
+                created_at=data.get('created_at', ''),
+                updated_at=data.get('updated_at', '')
             )
-            items.append(item)
-        return cls(
-            name=data.get('name', ''),
-            url=data.get('url', ''),
-            login_url=data.get('login_url', ''),
-            description=data.get('description', ''),
-            items=items,
-            created_at=data.get('created_at', ''),
-            updated_at=data.get('updated_at', '')
-        )
+        except KeyError as e:
+            raise ValueError(f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}")
+        except TypeError as e:
+            raise ValueError(f"SiteConfig.from_dict: 데이터 형식 오류 - {e}")
     
     @classmethod
     def from_preset(cls, preset_name: str) -> 'SiteConfig':

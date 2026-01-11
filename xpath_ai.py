@@ -74,7 +74,7 @@ class XPathAIAssistant:
             return None
         return self._config.get(f'{self._provider}_api_key')
     
-    def configure(self, api_key: str, model: str = None, provider: str = "openai"):
+    def configure(self, api_key: str, model: str = None, provider: str = "openai") -> bool:
         """
         AI 설정
         
@@ -82,7 +82,15 @@ class XPathAIAssistant:
             api_key: API 키
             model: 사용할 모델
             provider: 'openai' or 'gemini'
+            
+        Returns:
+            bool: 설정 성공 여부
         """
+        # API 키 유효성 검증
+        if not api_key or len(api_key.strip()) < 10:
+            return False
+        
+        api_key = api_key.strip()
         self._provider = provider
         self._api_key = api_key
         
@@ -100,6 +108,7 @@ class XPathAIAssistant:
         self._config[f'{provider}_api_key'] = api_key
         
         self._save_config()
+        return True
 
     def _save_config(self):
         config_path = Path.home() / '.xpath_explorer' / 'ai_config.json'
@@ -346,23 +355,49 @@ HTML:
 {page_html[:8000]}"""
 
         try:
-            response = client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=1500,
-                response_format={"type": "json_object"}
-            )
-            
-            result = json.loads(response.choices[0].message.content)
-            return result.get("elements", [])
+            # Provider에 따라 분기 처리
+            if self._provider == "gemini":
+                return self._analyze_with_gemini(system_prompt, user_prompt)
+            else:
+                return self._analyze_with_openai(system_prompt, user_prompt)
             
         except Exception as e:
             print(f"페이지 분석 실패: {e}")
             return []
+    
+    def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict]:
+        """Gemini API로 페이지 분석"""
+        client = self._get_client()
+        import google.generativeai as genai
+        
+        model = client.GenerativeModel(
+            self._model,
+            system_instruction=system_prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json"
+            )
+        )
+        
+        response = model.generate_content(user_prompt)
+        result = json.loads(response.text)
+        return result.get("elements", [])
+    
+    def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict]:
+        """OpenAI API로 페이지 분석"""
+        client = self._get_client()
+        response = client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result.get("elements", [])
     
     def improve_xpath(self, xpath: str, issue_description: str = None) -> XPathSuggestion:
         """

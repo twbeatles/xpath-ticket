@@ -86,7 +86,7 @@ class PickerWatcher(QThread):
 
 
 class ValidateWorker(QThread):
-    """검증 워커 (강화된 예외 처리)"""
+    """검증 워커 (강화된 예외 처리, 스레드 안전)"""
     progress = pyqtSignal(int, str)
     validated = pyqtSignal(str, dict)
     finished = pyqtSignal(int, int)
@@ -96,10 +96,11 @@ class ValidateWorker(QThread):
         self.browser = browser
         self.items = items
         self.handles = handles or []
-        self._cancelled = False
+        self._stop_event = Event()  # 스레드 안전한 이벤트
         
     def cancel(self):
-        self._cancelled = True
+        """스레드 취소 요청 (스레드 안전)"""
+        self._stop_event.set()
         
     def run(self):
         if not self.browser.is_alive():
@@ -118,7 +119,7 @@ class ValidateWorker(QThread):
         
         try:
             for i, item in enumerate(self.items):
-                if self._cancelled:
+                if self._stop_event.is_set():
                     break
                     
                 self.progress.emit(int((i / total) * 100), f"검증 중: {item.name}")
@@ -134,12 +135,15 @@ class ValidateWorker(QThread):
                     logger.error(f"항목 검증 실패 ({item.name}): {e}")
                     self.validated.emit(item.name, {"found": False, "msg": str(e)})
                 
-                time.sleep(0.1)  # UI 응답성 확보
+                # Event 기반 대기 (인터럽트 가능)
+                if self._stop_event.wait(timeout=0.1):
+                    break
                 
             self.progress.emit(100, "완료")
             self.finished.emit(found_total, total)
             
         finally:
+            self._stop_event.clear()
             # 원래 윈도우로 안전하게 복귀
             if original_window is not None:
                 try:

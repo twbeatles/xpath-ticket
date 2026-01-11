@@ -638,6 +638,7 @@ class BrowserManager:
         if not self.is_alive():
             return -1
         
+        original_frame = self.current_frame_path
         try:
             if frame_path:
                 self.switch_to_frame_by_path(frame_path)
@@ -647,6 +648,13 @@ class BrowserManager:
         except Exception as e:
             logger.debug(f"요소 카운트 실패: {e}")
             return -1
+        finally:
+            # 원래 프레임으로 복구
+            if frame_path and original_frame != frame_path:
+                try:
+                    self.switch_to_frame_by_path(original_frame if original_frame else "main")
+                except Exception:
+                    pass  # 복구 실패 시 무시
     
     def get_element_info(self, xpath: str, frame_path: str = None) -> Optional[Dict]:
         """
@@ -675,6 +683,7 @@ class BrowserManager:
         if not self.is_alive():
             return {'found': False, 'msg': '브라우저 연결 안됨'}
         
+        original_frame = self.current_frame_path
         try:
             # 프레임 전환
             if frame_path:
@@ -753,6 +762,13 @@ class BrowserManager:
         except Exception as e:
             logger.error(f"요소 정보 조회 실패: {e}")
             return {'found': False, 'msg': str(e)}
+        finally:
+            # 원래 프레임으로 복구
+            if frame_path and original_frame != frame_path:
+                try:
+                    self.switch_to_frame_by_path(original_frame if original_frame else "main")
+                except Exception:
+                    pass  # 복구 실패 시 무시
     
     def screenshot_element(self, xpath: str, save_path: str, frame_path: str = None) -> bool:
         """
@@ -784,7 +800,6 @@ class BrowserManager:
             
             # 스크롤하여 요소 표시
             self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-            import time
             time.sleep(0.3)  # 스크롤 완료 대기
             
             # 스크린샷 저장

@@ -45,15 +45,19 @@ class XPathOptimizer:
             return '""'
         
         if '"' in text and "'" in text:
-            # 둘 다 있으면 concat 사용
-            parts = text.split('"')
-            escaped_parts = [f'"{p}"' if p else '' for p in parts]
-            return 'concat(' + ', \'"\', '.join(filter(None, escaped_parts)) + ')'
+            # 둘 다 있으면 concat 사용 (수정된 버전)
+            parts = []
+            for i, segment in enumerate(text.split('"')):
+                if segment:
+                    parts.append(f'"{segment}"')
+                if i < text.count('"'):
+                    parts.append("'\"'")
+            return 'concat(' + ', '.join(parts) + ')'
         elif '"' in text:
-            # 큰따옴표만 있으면 작은따옴표로 감죄
+            # 큰따옴표만 있으면 작은따옴표로 감싸기
             return f"'{text}'"
         else:
-            # 기본: 큰따옴표로 감죄
+            # 기본: 큰따옴표로 감싸기
             return f'"{text}"'
     
     def generate_alternatives(self, element_info: Dict) -> List[XPathAlternative]:

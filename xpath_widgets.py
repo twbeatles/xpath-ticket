@@ -11,10 +11,10 @@ XPath Explorer Widgets v3.6
 from PyQt6.QtWidgets import (
     QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, 
     QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
-    QWidget, QSizePolicy
+    QWidget, QSizePolicy, QScrollArea, QToolButton
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QSize, pyqtProperty
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QSize, pyqtProperty, pyqtSignal, QParallelAnimationGroup, QAbstractAnimation
+from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QAction
 
 
 class NoWheelComboBox(QComboBox):
@@ -377,6 +377,7 @@ class AnimatedStatusIndicator(QFrame):
     펄스 애니메이션이 있는 상태 인디케이터
     - 연결/해제 상태에 따른 색상 변경
     - 부드러운 펄스 효과
+    - 위젯 삭제 시 타이머 안전 정리
     """
     
     def __init__(self, parent=None):
@@ -439,6 +440,16 @@ class AnimatedStatusIndicator(QFrame):
                 border: 2px solid {glow};
             }}
         """)
+    
+    def cleanup(self):
+        """리소스 정리 (명시적 호출용)"""
+        if self._pulse_timer.isActive():
+            self._pulse_timer.stop()
+    
+    def deleteLater(self):
+        """위젯 삭제 시 타이머 안전 정리"""
+        self.cleanup()
+        super().deleteLater()
 
 
 class ModernSearchInput(QFrame):
@@ -632,3 +643,93 @@ class IconButton(QPushButton):
             }}
         """)
 
+class CollapsibleBox(QWidget):
+    """
+    접이식 박스 위젯
+    - 부드러운 애니메이션
+    - 커스텀 헤더 (화살표 + 제목)
+    """
+    
+    toggled = pyqtSignal(bool)
+    
+    def __init__(self, title="", parent=None, expanded=True):
+        super().__init__(parent)
+        
+        self._expanded = expanded
+        
+        # 메인 레이아웃
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+        
+        # 헤더/토글 버튼
+        self.toggle_button = QToolButton(text=title)
+        self.toggle_button.setStyleSheet("""
+            QToolButton {
+                border: none;
+                color: #cdd6f4;
+                background-color: transparent;
+                font-weight: bold;
+                padding: 1px;
+                font-size: 13px;
+            }
+            QToolButton:hover {
+                color: #89b4fa;
+            }
+        """)
+        self.toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.toggle_button.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(expanded)
+        self.toggle_button.clicked.connect(self._on_toggle)
+        
+        # 헤더 컨테이너 (옵션: 별도의 헤더 영역이 필요한 경우 사용)
+        # 현재는 버튼 자체가 헤더 역할
+        
+        self.main_layout.addWidget(self.toggle_button)
+        
+        # 컨텐츠 영역
+        self.content_area = QWidget()
+        self.content_area.setMaximumHeight(16777215 if expanded else 0)
+        self.content_area.setMinimumHeight(0)
+        self.content_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        # 애니메이션
+        self.animation = QPropertyAnimation(self.content_area, b"maximumHeight")
+        self.animation.setDuration(300)
+        self.animation.setEasingCurve(QEasingCurve.Type.OutQuart)
+        
+        self.main_layout.addWidget(self.content_area)
+        
+    def setContentLayout(self, layout):
+        """컨텐츠 영역 레이아웃 설정"""
+        self.content_area.setLayout(layout)
+        
+    def _on_toggle(self, checked):
+        self.toggle(checked)
+        
+    def toggle(self, expanded):
+        self._expanded = expanded
+        
+        # 화살표 변경
+        self.toggle_button.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        
+        # 애니메이션 시작
+        # 현재 컨텐츠의 높이 계산
+        self.content_area.layout().activate()
+        content_height = self.content_area.layout().sizeHint().height()
+        
+        self.animation.stop()
+        if expanded:
+            self.animation.setStartValue(0)
+            self.animation.setEndValue(content_height)
+        else:
+            self.animation.setStartValue(content_height)
+            self.animation.setEndValue(0)
+            
+        self.animation.start()
+        
+        self.toggled.emit(expanded)
+
+    def set_title(self, title):
+        self.toggle_button.setText(title)

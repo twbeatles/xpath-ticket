@@ -36,7 +36,7 @@ from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySe
 from xpath_constants import APP_TITLE, APP_VERSION, SITE_PRESETS
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
-from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton
+from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton, CollapsibleBox
 from xpath_browser import BrowserManager
 from xpath_workers import PickerWatcher, ValidateWorker
 
@@ -159,6 +159,11 @@ class XPathExplorer(QMainWindow):
         # 2. 브라우저 컨트롤 패널
         self._create_browser_panel()
         main_layout.addLayout(self.browser_layout)
+        
+        # 2.5 URL 패널 (Collapsible)
+        self.url_panel = self._create_url_panel()
+        main_layout.addWidget(self.url_panel)
+
         
         # 3. 메인 작업 영역 (스플리터)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -454,19 +459,40 @@ class XPathExplorer(QMainWindow):
         self.btn_refresh_page.clicked.connect(lambda: self.browser.driver.refresh() if self.browser.is_alive() else None)
         self.browser_layout.addWidget(self.btn_refresh_page)
         
-        # URL 입력창 (확장)
-        self.input_url = QLineEdit()
-        self.input_url.setPlaceholderText("URL 입력 후 Enter")
-        self.input_url.setMinimumHeight(28)
-        self.input_url.returnPressed.connect(self._navigate)
-        self.browser_layout.addWidget(self.input_url, 1)
+        # URL 입력창 (구버전 제거, 하단 Collapsible 영역으로 이동)
+        self.browser_layout.addStretch()
+
+
+
+    def _create_url_panel(self):
+        """URL 입력 패널 (Collapsible)"""
+        # 컨텐츠 위젯
+        content = QWidget()
+        layout = QHBoxLayout(content)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
+        # 큰 URL 입력창
+        self.input_url = QLineEdit()
+        self.input_url.setObjectName("url_input_large")
+        self.input_url.setPlaceholderText("https://...")
+        self.input_url.returnPressed.connect(self._navigate)
+        layout.addWidget(self.input_url, 1)
+        
+        # 큰 이동 버튼
         self.btn_go = QPushButton("이동")
         self.btn_go.setObjectName("primary")
         self.btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_go.setFixedWidth(50)
+        self.btn_go.setFixedSize(80, 42)
+        self.btn_go.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.btn_go.clicked.connect(self._navigate)
-        self.browser_layout.addWidget(self.btn_go)
+        layout.addWidget(self.btn_go)
+        
+        # 접이식 박스 생성
+        self.url_collapsible = CollapsibleBox("🌐 URL 주소창", expanded=True)
+        self.url_collapsible.setContentLayout(layout)
+        
+        return self.url_collapsible
 
 
     def _create_list_panel(self):
@@ -999,6 +1025,7 @@ class XPathExplorer(QMainWindow):
         
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
+            self.input_url.setText(url)  # 정규화된 URL로 입력창 업데이트
             
         if self.browser.is_alive():
             self.browser.navigate(url)
@@ -1347,6 +1374,8 @@ class XPathExplorer(QMainWindow):
         self.config.add_or_update(item)
         self._refresh_table()
         self._update_undo_redo_actions()  # v4.0
+        # 히스토리 현재 상태 동기화 (변경 후)
+        self.history_manager._current_state = self.history_manager._items_to_dicts(self.config.items)
         self._show_toast(f"'{name}' 저장 완료", "success")
 
     def _delete_item(self, name):
@@ -1362,6 +1391,8 @@ class XPathExplorer(QMainWindow):
             self._refresh_table()
             self._clear_editor()
             self._update_undo_redo_actions()  # v4.0
+            # 히스토리 현재 상태 동기화 (변경 후)
+            self.history_manager._current_state = self.history_manager._items_to_dicts(self.config.items)
 
     # =========================================================================
     # 로직 핸들러: 테스트 및 검증
@@ -1655,7 +1686,7 @@ class XPathExplorer(QMainWindow):
     def _copy_from_table_context(self, type_idx):
         selected = self.table.selectedItems()
         if not selected: return
-        item_name = self.table.item(selected[0].row(), 1).data(Qt.ItemDataRole.UserRole)
+        item_name = self.table.item(selected[0].row(), 2).data(Qt.ItemDataRole.UserRole)
         item = self.config.get_item(item_name)
         if item:
             QApplication.clipboard().setText(item.xpath)
@@ -1664,7 +1695,7 @@ class XPathExplorer(QMainWindow):
     def _delete_selected(self):
         selected = self.table.selectedItems()
         if not selected: return
-        item_name = self.table.item(selected[0].row(), 1).data(Qt.ItemDataRole.UserRole)
+        item_name = self.table.item(selected[0].row(), 2).data(Qt.ItemDataRole.UserRole)
         self._delete_item(item_name)
         
     def _show_shortcuts(self):
@@ -1827,7 +1858,7 @@ class XPathExplorer(QMainWindow):
     # =========================================================================
     
     def _batch_test(self, category: str = None):
-        """배치 테스트 실행"""
+        """배치 테스트 실행 (취소 가능)"""
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
             return
@@ -1843,14 +1874,29 @@ class XPathExplorer(QMainWindow):
         
         self._show_toast(f"{len(items_to_test)}개 항목 배치 테스트 시작...", "info")
         
-        # 프로그레스 표시
+        # 취소 플래그 초기화
+        self._batch_cancel_flag = False
+        
+        # 프로그레스 바 표시 및 취소 버튼 설정
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         
+        # 기존 버튼 상태 저장 및 취소 버튼으로 변환
+        self.btn_open.setEnabled(False)  # 브라우저 버튼 비활성화
+        
         results = []
+        cancelled = False
+        
         for i, item in enumerate(items_to_test):
+            # 취소 확인
+            if self._batch_cancel_flag:
+                self._show_toast("배치 테스트가 취소되었습니다.", "warning")
+                cancelled = True
+                break
+            
             progress = int((i / len(items_to_test)) * 100)
             self.progress_bar.setValue(progress)
+            self.progress_bar.setFormat(f"테스트 중: {item.name} ({i+1}/{len(items_to_test)}) - ESC로 취소")
             QApplication.processEvents()
             
             result = self.browser.validate_xpath(item.xpath)
@@ -1866,14 +1912,16 @@ class XPathExplorer(QMainWindow):
                 'xpath': item.xpath,
                 'msg': result.get('msg', '')
             })
-            
-            time.sleep(0.1)  # UI 응답성
         
+        # 정리
         self.progress_bar.setVisible(False)
+        self.progress_bar.setFormat("%p%")  # 기본 형식 복원
+        self.btn_open.setEnabled(True)  # 버튼 재활성화
         self._refresh_table()
         
-        # 결과 리포트 표시
-        self._show_batch_report(results)
+        # 결과 리포트 표시 (취소된 경우에도 부분 결과 표시)
+        if results:
+            self._show_batch_report(results, cancelled=cancelled)
     
     def _batch_test_dialog(self):
         """카테고리 선택 후 배치 테스트"""
@@ -1887,10 +1935,11 @@ class XPathExplorer(QMainWindow):
         if ok:
             self._batch_test(category)
     
-    def _show_batch_report(self, results: list):
+    def _show_batch_report(self, results: list, cancelled: bool = False):
         """배치 테스트 결과 리포트"""
         dialog = QDialog(self)
-        dialog.setWindowTitle("배치 테스트 결과")
+        title = "배치 테스트 결과" + (" (취소됨)" if cancelled else "")
+        dialog.setWindowTitle(title)
         dialog.resize(700, 500)
         
         layout = QVBoxLayout(dialog)
@@ -1900,7 +1949,8 @@ class XPathExplorer(QMainWindow):
         success_count = sum(1 for r in results if r['success'])
         success_rate = (success_count / total * 100) if total > 0 else 0
         
-        summary = QLabel(f"총 {total}개 테스트 | ✅ 성공: {success_count} | ❌ 실패: {total - success_count} | 성공률: {success_rate:.1f}%")
+        cancelled_text = " ⚠️ (중도 취소됨)" if cancelled else ""
+        summary = QLabel(f"총 {total}개 테스트 | ✅ 성공: {success_count} | ❌ 실패: {total - success_count} | 성공률: {success_rate:.1f}%{cancelled_text}")
         summary.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
         layout.addWidget(summary)
         
@@ -2235,7 +2285,7 @@ class XPathExplorer(QMainWindow):
     
     def _scan_page_elements(self):
         """Playwright로 페이지 요소 자동 스캔"""
-        if self.pw_manager is None or not self.pw_manager.is_alive():
+        if not self.pw_manager or not self.pw_manager.is_alive():
             self._show_toast("Playwright 브라우저가 실행되지 않았습니다.", "warning")
             return
         
@@ -2826,6 +2876,20 @@ class XPathExplorer(QMainWindow):
                 item.screenshot_path = fname
         else:
             self._show_toast("스크린샷 저장 실패", "error")
+
+    def keyPressEvent(self, event):
+        """키보드 이벤트 처리 - ESC로 배치 테스트 취소"""
+        from PyQt6.QtCore import Qt
+        if event.key() == Qt.Key.Key_Escape:
+            # 배치 테스트 취소 플래그 설정
+            if hasattr(self, '_batch_cancel_flag'):
+                self._batch_cancel_flag = True
+        super().keyPressEvent(event)
+
+    def _save_settings(self):
+        """설정 저장 (추가 설정용 확장 포인트)"""
+        # 현재는 geometry만 별도 저장, 필요시 확장
+        pass
 
     def closeEvent(self, event):
         """종료 처리"""
