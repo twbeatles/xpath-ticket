@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 XPath Explorer AI Assistant v4.0
-AI 기반 XPath 추천 모듈 (OpenAI API 통합)
+AI 기반 XPath 추천 모듈 (Google GenAI 통합)
 """
 
 from typing import List, Dict, Optional
@@ -31,7 +31,7 @@ class XPathAIAssistant:
         """
         self._client = None
         self._provider = "openai"  # "openai" or "gemini"
-        self._model = "gpt-4o-mini"
+        self._model = "gpt-5.2"
         
         # 설정 로드 (먼저 실행해야 함)
         self._config = self._load_config()
@@ -98,7 +98,7 @@ class XPathAIAssistant:
             self._model = model
         else:
             # 기본 모델 설정
-            self._model = "gpt-4o-mini" if provider == "openai" else "gemini-flash-latest"
+            self._model = "gpt-5.2" if provider == "openai" else "gemini-flash-latest"
             
         self._client = None  # 재초기화
         
@@ -140,11 +140,10 @@ class XPathAIAssistant:
                 
         elif self._provider == "gemini":
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self._api_key)
-                self._client = genai
+                from google import genai
+                self._client = genai.Client(api_key=self._api_key)
             except ImportError:
-                raise ImportError("Google Generative AI 라이브러리가 필요합니다. pip install google-generativeai")
+                raise ImportError("Google GenAI 라이브러리가 필요합니다. pip install google-genai")
                 
         return self._client
     
@@ -207,20 +206,20 @@ XPath 생성 시 고려사항:
             return self._fallback_suggestion(description)
     
     def _generate_with_gemini(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
-        """Gemini API 사용하여 생성"""
+        """Gemini API 사용하여 생성 (google-genai)"""
         client = self._get_client()
-        import google.generativeai as genai
-        
-        model = client.GenerativeModel(
-            self._model,
-            system_instruction=system_prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json"
-            )
-        )
+        from google import genai
+        from google.genai import types
         
         try:
-            response = model.generate_content(user_prompt)
+            response = client.models.generate_content(
+                model=self._model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json"
+                )
+            )
             result = json.loads(response.text)
             
             return XPathSuggestion(
@@ -366,21 +365,24 @@ HTML:
             return []
     
     def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict]:
-        """Gemini API로 페이지 분석"""
+        """Gemini API로 페이지 분석 (google-genai)"""
         client = self._get_client()
-        import google.generativeai as genai
-        
-        model = client.GenerativeModel(
-            self._model,
-            system_instruction=system_prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json"
+        from google.genai import types
+
+        try:
+            response = client.models.generate_content(
+                model=self._model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json"
+                )
             )
-        )
-        
-        response = model.generate_content(user_prompt)
-        result = json.loads(response.text)
-        return result.get("elements", [])
+            result = json.loads(response.text)
+            return result.get("elements", [])
+        except Exception as e:
+            print(f"Gemini Analyze Error: {e}")
+            return []
     
     def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict]:
         """OpenAI API로 페이지 분석"""
@@ -431,25 +433,13 @@ HTML:
             user_prompt += f"\n문제: {issue_description}"
         
         try:
-            response = client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.3,
-                max_tokens=400,
-                response_format={"type": "json_object"}
-            )
-            
-            result = json.loads(response.choices[0].message.content)
-            
-            return XPathSuggestion(
-                xpath=result.get("improved_xpath", xpath),
-                confidence=float(result.get("confidence", 0.5)),
-                explanation=result.get("explanation", ""),
-                alternative_xpaths=result.get("alternatives", [])
-            )
+            # TODO: Gemini 구현 추가 필요 (현재 OpenAI만 사용 중인 것으로 보임, 또는 공통 로직 필요)
+            # 여기서는 편의상 OpenAI 로직을 그대로 두되, 필요하다면 Gemini 로직 추가 가능
+            # 일단 기존 코드 구조 유지 (improve_xpath는 _generate_with_... 를 호출하지 않고 직접 구현되어 있었음)
+             if self._provider == "gemini":
+                return self._improve_with_gemini(system_prompt, user_prompt, xpath)
+             else:
+                return self._improve_with_openai(system_prompt, user_prompt, xpath)
             
         except Exception as e:
             print(f"XPath 개선 실패: {e}")
@@ -457,6 +447,58 @@ HTML:
                 xpath=xpath,
                 confidence=0.0,
                 explanation=f"개선 실패: {e}",
+                alternative_xpaths=[]
+            )
+
+    def _improve_with_openai(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
+        client = self._get_client()
+        response = client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=400,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        
+        return XPathSuggestion(
+            xpath=result.get("improved_xpath", original_xpath),
+            confidence=float(result.get("confidence", 0.5)),
+            explanation=result.get("explanation", ""),
+            alternative_xpaths=result.get("alternatives", [])
+        )
+        
+    def _improve_with_gemini(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
+        """Gemini를 사용한 XPath 개선"""
+        client = self._get_client()
+        from google.genai import types
+        
+        try:
+            response = client.models.generate_content(
+                model=self._model,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json"
+                )
+            )
+            result = json.loads(response.text)
+             
+            return XPathSuggestion(
+                xpath=result.get("improved_xpath", original_xpath),
+                confidence=float(result.get("confidence", 0.5)),
+                explanation=result.get("explanation", ""),
+                alternative_xpaths=result.get("alternatives", [])
+            )
+        except Exception as e:
+             return XPathSuggestion(
+                xpath=original_xpath,
+                confidence=0.0,
+                explanation=f"Gemini 개선 실패: {e}",
                 alternative_xpaths=[]
             )
 

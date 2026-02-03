@@ -25,7 +25,7 @@
 
 ## 🤖 AI XPath 어시스턴트
 - **OpenAI & Gemini 연동**: 자연어로 XPath 자동 생성
-- **멀티 모델 지원**: GPT-4o, Gemini Flash 등
+- **멀티 모델 지원**: GPT-5.2, Gemini Flash Latest 등 최신 경량 모델
 
 ## 🔄 히스토리 & 안전 장치
 - **Undo/Redo**: 무제한 히스토리
@@ -45,7 +45,7 @@
 pip install PyQt6 selenium undetected-chromedriver webdriver-manager
 
 # AI (선택)
-pip install openai google-generativeai
+pip install openai google-genai
 
 # Playwright (선택)
 pip install playwright && playwright install chromium

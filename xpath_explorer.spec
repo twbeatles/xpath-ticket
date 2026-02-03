@@ -15,6 +15,9 @@ hiddenimports = [
     'xpath_ai', 'xpath_diff', 'xpath_history', 'xpath_optimizer',
     'xpath_constants', 'xpath_styles', 'xpath_config', 'xpath_widgets',
     'xpath_browser', 'xpath_workers', 'xpath_codegen', 'xpath_statistics',
+
+    # Google GenAI (신규)
+    'google.genai', 'google.genai.types',
     
     # PyQt6 (필수)
     'PyQt6.QtWidgets', 'PyQt6.QtCore', 'PyQt6.QtGui',
@@ -118,6 +121,6 @@ exe = EXE(
 # 빌드 팁:
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
-# - AI 기능: openai, google-generativeai 별도 설치
+# - AI 기능: openai, google-genai 별도 설치
 # - Playwright: pip install playwright && playwright install chromium
 # ============================================================================
