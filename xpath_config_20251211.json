@@ -1,0 +1,170 @@
+{
+  "login_button": {
+    "xpath": "//*[@id=\"__next\"]/div/div/div/div[2]/div[1]/div/div/div/div/div[2]/div/button",
+    "css": "",
+    "category": "login",
+    "desc": "메인 로그인 버튼"
+  },
+  "login_id": {
+    "xpath": "userId",
+    "css": "",
+    "category": "login",
+    "desc": "ID 입력 (ID속성)"
+  },
+  "login_pw": {
+    "xpath": "userPwd",
+    "css": "",
+    "category": "login",
+    "desc": "PW 입력 (ID속성)"
+  },
+  "login_submit": {
+    "xpath": "btn_login",
+    "css": "",
+    "category": "login",
+    "desc": "로그인 버튼 (ID속성)"
+  },
+  "book_button": {
+    "xpath": "//*[@id=\"productSide\"]/div/div[2]/a[contains(@class, \"is-primary\")]",
+    "css": "",
+    "category": "booking",
+    "desc": "예매하기 버튼"
+  },
+  "book_button_alt": {
+    "xpath": "//a[contains(text(), \"예매하기\")]",
+    "css": "",
+    "category": "booking",
+    "desc": "예매 버튼 (텍스트)"
+  },
+  "date_area": {
+    "xpath": "//*[@id=\"productSide\"]/div/div[1]",
+    "css": "",
+    "category": "booking",
+    "desc": "날짜 선택 영역"
+  },
+  "round_list": {
+    "xpath": "//ul[contains(@class, \"roundList\")]/li",
+    "css": "",
+    "category": "booking",
+    "desc": "회차 목록"
+  },
+  "seat_iframe": {
+    "xpath": "//*[@id='ifrmSeat']",
+    "css": "",
+    "category": "seat",
+    "desc": "좌석 iframe"
+  },
+  "seat_detail_frame": {
+    "xpath": "ifrmSeatDetail",
+    "css": "",
+    "category": "seat",
+    "desc": "좌석상세 iframe (name)"
+  },
+  "seat_area": {
+    "xpath": "//*[@id=\"divSeatArray\"]",
+    "css": "",
+    "category": "seat",
+    "desc": "좌석 배열"
+  },
+  "seat_grade": {
+    "xpath": "//*[@id=\"divGrade\"]",
+    "css": "",
+    "category": "seat",
+    "desc": "좌석 등급"
+  },
+  "next_step": {
+    "xpath": "NextStepImage",
+    "css": "",
+    "category": "seat",
+    "desc": "다음단계 (ID)"
+  },
+  "seat_confirm": {
+    "xpath": "//*[@id=\"btnConfirm\"]",
+    "css": "",
+    "category": "seat",
+    "desc": "좌석 확인"
+  },
+  "captcha_img": {
+    "xpath": "//*[@id='imgCaptcha']",
+    "css": "",
+    "category": "captcha",
+    "desc": "캡차 이미지"
+  },
+  "captcha_input": {
+    "xpath": "txtCaptcha",
+    "css": "",
+    "category": "captcha",
+    "desc": "캡차 입력 (ID)"
+  },
+  "captcha_confirm": {
+    "xpath": "/html/body/div[2]/div[1]/div[4]/a[2]",
+    "css": "",
+    "category": "captcha",
+    "desc": "캡차 확인"
+  },
+  "captcha_reload": {
+    "xpath": "/html/body/div[2]/div[1]/div[1]/a[1]",
+    "css": "",
+    "category": "captcha",
+    "desc": "캡차 새로고침"
+  },
+  "district_tmpl": {
+    "xpath": "/html/body/form[1]/div/div[1]/div[3]/div/div[1]/div/div/div/div/table/tbody/tr[{n}]/td[1]/div/span[2]",
+    "css": "",
+    "category": "district",
+    "desc": "구역 템플릿"
+  },
+  "sub_district": {
+    "xpath": "/html/body/form[1]/div/div[1]/div[3]/div/div[1]/div/div/div/div/table/tbody/tr[{n}]/td/div/ul/li[{i}]/a",
+    "css": "",
+    "category": "district",
+    "desc": "하위구역 템플릿"
+  },
+  "회차 선택": {
+    "xpath": "//*[@id=\"productSide\"]/div/div[1]/div[2]/div[2]/div[1]",
+    "css": "",
+    "category": "login",
+    "desc": "다회차인경우 회사 선택"
+  },
+  "날짜선택": {
+    "xpath": "//*[@id=\"productSide\"]/div/div[1]/div[1]/div[2]/div/div/div/div/ul[3]/li[27]",
+    "css": "",
+    "category": "login",
+    "desc": "다회차 인경우 날짜 선택(12월 26일의 경우 예시)"
+  },
+  "텍스트 캡챠 입력": {
+    "xpath": "//*[@id='txtCaptcha']",
+    "css": "",
+    "category": "login",
+    "desc": "텍스트 캡챠 입력"
+  },
+  "구역별 요소": {
+    "xpath": "//*[@id=\"GradeRow\"]/td[1]/div/span[2]",
+    "css": "",
+    "category": "login",
+    "desc": "r석(첫번째 경우)"
+  },
+  "영역별요소": {
+    "xpath": "//*[@id=GradeDetail\"]/div/ul/li[1]/a",
+    "css": "",
+    "category": "login",
+    "desc": "001영역 예시"
+  },
+  "좌석선택완료": {
+    "xpath": "//[@id=\"NextStepImage\"]",
+    "css": "",
+    "category": "login",
+    "desc": "좌석선택완료 버튼"
+  },
+  "좌석박스": {
+    "xpath": "//*[@id=\"divSeatBox\"]",
+    "css": "",
+    "category": "login",
+    "desc": "좌석 박스란"
+  },
+  "실제 좌석 선택": {
+    "xpath": "//*[@id=\"divSeatBox\"]/span[320]",
+    "css": "",
+    "category": "login",
+    "desc": "예시 좌석"
+  }
+}
