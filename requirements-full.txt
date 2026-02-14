@@ -1,0 +1,4 @@
+-r requirements.txt
+openai
+google-genai
+playwright

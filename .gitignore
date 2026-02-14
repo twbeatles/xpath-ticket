@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+.Python
+
+# Virtualenv
+.venv/
+venv/
+ENV/
+
+# Pytest
+.pytest_cache/
+
+# Build artifacts (PyInstaller)
+build/
+dist/
+*.spec.bak
+
+# Logs / local app data
+*.log
+.xpath_explorer/
+
+# Project-specific local folders
+backup/
+
