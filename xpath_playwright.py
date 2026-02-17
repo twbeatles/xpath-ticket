@@ -17,6 +17,7 @@ from pathlib import Path
 
 # 상수 임포트
 from xpath_constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
+from xpath_perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
@@ -412,45 +413,91 @@ class PlaywrightManager:
             
         selector = SCAN_SELECTORS.get(element_type, SCAN_SELECTORS['interactive'])
         results = []
-        
-        try:
-            frame = self._get_frame()
-            if not frame:
-                return []
 
-            elements = frame.query_selector_all(selector)
-            
-            for i, el in enumerate(elements[:max_count]):
-                try:
-                    tag = el.evaluate("el => el.tagName.toLowerCase()")
-                    text = el.inner_text()[:100] if el.inner_text() else ""
-                    el_id = el.get_attribute('id') or ""
-                    el_name = el.get_attribute('name') or ""
-                    el_class = el.get_attribute('class') or ""
-                    is_visible = el.is_visible()
-                    is_enabled = el.is_enabled()
-                    
-                    xpath = self._generate_xpath(el, el_id, el_name, tag, text)
-                    css = self._generate_css_selector(el_id, el_name, el_class, tag)
-                    
-                    results.append(ScannedElement(
-                        xpath=xpath,
-                        css_selector=css,
-                        tag=tag,
-                        text=text.strip()[:50],
-                        element_id=el_id,
-                        element_name=el_name,
-                        element_class=el_class[:50],
-                        is_visible=is_visible,
-                        is_enabled=is_enabled
-                    ))
-                except Exception as e:
-                    logger.debug(f"요소 스캔 중 오류: {e}")
-                    continue
-                    
-        except Exception as e:
-            logger.error(f"요소 스캔 실패: {e}")
-            
+        with perf_span("playwright.scan_elements"):
+            try:
+                frame = self._get_frame()
+                if not frame:
+                    return []
+
+                data_rows = frame.eval_on_selector_all(
+                    selector,
+                    """
+                    (elements, maxCount) => {
+                        function buildXPath(el) {
+                            if (!el) return "";
+                            if (el.id) return `//*[@id="${el.id}"]`;
+                            const tag = (el.tagName || "").toLowerCase();
+                            const name = el.getAttribute("name") || "";
+                            const text = (el.innerText || "").trim();
+                            if (name) return `//${tag}[@name="${name}"]`;
+                            if (text && (tag === "button" || tag === "a")) {
+                                const clean = text.slice(0, 30);
+                                if (clean) return `//${tag}[contains(text(), "${clean}")]`;
+                            }
+                            return `//${tag || "*"}`;
+                        }
+
+                        function buildCss(el) {
+                            if (!el) return "";
+                            const esc = (v) => (v || "").replace(/([!"#$%&'()*+,./:;<=>?@[\\\\\\]^`{|}~])/g, "\\\\$1");
+                            const tag = (el.tagName || "").toLowerCase() || "*";
+                            const id = el.getAttribute("id") || "";
+                            const name = el.getAttribute("name") || "";
+                            const klass = el.getAttribute("class") || "";
+
+                            if (id) return `#${esc(id)}`;
+                            if (name) return `${tag}[name="${(name || "").replace(/"/g, '\\"')}"]`;
+                            if (klass) {
+                                const classes = klass.split(/\\s+/).filter(Boolean).slice(0, 2).map(esc);
+                                if (classes.length) return `${tag}.${classes.join(".")}`;
+                            }
+                            return tag;
+                        }
+
+                        const rows = [];
+                        const slice = elements.slice(0, maxCount);
+                        for (const el of slice) {
+                            try {
+                                const tag = (el.tagName || "").toLowerCase();
+                                const text = ((el.innerText || "").trim()).slice(0, 50);
+                                rows.push({
+                                    tag,
+                                    text,
+                                    element_id: el.getAttribute("id") || "",
+                                    element_name: el.getAttribute("name") || "",
+                                    element_class: (el.getAttribute("class") || "").slice(0, 50),
+                                    is_visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
+                                    is_enabled: !el.disabled,
+                                    xpath: buildXPath(el),
+                                    css_selector: buildCss(el)
+                                });
+                            } catch (_) {}
+                        }
+                        return rows;
+                    }
+                    """,
+                    max_count
+                )
+
+                for row in data_rows:
+                    results.append(
+                        ScannedElement(
+                            xpath=row.get("xpath", ""),
+                            css_selector=row.get("css_selector", ""),
+                            tag=row.get("tag", ""),
+                            text=row.get("text", ""),
+                            element_id=row.get("element_id", ""),
+                            element_name=row.get("element_name", ""),
+                            element_class=row.get("element_class", ""),
+                            is_visible=bool(row.get("is_visible", False)),
+                            is_enabled=bool(row.get("is_enabled", False)),
+                        )
+                    )
+
+            except Exception as e:
+                logger.error(f"요소 스캔 실패: {e}")
+
         return results
     
     def _generate_xpath(self, el, el_id: str, el_name: str, 

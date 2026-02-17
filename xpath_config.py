@@ -62,11 +62,13 @@ class SiteConfig:
     items: List[XPathItem] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    _item_index: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
     
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
+        self.rebuild_index()
     
     def to_dict(self) -> Dict:
         return {
@@ -164,23 +166,48 @@ class SiteConfig:
         )
     
     def get_item(self, name: str) -> Optional[XPathItem]:
-        for item in self.items:
-            if item.name == name:
-                return item
+        idx = self._item_index.get(name)
+        if idx is None:
+            return None
+        if 0 <= idx < len(self.items) and self.items[idx].name == name:
+            return self.items[idx]
+        # 외부에서 items를 직접 수정한 경우 대비
+        self.rebuild_index()
+        idx = self._item_index.get(name)
+        if idx is not None and 0 <= idx < len(self.items):
+            return self.items[idx]
         return None
     
     def add_or_update(self, item: XPathItem):
-        existing = self.get_item(item.name)
-        if existing:
-            idx = self.items.index(existing)
+        idx = self._item_index.get(item.name)
+        if idx is not None and 0 <= idx < len(self.items):
             self.items[idx] = item
         else:
             self.items.append(item)
+            self._item_index[item.name] = len(self.items) - 1
+            self.updated_at = datetime.now().isoformat()
+            return
+        self.rebuild_index()
         self.updated_at = datetime.now().isoformat()
     
     def remove_item(self, name: str):
-        self.items = [item for item in self.items if item.name != name]
+        idx = self._item_index.get(name)
+        if idx is None:
+            return
+        if 0 <= idx < len(self.items):
+            self.items.pop(idx)
+        self.rebuild_index()
         self.updated_at = datetime.now().isoformat()
     
     def get_categories(self) -> List[str]:
         return list(set(item.category for item in self.items))
+
+    def replace_items(self, items: List[XPathItem]):
+        """항목 리스트 전체 교체 후 인덱스 재구축."""
+        self.items = list(items)
+        self.rebuild_index()
+        self.updated_at = datetime.now().isoformat()
+
+    def rebuild_index(self):
+        """name -> index 인덱스를 재구축."""
+        self._item_index = {item.name: idx for idx, item in enumerate(self.items)}

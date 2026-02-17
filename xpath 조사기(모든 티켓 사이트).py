@@ -33,12 +33,20 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QSettings, QPro
 from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySequence, QDrag
 
 # 사용자 모듈 임포트
-from xpath_constants import APP_TITLE, APP_VERSION, SITE_PRESETS
+from xpath_constants import (
+    APP_TITLE, APP_VERSION, SITE_PRESETS,
+    BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
+    LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
+)
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
 from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton, CollapsibleBox
 from xpath_browser import BrowserManager
-from xpath_workers import PickerWatcher, ValidateWorker
+from xpath_workers import (
+    PickerWatcher, ValidateWorker, LivePreviewWorker,
+    AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker,
+)
+from xpath_perf import perf_span
 
 # v3.3 신규 모듈
 from xpath_codegen import CodeGenerator, CodeTemplate
@@ -111,27 +119,35 @@ class XPathExplorer(QMainWindow):
         # 워커 스레드 관리
         self.picker_watcher = None
         self.validate_worker = None
+        self.live_preview_worker = None
+        self.ai_worker = None
+        self.diff_worker = None
+        self.batch_worker = None
+        self._live_preview_request_id = 0
+        self._ai_request_id = 0
         
         # 상태 변수
         self._font_size = 14
         self._search_text = ""
         self._filter_favorites_only = False  # v3.3: 즐겨찾기 필터
         self._filter_tag = ""  # v3.3: 태그 필터
+        self._filter_options_dirty = True
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(300) # [PERF-003] 300ms Debounce
+        self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
         self._search_timer.timeout.connect(self._perform_search)
         
         # v4.0: 실시간 미리보기 타이머
         self._live_preview_timer = QTimer()
         self._live_preview_timer.setSingleShot(True)
-        self._live_preview_timer.setInterval(500)  # 500ms debounce
+        self._live_preview_timer.setInterval(LIVE_PREVIEW_DEBOUNCE_MS)
         self._live_preview_timer.timeout.connect(self._update_live_preview)
         
         self.init_settings()
         self._init_ui()
         self._load_settings()
         self._setup_timers()
+        self._refresh_table(refresh_filters=True)
         
         # v4.0: 히스토리 초기화
         self.history_manager.initialize(self.config.items)
@@ -953,7 +969,7 @@ class XPathExplorer(QMainWindow):
         """주기적 작업 타이머"""
         self.check_timer = QTimer(self)
         self.check_timer.timeout.connect(self._check_browser)
-        self.check_timer.start(2000)
+        self.check_timer.start(BROWSER_CHECK_INTERVAL)
 
     # =========================================================================
     # 로직 핸들러: 브라우저
@@ -1065,18 +1081,22 @@ class XPathExplorer(QMainWindow):
 
     def _scan_frames(self):
         """iframe 목록 스캔"""
-        self.combo_frames.clear()
-        self.combo_frames.addItem("Main Content", "main")
-        
-        if not self.browser.is_alive():
-            return
-            
-        frames = self.browser.get_all_frames()
-        for path, identifier in frames:
-            indent = "  " * path.count('/')
-            self.combo_frames.addItem(f"{indent}📄 {identifier}", path)
-            
-        self._show_toast(f"{len(frames)}개의 프레임을 찾았습니다.", "info")
+        with perf_span("ui.scan_frames"):
+            self.combo_frames.blockSignals(True)
+            try:
+                self.combo_frames.clear()
+                self.combo_frames.addItem("Main Content", "main")
+                
+                if not self.browser.is_alive():
+                    return
+                    
+                frames = self.browser.get_all_frames()
+                for path, identifier in frames:
+                    indent = "  " * path.count('/')
+                    self.combo_frames.addItem(f"{indent}📄 {identifier}", path)
+                self._show_toast(f"{len(frames)}개의 프레임을 찾았습니다.", "info")
+            finally:
+                self.combo_frames.blockSignals(False)
 
     # =========================================================================
     # 로직 핸들러: 데이터 & 편집
@@ -1112,135 +1132,143 @@ class XPathExplorer(QMainWindow):
             self.input_url.setText(self.config.login_url)
         elif self.config.url:
             self.input_url.setText(self.config.url)
-            
-        self._refresh_table()
+
+        self._filter_options_dirty = True
+        self._refresh_table(refresh_filters=True)
         self._show_toast(f"{preset_name} 프리셋 로드 완료", "success")
 
-    def _refresh_table(self, filter_cat=None):
-        """테이블 갱신 - v3.3: 확장된 컬럼 및 필터 지원"""
-        self.table.setRowCount(0)
-        
-        # 카테고리 필터 콤보박스 업데이트
+    def _refresh_filter_options_if_dirty(self, force: bool = False):
+        """필터 옵션(카테고리/태그)을 필요할 때만 갱신."""
+        if not (force or self._filter_options_dirty):
+            return
+
         categories = sorted(self.config.get_categories())
-        current_cat = self.combo_filter.currentText()
-        
+        current_cat = self.combo_filter.currentText() or "전체"
         self.combo_filter.blockSignals(True)
         self.combo_filter.clear()
         self.combo_filter.addItem("전체")
         self.combo_filter.addItems(categories)
-        
-        if current_cat in categories:
+        if current_cat == "전체" or current_cat in categories:
             self.combo_filter.setCurrentText(current_cat)
+        else:
+            self.combo_filter.setCurrentIndex(0)
         self.combo_filter.blockSignals(False)
-        
-        # v3.3: 태그 필터 콤보박스 업데이트
+
         all_tags = set()
         for item in self.config.items:
             all_tags.update(item.tags)
-        
-        current_tag = self.combo_tag_filter.currentText()
+
+        current_tag = self.combo_tag_filter.currentText() or "모든 태그"
         self.combo_tag_filter.blockSignals(True)
         self.combo_tag_filter.clear()
         self.combo_tag_filter.addItem("모든 태그")
         self.combo_tag_filter.addItems(sorted(all_tags))
-        if current_tag in all_tags:
+        if current_tag == "모든 태그" or current_tag in all_tags:
             self.combo_tag_filter.setCurrentText(current_tag)
+        else:
+            self.combo_tag_filter.setCurrentIndex(0)
         self.combo_tag_filter.blockSignals(False)
-        
-        # 실제 필터링 적용
-        target_cat = filter_cat if filter_cat else self.combo_filter.currentText()
-        
-        items_to_show = []
-        for item in self.config.items:
-            # 1. 카테고리 필터
-            if target_cat != "전체" and item.category != target_cat:
-                continue
-            
-            # 2. 검색어 필터
-            if self._search_text:
-                st = self._search_text.lower()
-                if (st not in item.name.lower() and 
-                    st not in item.description.lower() and 
-                    st not in item.xpath.lower()):
-                    continue
-            
-            # v3.3: 즐겨찾기 필터
-            if self._filter_favorites_only and not item.is_favorite:
-                continue
-            
-            # v3.3: 태그 필터
-            if self._filter_tag and self._filter_tag != "모든 태그":
-                if self._filter_tag not in item.tags:
-                    continue
-            
-            items_to_show.append(item)
-        
-        # v3.3: sort_order로 정렬
-        items_to_show.sort(key=lambda x: x.sort_order)
-            
-        verified_count = 0
-        
-        for item in items_to_show:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            
-            # 컬럼 0: 즐겨찾기
-            fav_item = QTableWidgetItem("⭐" if item.is_favorite else "☆")
-            fav_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            fav_item.setToolTip("클릭하여 즐겨찾기 토글")
-            self.table.setItem(row, 0, fav_item)
-            
-            # 컬럼 1: 상태
-            status = QTableWidgetItem("✅" if item.is_verified else "⬜")
-            status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 1, status)
-            if item.is_verified: verified_count += 1
-            
-            # 컬럼 2: 이름
-            name_item = QTableWidgetItem(item.name)
-            name_item.setData(Qt.ItemDataRole.UserRole, item.name)  # 식별용
-            self.table.setItem(row, 2, name_item)
-            
-            # 컬럼 3: 카테고리
-            cat_item = QTableWidgetItem(item.category)
-            cat_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            cat_item.setBackground(QColor("#313244"))
-            self.table.setItem(row, 3, cat_item)
-            
-            # 컬럼 4: 설명
-            desc_text = item.description
-            if item.tags:
-                desc_text += f" [{', '.join(item.tags)}]"
-            self.table.setItem(row, 4, QTableWidgetItem(desc_text))
-            
-            # 컬럼 5: 성공률
-            rate_text = f"{item.success_rate:.0f}%" if item.test_count > 0 else "-"
-            rate_item = QTableWidgetItem(rate_text)
-            rate_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            # 색상 표시
-            if item.test_count > 0:
-                if item.success_rate >= 80:
-                    rate_item.setForeground(QColor("#a6e3a1"))  # Green
-                elif item.success_rate >= 50:
-                    rate_item.setForeground(QColor("#fab387"))  # Orange
-                else:
-                    rate_item.setForeground(QColor("#f38ba8"))  # Red
-            self.table.setItem(row, 5, rate_item)
-            
-            # 컬럼 6: 삭제 버튼
-            btn_del = QPushButton("🗑")
-            btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_del.setStyleSheet("color: #f38ba8; font-weight: bold; border: none; background: transparent;")
-            btn_del.clicked.connect(lambda _, n=item.name: self._delete_item(n))
-            self.table.setCellWidget(row, 6, btn_del)
 
+        self._filter_options_dirty = False
+
+    def _item_matches_filters(self, item: XPathItem, target_cat: str) -> bool:
+        if target_cat != "전체" and item.category != target_cat:
+            return False
+
+        if self._search_text:
+            st = self._search_text.lower()
+            if (
+                st not in item.name.lower()
+                and st not in item.description.lower()
+                and st not in item.xpath.lower()
+            ):
+                return False
+
+        if self._filter_favorites_only and not item.is_favorite:
+            return False
+
+        if self._filter_tag and self._filter_tag != "모든 태그":
+            if self._filter_tag not in item.tags:
+                return False
+
+        return True
+
+    def _collect_filtered_items(self, target_cat: str) -> List[XPathItem]:
+        items_to_show = [item for item in self.config.items if self._item_matches_filters(item, target_cat)]
+        items_to_show.sort(key=lambda x: x.sort_order)
+        return items_to_show
+
+    def _render_table_row(self, row: int, item: XPathItem):
+        """단일 행 렌더링."""
+        fav_item = QTableWidgetItem("⭐" if item.is_favorite else "☆")
+        fav_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        fav_item.setToolTip("클릭하여 즐겨찾기 토글")
+        self.table.setItem(row, 0, fav_item)
+
+        status = QTableWidgetItem("✅" if item.is_verified else "⬜")
+        status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(row, 1, status)
+
+        name_item = QTableWidgetItem(item.name)
+        name_item.setData(Qt.ItemDataRole.UserRole, item.name)
+        self.table.setItem(row, 2, name_item)
+
+        cat_item = QTableWidgetItem(item.category)
+        cat_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        cat_item.setBackground(QColor("#313244"))
+        self.table.setItem(row, 3, cat_item)
+
+        desc_text = item.description
+        if item.tags:
+            desc_text += f" [{', '.join(item.tags)}]"
+        self.table.setItem(row, 4, QTableWidgetItem(desc_text))
+
+        rate_text = f"{item.success_rate:.0f}%" if item.test_count > 0 else "-"
+        rate_item = QTableWidgetItem(rate_text)
+        rate_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        if item.test_count > 0:
+            if item.success_rate >= 80:
+                rate_item.setForeground(QColor("#a6e3a1"))
+            elif item.success_rate >= 50:
+                rate_item.setForeground(QColor("#fab387"))
+            else:
+                rate_item.setForeground(QColor("#f38ba8"))
+        self.table.setItem(row, 5, rate_item)
+
+        btn_del = QPushButton("🗑")
+        btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_del.setStyleSheet("color: #f38ba8; font-weight: bold; border: none; background: transparent;")
+        btn_del.clicked.connect(lambda _, n=item.name: self._delete_item(n))
+        self.table.setCellWidget(row, 6, btn_del)
+
+    def _render_table_rows(self, items_to_show: List[XPathItem]):
+        self.table.setUpdatesEnabled(False)
+        self.table.blockSignals(True)
+        try:
+            self.table.setRowCount(len(items_to_show))
+            for row, item in enumerate(items_to_show):
+                self._render_table_row(row, item)
+        finally:
+            self.table.blockSignals(False)
+            self.table.setUpdatesEnabled(True)
+
+    def _update_table_summary(self, items_to_show: List[XPathItem]):
+        verified_count = sum(1 for item in items_to_show if item.is_verified)
         self.lbl_summary.setText(f"총 {len(self.config.items)}개 (필터됨: {len(items_to_show)}개) | ✅ {verified_count}")
-        
-        # 빈 상태 메시지 표시
         if len(items_to_show) == 0 and len(self.config.items) > 0:
             self.lbl_summary.setText(f"검색 결과 없음 (전체: {len(self.config.items)}개)")
         elif len(self.config.items) == 0:
             self.lbl_summary.setText("항목이 없습니다. '+ 새 항목' 버튼을 클릭하여 추가하세요.")
+
+    def _refresh_table(self, filter_cat=None, refresh_filters: bool = False):
+        """테이블 갱신 - 필터 옵션/행 렌더링 분리."""
+        with perf_span("ui.refresh_table"):
+            self._refresh_filter_options_if_dirty(force=refresh_filters)
+            target_cat = filter_cat if filter_cat is not None else self.combo_filter.currentText()
+            items_to_show = self._collect_filtered_items(target_cat)
+            self._render_table_rows(items_to_show)
+            self._update_table_summary(items_to_show)
+            return items_to_show
 
     def _on_search_text_changed(self, text):
         """[BUG-003] 검색어 변경 시 타이머 시작 (Debounce)"""
@@ -1273,7 +1301,12 @@ class XPathExplorer(QMainWindow):
             item = self.config.get_item(item_name)
             if item:
                 item.is_favorite = not item.is_favorite
-                self._refresh_table()
+                target_cat = self.combo_filter.currentText()
+                if self._item_matches_filters(item, target_cat):
+                    self._render_table_row(row, item)
+                    self._update_table_summary(self._collect_filtered_items(target_cat))
+                else:
+                    self._refresh_table()
                 status = "추가" if item.is_favorite else "해제"
                 self._show_toast(f"'{item.name}' 즐겨찾기 {status}", "success", 1500)
 
@@ -1372,7 +1405,8 @@ class XPathExplorer(QMainWindow):
              item.found_frame = self.browser.current_frame_path
              
         self.config.add_or_update(item)
-        self._refresh_table()
+        self._filter_options_dirty = True
+        self._refresh_table(refresh_filters=True)
         self._update_undo_redo_actions()  # v4.0
         # 히스토리 현재 상태 동기화 (변경 후)
         self.history_manager.sync_current_state(self.config.items)
@@ -1388,7 +1422,8 @@ class XPathExplorer(QMainWindow):
                 f"{name} 항목 삭제"
             )
             self.config.remove_item(name)
-            self._refresh_table()
+            self._filter_options_dirty = True
+            self._refresh_table(refresh_filters=True)
             self._clear_editor()
             self._update_undo_redo_actions()  # v4.0
             # 히스토리 현재 상태 동기화 (변경 후)
@@ -1489,7 +1524,7 @@ class XPathExplorer(QMainWindow):
         self.show()
         if self.picker_watcher:
             self.picker_watcher.stop()
-            self.picker_watcher.wait(1000)
+            self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
             self.picker_watcher = None
         
         if not result or not isinstance(result, dict):
@@ -1526,7 +1561,7 @@ class XPathExplorer(QMainWindow):
         self.show()
         if self.picker_watcher:
             self.picker_watcher.stop()
-            self.picker_watcher.wait(1000)  # 스레드 완료 대기
+            self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
             self.picker_watcher = None
         self._show_toast("요소 선택이 취소되었습니다.", "warning")
 
@@ -1591,7 +1626,8 @@ class XPathExplorer(QMainWindow):
     def _new_config(self):
         if QMessageBox.question(self, "새 설정", "모든 항목을 지우고 초기화하시겠습니까?") == QMessageBox.StandardButton.Yes:
             self.config = SiteConfig.from_preset("빈 템플릿")
-            self._refresh_table()
+            self._filter_options_dirty = True
+            self._refresh_table(refresh_filters=True)
             self._clear_editor()
 
     def _open_config(self):
@@ -1601,7 +1637,8 @@ class XPathExplorer(QMainWindow):
                 with open(fname, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.config = SiteConfig.from_dict(data)
-                    self._refresh_table()
+                    self._filter_options_dirty = True
+                    self._refresh_table(refresh_filters=True)
                     self._show_toast("설정을 불러왔습니다.", "success")
             except Exception as e:
                 self._show_toast(f"로드 실패: {e}", "error")
@@ -1862,9 +1899,13 @@ class XPathExplorer(QMainWindow):
     # =========================================================================
     
     def _batch_test(self, category: str = None):
-        """배치 테스트 실행 (취소 가능)"""
+        """배치 테스트 실행 (취소 가능, 비동기)"""
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
+            return
+
+        if self.batch_worker and self.batch_worker.isRunning():
+            self._show_toast("이미 배치 테스트가 실행 중입니다.", "warning")
             return
         
         # 테스트할 항목 필터링
@@ -1877,53 +1918,35 @@ class XPathExplorer(QMainWindow):
             return
         
         self._show_toast(f"{len(items_to_test)}개 항목 배치 테스트 시작...", "info")
-        
-        # 취소 플래그 초기화
-        self._batch_cancel_flag = False
-        
-        # 프로그레스 바 표시 및 취소 버튼 설정
+
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        
-        # 기존 버튼 상태 저장 및 취소 버튼으로 변환
+        self.progress_bar.setFormat("테스트 준비 중...")
         self.btn_open.setEnabled(False)  # 브라우저 버튼 비활성화
-        
-        results = []
-        cancelled = False
-        
-        for i, item in enumerate(items_to_test):
-            # 취소 확인
-            if self._batch_cancel_flag:
-                self._show_toast("배치 테스트가 취소되었습니다.", "warning")
-                cancelled = True
-                break
-            
-            progress = int((i / len(items_to_test)) * 100)
-            self.progress_bar.setValue(progress)
-            self.progress_bar.setFormat(f"테스트 중: {item.name} ({i+1}/{len(items_to_test)}) - ESC로 취소")
-            QApplication.processEvents()
-            
-            result = self.browser.validate_xpath(item.xpath)
-            success = result.get('found', False)
-            
-            # 통계 기록
+        self.batch_worker = BatchTestWorker(self.browser, list(items_to_test))
+        self.batch_worker.progress.connect(self._on_batch_test_progress)
+        self.batch_worker.item_tested.connect(self._on_batch_item_tested)
+        self.batch_worker.completed.connect(self._on_batch_test_completed)
+        self.batch_worker.start()
+
+    def _on_batch_test_progress(self, value: int, message: str):
+        self.progress_bar.setValue(value)
+        self.progress_bar.setFormat(f"{message} - ESC로 취소")
+
+    def _on_batch_item_tested(self, name: str, success: bool, xpath: str, msg: str):
+        item = self.config.get_item(name)
+        if item:
             item.record_test(success)
-            self.stats_manager.record_test(item.name, item.xpath, success)
-            
-            results.append({
-                'name': item.name,
-                'success': success,
-                'xpath': item.xpath,
-                'msg': result.get('msg', '')
-            })
-        
-        # 정리
+        self.stats_manager.record_test(name, xpath, success, error_msg=msg if not success else "")
+
+    def _on_batch_test_completed(self, results: list, cancelled: bool):
         self.progress_bar.setVisible(False)
-        self.progress_bar.setFormat("%p%")  # 기본 형식 복원
-        self.btn_open.setEnabled(True)  # 버튼 재활성화
+        self.progress_bar.setFormat("%p%")
+        self.btn_open.setEnabled(True)
+        self.batch_worker = None
         self._refresh_table()
-        
-        # 결과 리포트 표시 (취소된 경우에도 부분 결과 표시)
+        if cancelled:
+            self._show_toast("배치 테스트가 취소되었습니다.", "warning")
         if results:
             self._show_batch_report(results, cancelled=cancelled)
     
@@ -2320,38 +2343,33 @@ class XPathExplorer(QMainWindow):
         QApplication.processEvents()
         
         try:
-            elements = self.pw_manager.scan_elements(scan_type, max_count=50)
-            
-            self.table_scan_results.setRowCount(0)
-            
-            for elem in elements:
-                row = self.table_scan_results.rowCount()
-                self.table_scan_results.insertRow(row)
+            with perf_span("ui.scan_page_elements"):
+                elements = self.pw_manager.scan_elements(scan_type, max_count=50)
                 
-                # XPath (최대 80자)
-                xpath = elem.xpath
-                if len(xpath) > 80:
-                    xpath = xpath[:77] + "..."
-                self.table_scan_results.setItem(row, 0, QTableWidgetItem(xpath))
+                self.table_scan_results.setUpdatesEnabled(False)
+                self.table_scan_results.setRowCount(len(elements))
                 
-                # Tag
-                self.table_scan_results.setItem(row, 1, QTableWidgetItem(elem.tag))
-                
-                # Text (최대 30자)
-                text = elem.text[:30] + "..." if len(elem.text) > 30 else elem.text
-                self.table_scan_results.setItem(row, 2, QTableWidgetItem(text))
-                
-                # 사용 버튼
-                btn_use = QPushButton("사용")
-                btn_use.setObjectName("success")
-                btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_use.clicked.connect(lambda checked, e=elem: self._use_scanned_element(e))
-                self.table_scan_results.setCellWidget(row, 3, btn_use)
-            
-            self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
-            self._show_toast(f"{len(elements)}개의 {scan_type} 요소를 찾았습니다.", "success")
+                for row, elem in enumerate(elements):
+                    xpath = elem.xpath
+                    if len(xpath) > 80:
+                        xpath = xpath[:77] + "..."
+                    self.table_scan_results.setItem(row, 0, QTableWidgetItem(xpath))
+                    self.table_scan_results.setItem(row, 1, QTableWidgetItem(elem.tag))
+                    text = elem.text[:30] + "..." if len(elem.text) > 30 else elem.text
+                    self.table_scan_results.setItem(row, 2, QTableWidgetItem(text))
+                    
+                    btn_use = QPushButton("사용")
+                    btn_use.setObjectName("success")
+                    btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_use.clicked.connect(lambda checked, e=elem: self._use_scanned_element(e))
+                    self.table_scan_results.setCellWidget(row, 3, btn_use)
+
+                self.table_scan_results.setUpdatesEnabled(True)
+                self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
+                self._show_toast(f"{len(elements)}개의 {scan_type} 요소를 찾았습니다.", "success")
             
         except Exception as e:
+            self.table_scan_results.setUpdatesEnabled(True)
             self._show_toast(f"스캔 실패: {e}", "error")
     
     def _use_scanned_element(self, element):
@@ -2395,7 +2413,8 @@ class XPathExplorer(QMainWindow):
         restored = self.history_manager.undo()
         if restored:
             self._restore_items_from_dicts(restored)
-            self._refresh_table()
+            self._filter_options_dirty = True
+            self._refresh_table(refresh_filters=True)
             self._update_undo_redo_actions()
             self._show_toast("실행 취소됨", "info")
     
@@ -2404,13 +2423,14 @@ class XPathExplorer(QMainWindow):
         restored = self.history_manager.redo()
         if restored:
             self._restore_items_from_dicts(restored)
-            self._refresh_table()
+            self._filter_options_dirty = True
+            self._refresh_table(refresh_filters=True)
             self._update_undo_redo_actions()
             self._show_toast("다시 실행됨", "info")
     
     def _restore_items_from_dicts(self, item_dicts: list):
         """딕셔너리 리스트에서 XPathItem 복원"""
-        self.config.items = []
+        restored_items = []
         for d in item_dicts:
             item = XPathItem(
                 name=d.get('name', ''),
@@ -2434,7 +2454,8 @@ class XPathExplorer(QMainWindow):
                 screenshot_path=d.get('screenshot_path', ''),
                 ai_generated=d.get('ai_generated', False)
             )
-            self.config.items.append(item)
+            restored_items.append(item)
+        self.config.replace_items(restored_items)
     
     def _save_item_with_history(self):
         """항목 저장 (히스토리 기록 포함)"""
@@ -2460,37 +2481,62 @@ class XPathExplorer(QMainWindow):
         self._live_preview_timer.start()
     
     def _update_live_preview(self):
-        """실시간 매칭 요소 수 업데이트"""
-        xpath = self.input_xpath.toPlainText().strip()
+        """실시간 매칭 요소 수 업데이트 (비동기)"""
+        with perf_span("ui.update_live_preview"):
+            xpath = self.input_xpath.toPlainText().strip()
         
-        if not xpath:
-            self.lbl_live_preview.setText("🔍 매칭: -")
-            self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
-            return
-        
-        if not self.browser.is_alive():
-            self.lbl_live_preview.setText("🔍 매칭: (브라우저 없음)")
-            self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
-            return
-        
-        try:
-            count = self.browser.count_elements(xpath)
+            if not xpath:
+                self.lbl_live_preview.setText("🔍 매칭: -")
+                self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+                return
             
-            if count < 0:
-                self.lbl_live_preview.setText("⚠️ 오류")
-                self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
-            elif count == 0:
-                self.lbl_live_preview.setText("❌ 매칭: 0개")
-                self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
-            elif count == 1:
-                self.lbl_live_preview.setText("✅ 매칭: 1개")
-                self.lbl_live_preview.setStyleSheet("color: #a6e3a1; font-size: 11px;")
-            else:
-                self.lbl_live_preview.setText(f"🔍 매칭: {count}개")
-                self.lbl_live_preview.setStyleSheet("color: #fab387; font-size: 11px;")
-        except Exception:
+            if not self.browser.is_alive():
+                self.lbl_live_preview.setText("🔍 매칭: (브라우저 없음)")
+                self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+                return
+
+            self._live_preview_request_id += 1
+            request_id = self._live_preview_request_id
+
+            if self.live_preview_worker and self.live_preview_worker.isRunning():
+                self.live_preview_worker.cancel()
+
+            self.lbl_live_preview.setText("🔍 매칭: 계산 중...")
+            self.lbl_live_preview.setStyleSheet("color: #89b4fa; font-size: 11px;")
+
+            worker = LivePreviewWorker(self.browser, xpath, request_id)
+            worker.counted.connect(self._on_live_preview_counted)
+            worker.failed.connect(self._on_live_preview_failed)
+            worker.finished.connect(lambda w=worker: self._on_live_preview_worker_finished(w))
+            self.live_preview_worker = worker
+            worker.start()
+
+    def _on_live_preview_counted(self, request_id: int, count: int):
+        if request_id != self._live_preview_request_id:
+            return
+
+        if count < 0:
             self.lbl_live_preview.setText("⚠️ 오류")
             self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+        elif count == 0:
+            self.lbl_live_preview.setText("❌ 매칭: 0개")
+            self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+        elif count == 1:
+            self.lbl_live_preview.setText("✅ 매칭: 1개")
+            self.lbl_live_preview.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+        else:
+            self.lbl_live_preview.setText(f"🔍 매칭: {count}개")
+            self.lbl_live_preview.setStyleSheet("color: #fab387; font-size: 11px;")
+
+    def _on_live_preview_failed(self, request_id: int, _error: str):
+        if request_id != self._live_preview_request_id:
+            return
+        self.lbl_live_preview.setText("⚠️ 오류")
+        self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+
+    def _on_live_preview_worker_finished(self, worker):
+        if self.live_preview_worker is worker:
+            self.live_preview_worker = None
 
     # =========================================================================
     # v4.0 신규 기능: XPath 대안 제안
@@ -2644,23 +2690,12 @@ class XPathExplorer(QMainWindow):
         # 신뢰도 라벨
         self._ai_confidence_label = QLabel("")
         layout.addWidget(self._ai_confidence_label)
-        
-        def generate():
-            desc = self._ai_input.toPlainText().strip()
-            if not desc:
-                self._show_toast("설명을 입력하세요.", "warning")
-                return
-            
-            self._ai_result_text.setPlainText("생성 중...")
-            QApplication.processEvents()
-            
-            result = self.ai_assistant.generate_xpath_from_description(desc)
-            
+
+        def _apply_ai_result(result):
             output = f"추천 XPath:\n{result.xpath}\n\n"
             if result.alternative_xpaths:
                 output += "대안:\n" + "\n".join(f"  - {x}" for x in result.alternative_xpaths) + "\n\n"
             output += f"설명:\n{result.explanation}"
-            
             self._ai_result_text.setPlainText(output)
             
             conf = result.confidence * 100
@@ -2673,6 +2708,46 @@ class XPathExplorer(QMainWindow):
             else:
                 self._ai_confidence_label.setText(f"신뢰도: {conf:.0f}% (낮음)")
                 self._ai_confidence_label.setStyleSheet("color: #f38ba8;")
+
+        def _on_ai_generated(request_id: int, result):
+            if request_id != self._ai_request_id:
+                return
+            _apply_ai_result(result)
+
+        def _on_ai_failed(request_id: int, error: str):
+            if request_id != self._ai_request_id:
+                return
+            self._ai_result_text.setPlainText(f"생성 실패:\n{error}")
+            self._ai_confidence_label.setText("")
+
+        def _on_ai_worker_finished(worker):
+            if self.ai_worker is worker:
+                self.ai_worker = None
+            btn_generate.setEnabled(True)
+        
+        def generate():
+            with perf_span("ui.ai_generate_click"):
+                desc = self._ai_input.toPlainText().strip()
+                if not desc:
+                    self._show_toast("설명을 입력하세요.", "warning")
+                    return
+
+                self._ai_request_id += 1
+                request_id = self._ai_request_id
+
+                if self.ai_worker and self.ai_worker.isRunning():
+                    self.ai_worker.cancel()
+
+                btn_generate.setEnabled(False)
+                self._ai_result_text.setPlainText("생성 중...")
+                self._ai_confidence_label.setText("")
+
+                worker = AIGenerateWorker(self.ai_assistant, desc, request_id)
+                worker.generated.connect(_on_ai_generated)
+                worker.failed.connect(_on_ai_failed)
+                worker.finished.connect(lambda w=worker: _on_ai_worker_finished(w))
+                self.ai_worker = worker
+                worker.start()
         
         btn_generate.clicked.connect(generate)
         
@@ -2695,6 +2770,11 @@ class XPathExplorer(QMainWindow):
         btn_layout.addWidget(btn_close)
         
         layout.addLayout(btn_layout)
+        dialog.finished.connect(
+            lambda _=None: (
+                self.ai_worker.cancel() if self.ai_worker and self.ai_worker.isRunning() else None
+            )
+        )
         dialog.exec()
     
     def _configure_ai_api(self, parent_dialog):
@@ -2816,47 +2896,67 @@ class XPathExplorer(QMainWindow):
         table.verticalHeader().setVisible(False)
         layout.addWidget(table)
         
+        def _render_diff_results(results):
+            table.setUpdatesEnabled(False)
+            try:
+                table.setRowCount(len(results))
+                unchanged = modified = missing = 0
+                for row, result in enumerate(results):
+                    status_item = QTableWidgetItem(result.status_icon)
+                    status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    table.setItem(row, 0, status_item)
+
+                    table.setItem(row, 1, QTableWidgetItem(result.item_name))
+
+                    changes_text = ", ".join(result.changes) if result.changes else "-"
+                    table.setItem(row, 2, QTableWidgetItem(changes_text))
+
+                    xpath_short = result.xpath[:40] + "..." if len(result.xpath) > 40 else result.xpath
+                    xpath_item = QTableWidgetItem(xpath_short)
+                    xpath_item.setToolTip(result.xpath)
+                    table.setItem(row, 3, xpath_item)
+
+                    if result.status == "unchanged":
+                        unchanged += 1
+                    elif result.status == "modified":
+                        modified += 1
+                    elif result.status == "missing":
+                        missing += 1
+                lbl_summary.setText(f"분석 완료: ✅ 변경없음 {unchanged}개 | ⚠️ 수정됨 {modified}개 | ❌ 찾지못함 {missing}개")
+            finally:
+                table.setUpdatesEnabled(True)
+
+        def _on_diff_progress(_value, message):
+            lbl_summary.setText(message)
+
+        def _on_diff_completed(results):
+            btn_analyze.setEnabled(True)
+            self.diff_worker = None
+            _render_diff_results(results)
+
+        def _on_diff_failed(message):
+            btn_analyze.setEnabled(True)
+            self.diff_worker = None
+            lbl_summary.setText(f"분석 실패: {message}")
+
         def run_analysis():
+            if self.diff_worker and self.diff_worker.isRunning():
+                return
             lbl_summary.setText("분석 중...")
-            QApplication.processEvents()
-            
-            results = self.diff_analyzer.compare_all(self.config.items, self.browser)
-            
-            table.setRowCount(0)
-            unchanged = modified = missing = 0
-            
-            for result in results:
-                row = table.rowCount()
-                table.insertRow(row)
-                
-                # 상태
-                status_item = QTableWidgetItem(result.status_icon)
-                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                table.setItem(row, 0, status_item)
-                
-                # 항목 이름
-                table.setItem(row, 1, QTableWidgetItem(result.item_name))
-                
-                # 변경 사항
-                changes_text = ", ".join(result.changes) if result.changes else "-"
-                table.setItem(row, 2, QTableWidgetItem(changes_text))
-                
-                # XPath
-                xpath_short = result.xpath[:40] + "..." if len(result.xpath) > 40 else result.xpath
-                xpath_item = QTableWidgetItem(xpath_short)
-                xpath_item.setToolTip(result.xpath)
-                table.setItem(row, 3, xpath_item)
-                
-                if result.status == "unchanged":
-                    unchanged += 1
-                elif result.status == "modified":
-                    modified += 1
-                elif result.status == "missing":
-                    missing += 1
-            
-            lbl_summary.setText(f"분석 완료: ✅ 변경없음 {unchanged}개 | ⚠️ 수정됨 {modified}개 | ❌ 찾지못함 {missing}개")
+            btn_analyze.setEnabled(False)
+            self.diff_worker = DiffAnalyzeWorker(list(self.config.items), self.browser, self.diff_analyzer)
+            self.diff_worker.progress.connect(_on_diff_progress)
+            self.diff_worker.completed.connect(_on_diff_completed)
+            self.diff_worker.failed.connect(_on_diff_failed)
+            self.diff_worker.start()
         
         btn_analyze.clicked.connect(run_analysis)
+
+        dialog.finished.connect(
+            lambda _=None: (
+                self.diff_worker.cancel() if self.diff_worker and self.diff_worker.isRunning() else None
+            )
+        )
         
         # 닫기 버튼
         btn_close = QPushButton("닫기")
@@ -2907,9 +3007,8 @@ class XPathExplorer(QMainWindow):
         """키보드 이벤트 처리 - ESC로 배치 테스트 취소"""
         from PyQt6.QtCore import Qt
         if event.key() == Qt.Key.Key_Escape:
-            # 배치 테스트 취소 플래그 설정
-            if hasattr(self, '_batch_cancel_flag'):
-                self._batch_cancel_flag = True
+            if self.batch_worker and self.batch_worker.isRunning():
+                self.batch_worker.cancel()
         super().keyPressEvent(event)
 
     def _save_settings(self):
@@ -2925,18 +3024,34 @@ class XPathExplorer(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self._save_settings()  # 추가 설정 저장
         
-        # 워커 스레드 정리 (대기 시간 증가)
+        # 워커 스레드 정리
         if self.picker_watcher and self.picker_watcher.isRunning():
             logger.debug("PickerWatcher 종료 대기 중...")
             self.picker_watcher.stop()
-            if not self.picker_watcher.wait(2000):  # 2초 대기
+            if not self.picker_watcher.wait(WORKER_WAIT_TIMEOUT):
                 logger.warning("PickerWatcher 강제 종료")
             
         if self.validate_worker and self.validate_worker.isRunning():
             logger.debug("ValidateWorker 종료 대기 중...")
             self.validate_worker.cancel()
-            if not self.validate_worker.wait(2000):  # 2초 대기
+            if not self.validate_worker.wait(WORKER_WAIT_TIMEOUT):
                 logger.warning("ValidateWorker 강제 종료")
+
+        if self.live_preview_worker and self.live_preview_worker.isRunning():
+            self.live_preview_worker.cancel()
+            self.live_preview_worker.wait(WORKER_WAIT_TIMEOUT)
+
+        if self.ai_worker and self.ai_worker.isRunning():
+            self.ai_worker.cancel()
+            self.ai_worker.wait(WORKER_WAIT_TIMEOUT)
+
+        if self.diff_worker and self.diff_worker.isRunning():
+            self.diff_worker.cancel()
+            self.diff_worker.wait(WORKER_WAIT_TIMEOUT)
+
+        if self.batch_worker and self.batch_worker.isRunning():
+            self.batch_worker.cancel()
+            self.batch_worker.wait(WORKER_WAIT_TIMEOUT)
         
         # v3.4: Playwright 종료
         if self.pw_manager:
