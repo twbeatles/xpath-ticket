@@ -28,6 +28,9 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+    sync_playwright = None  # type: ignore[assignment]
+    Page = Browser = BrowserContext = Any  # type: ignore[misc,assignment]
+    PlaywrightTimeout = Exception  # type: ignore[assignment]
     logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
 
 
@@ -53,6 +56,7 @@ class NetworkRequest:
     method: str
     resource_type: str
     status: int = 0
+    response_size: int = 0
     response_body: str = ""
 
 
@@ -304,6 +308,11 @@ class PlaywrightManager:
             for req in reversed(self._network_requests):
                 if req.url == response.url and req.status == 0:
                     req.status = response.status
+                    try:
+                        content_length = response.headers.get("content-length", "0")
+                        req.response_size = int(content_length)
+                    except Exception:
+                        req.response_size = 0
                     break
         
         # 핸들러 참조 저장 (나중에 제거용)
@@ -812,4 +821,40 @@ class PlaywrightManager:
         """페이지 로드 시 스크립트 주입"""
         if self._page:
             self._page.add_init_script(script)
+
+
+class NetworkAnalyzer:
+    """
+    기존 UI와의 호환을 위한 네트워크 분석 어댑터.
+
+    내부적으로 PlaywrightManager를 사용해 브라우저 시작/캡처/종료를 수행합니다.
+    """
+
+    def __init__(self):
+        self._manager = PlaywrightManager()
+
+    @property
+    def _browser(self):
+        """레거시 UI 코드와의 호환용 읽기 전용 속성."""
+        return self._manager._browser
+
+    def is_playwright_available(self) -> bool:
+        return PLAYWRIGHT_AVAILABLE
+
+    def start_browser(self, url: str, headless: bool = False) -> bool:
+        if not self.is_playwright_available():
+            return False
+        if not self._manager.launch(headless=headless, stealth=True):
+            return False
+        # navigate()는 timeout 시 None을 반환할 수 있으므로 False만 실패로 간주
+        return self._manager.navigate(url) is not False
+
+    def start_capture(self):
+        self._manager.start_network_monitoring()
+
+    def stop_capture(self) -> List[NetworkRequest]:
+        return self._manager.stop_network_monitoring()
+
+    def close(self):
+        self._manager.close()
 

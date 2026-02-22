@@ -149,6 +149,28 @@ class XPathAIAssistant:
                 raise ImportError("Google GenAI 라이브러리가 필요합니다. pip install google-genai")
                 
         return self._client
+
+    def _xpath_text_expr(self, text: str) -> str:
+        """XPath 문자열 리터럴 표현식 생성 (따옴표 안전)"""
+        if text is None:
+            text = ""
+
+        if '"' in text and "'" in text:
+            parts = text.split('"')
+            tokens = []
+            for idx, part in enumerate(parts):
+                if part:
+                    tokens.append(f'"{part}"')
+                if idx < len(parts) - 1:
+                    tokens.append("'\"'")
+            if not tokens:
+                return '""'
+            return "concat(" + ", ".join(tokens) + ")"
+
+        if '"' in text:
+            return f"'{text}'"
+
+        return f'"{text}"'
     
     def generate_xpath_from_description(
         self, 
@@ -233,8 +255,9 @@ XPath 생성 시 고려사항:
             )
         except Exception as e:
             # Fallback
+            err_expr = self._xpath_text_expr(str(e))
             return XPathSuggestion(
-                xpath=f"//error[contains(text(), '{str(e)}')]",
+                xpath=f"//error[contains(text(), {err_expr})]",
                 confidence=0.0,
                 explanation=f"AI 오류: {e}",
                 alternative_xpaths=[]
@@ -270,13 +293,16 @@ XPath 생성 시 고려사항:
         # 버튼 패턴
         if any(word in desc_lower for word in ['버튼', 'button', 'btn', '클릭']):
             button_text = description.replace('버튼', '').replace('button', '').strip()
+            if not button_text:
+                button_text = description.strip()
+            button_expr = self._xpath_text_expr(button_text)
             return XPathSuggestion(
-                xpath=f'//button[contains(text(), "{button_text}")]',
+                xpath=f"//button[contains(text(), {button_expr})]",
                 confidence=0.6,
                 explanation="텍스트 기반 버튼 XPath (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
-                    f'//*[contains(@class, "btn")][contains(text(), "{button_text}")]',
-                    f'//input[@type="submit"][@value="{button_text}"]'
+                    f'//*[contains(@class, "btn")][contains(text(), {button_expr})]',
+                    f'//input[@type="submit"][@value={button_expr}]'
                 ]
             )
         
@@ -287,32 +313,38 @@ XPath 생성 시 고려사항:
                 field_type = "email"
             elif '비밀번호' in desc_lower or 'password' in desc_lower:
                 field_type = "password"
-            
+            description_expr = self._xpath_text_expr(description)
+            field_type_expr = self._xpath_text_expr(field_type)
             return XPathSuggestion(
                 xpath=f'//input[@type="{field_type}"]',
                 confidence=0.5,
                 explanation=f"{field_type} 타입 입력 필드 (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
-                    f'//input[contains(@placeholder, "{description}")]',
-                    f'//input[contains(@name, "{field_type}")]'
+                    f"//input[contains(@placeholder, {description_expr})]",
+                    f"//input[contains(@name, {field_type_expr})]"
                 ]
             )
         
         # 링크 패턴
         if any(word in desc_lower for word in ['링크', 'link', '메뉴', '탭']):
             link_text = description.replace('링크', '').replace('link', '').strip()
+            if not link_text:
+                link_text = description.strip()
+            link_expr = self._xpath_text_expr(link_text)
+            href_expr = self._xpath_text_expr(link_text.lower())
             return XPathSuggestion(
-                xpath=f'//a[contains(text(), "{link_text}")]',
+                xpath=f"//a[contains(text(), {link_expr})]",
                 confidence=0.5,
                 explanation="텍스트 기반 링크 XPath (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
-                    f'//*[contains(@href, "{link_text.lower()}")]'
+                    f"//*[contains(@href, {href_expr})]"
                 ]
             )
         
         # 기본 (텍스트 기반)
+        description_expr = self._xpath_text_expr(description)
         return XPathSuggestion(
-            xpath=f'//*[contains(text(), "{description}")]',
+            xpath=f"//*[contains(text(), {description_expr})]",
             confidence=0.3,
             explanation="일반 텍스트 검색 XPath (AI 없이 규칙 기반 생성)",
             alternative_xpaths=[]

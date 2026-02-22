@@ -15,6 +15,12 @@
 - **CSS/XPath**: 특수 문자(따옴표, ID 등) 이스케이프 처리 강화
 - **Validation**: PDF 저장 시 Headless 모드 검증 로직 추가
 
+### 🧰 안정화 패치 (2026.02)
+- **Code Generator Fix**: Selenium/Playwright/PyAutoGUI 코드 생성 시 문자열 포맷 충돌(`KeyError`) 수정
+- **Network Analyzer Recovery**: `NetworkAnalyzer` 어댑터 복구 및 응답 크기(`response_size`) 표시 지원
+- **History Integrity**: preset/new/open 직후 Undo 기준점 재설정으로 히스토리 오염 방지
+- **Validation Data Flow**: 단일/전체/배치 검증 결과를 통합 기록(통계 + Diff 스냅샷)
+
 ### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
 - 테이블 선택/hover 효과 강화
@@ -50,6 +56,8 @@ pip install -r requirements-full.txt
 # Playwright Chromium 설치 (선택 기능이지만 EXE에서도 동일 기능 사용 시 필요)
 python -m playwright install chromium
 ```
+
+> 네트워크 분석/Playwright 스캔 기능은 Chromium 설치가 되어 있어야 정상 동작합니다.
 
 ---
 
@@ -105,3 +113,23 @@ python "xpath 조사기(모든 티켓 사이트).py"
 ## 📄 라이선스
 
 MIT License
+
+---
+
+## Performance Architecture (v4.2 Refactor)
+
+- `QTableWidget` list rendering path was replaced with `QTableView + XPathItemTableModel + XPathFilterProxyModel`.
+- Search/category/tag/favorite filters now run through proxy invalidation instead of full row re-render.
+- Selenium validation now supports a reusable validation session:
+  - `begin_validation_session()`
+  - `validate_xpath(xpath, preferred_frame=None, session=None)`
+  - `end_validation_session(session)`
+- `get_element_info()` now supports:
+  - `include_attributes=True|False`
+  - `session` cache reuse
+- Statistics persistence is now async-batched:
+  - `record_test()` updates memory state only
+  - background writer performs periodic flush
+  - `save()` keeps synchronous flush semantics
+  - `shutdown(timeout=...)` flushes and stops writer thread
+- Perf metrics are aggregated by `perf_span` and summarized on app shutdown (`count/avg/p95/max`).

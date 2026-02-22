@@ -13,6 +13,7 @@
 import sys
 import os
 import json
+import csv
 import time
 import random
 from datetime import datetime
@@ -25,7 +26,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QSplitter, QGroupBox,
     QProgressBar, QMenu, QToolBar, QDialog, QDialogButtonBox,
     QListWidget, QListWidgetItem, QMessageBox, QFileDialog, QHeaderView,
-    QAbstractItemView, QSpinBox, QFormLayout, QScrollArea, QFrame,
+    QAbstractItemView, QSpinBox, QFormLayout, QScrollArea, QFrame, QTableView,
     QTreeWidget, QTreeWidgetItem, QPlainTextEdit, QStackedWidget,
     QToolButton, QGridLayout, QSizePolicy
 )
@@ -46,7 +47,7 @@ from xpath_workers import (
     PickerWatcher, ValidateWorker, LivePreviewWorker,
     AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker,
 )
-from xpath_perf import perf_span
+from xpath_perf import perf_span, log_perf_summary
 
 # v3.3 신규 모듈
 from xpath_codegen import CodeGenerator, CodeTemplate
@@ -57,6 +58,8 @@ from xpath_optimizer import XPathOptimizer, XPathAlternative
 from xpath_history import HistoryManager
 from xpath_ai import XPathAIAssistant
 from xpath_diff import XPathDiffAnalyzer
+from xpath_table_model import XPathItemTableModel
+from xpath_filter_proxy import XPathFilterProxyModel
 
 import logging
 
@@ -125,6 +128,7 @@ class XPathExplorer(QMainWindow):
         self.batch_worker = None
         self._live_preview_request_id = 0
         self._ai_request_id = 0
+        self._ai_last_xpath = ""
         
         # 상태 변수
         self._font_size = 14
@@ -132,6 +136,10 @@ class XPathExplorer(QMainWindow):
         self._filter_favorites_only = False  # v3.3: 즐겨찾기 필터
         self._filter_tag = ""  # v3.3: 태그 필터
         self._filter_options_dirty = True
+        self._table_data_dirty = True
+        self.table_model = XPathItemTableModel([])
+        self.table_proxy = XPathFilterProxyModel()
+        self.table_proxy.setSourceModel(self.table_model)
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
@@ -150,7 +158,7 @@ class XPathExplorer(QMainWindow):
         self._refresh_table(refresh_filters=True)
         
         # v4.0: 히스토리 초기화
-        self.history_manager.initialize(self.config.items)
+        self._reset_history_baseline()
         
     def init_settings(self):
         self.settings = QSettings("MyCompany", "XPathExplorer")
@@ -603,34 +611,27 @@ class XPathExplorer(QMainWindow):
         
         list_layout.addLayout(filter_layout)
         
-        # 테이블 - v3.3: 컬럼 확장 (즐겨찾기, 성공률 추가)
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["⭐", "", "이름", "카테고리", "설명", "성공률", ""])
+        # 목록 테이블 (Model/View 기반)
+        self.table = QTableView()
+        self.table.setModel(self.table_proxy)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        
-        # v3.3: 드래그 앤 드롭 활성화
-        self.table.setDragEnabled(True)
-        self.table.setAcceptDrops(True)
-        self.table.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.table.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.table.setDropIndicatorShown(True)
-        
+        self.table.setSortingEnabled(False)
+
         self.table.setColumnWidth(0, 30)   # 즐겨찾기
         self.table.setColumnWidth(1, 30)   # 상태 아이콘
         self.table.setColumnWidth(2, 140)  # 이름
         self.table.setColumnWidth(3, 90)   # 카테고리
         self.table.setColumnWidth(5, 60)   # 성공률
-        self.table.setColumnWidth(6, 40)   # 삭제 버튼
-        
-        self.table.itemSelectionChanged.connect(self._on_item_selected)
-        self.table.cellClicked.connect(self._on_cell_clicked)  # v3.3: 즐겨찾기 토글
-        
+        self.table.setColumnWidth(6, 40)   # 삭제
+
+        self.table.clicked.connect(self._on_table_clicked)
+        self.table.selectionModel().currentRowChanged.connect(self._on_item_selected)
+
         # 컨텍스트 메뉴
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
@@ -1024,7 +1025,6 @@ class XPathExplorer(QMainWindow):
                 start_url = "about:blank"
                 
             self._show_toast("브라우저를 시작합니다...", "info", 5000)
-            QApplication.processEvents()
             
             if self.browser.create_driver():
                 self.browser.navigate(start_url)
@@ -1111,7 +1111,7 @@ class XPathExplorer(QMainWindow):
         if preset_name == self.config.name:
             return
 
-        if self.table.rowCount() > 0:
+        if len(self.config.items) > 0:
             reply = QMessageBox.question(
                 self, '확인',
                 f'"{preset_name}" 프리셋을 불러오시겠습니까?\n현재 작성 중인 목록은 초기화됩니다.',
@@ -1133,8 +1133,10 @@ class XPathExplorer(QMainWindow):
         elif self.config.url:
             self.input_url.setText(self.config.url)
 
+        self._table_data_dirty = True
         self._filter_options_dirty = True
         self._refresh_table(refresh_filters=True)
+        self._reset_history_baseline()
         self._show_toast(f"{preset_name} 프리셋 로드 완료", "success")
 
     def _refresh_filter_options_if_dirty(self, force: bool = False):
@@ -1168,6 +1170,7 @@ class XPathExplorer(QMainWindow):
         else:
             self.combo_tag_filter.setCurrentIndex(0)
         self.combo_tag_filter.blockSignals(False)
+        self._filter_tag = self.combo_tag_filter.currentText()
 
         self._filter_options_dirty = False
 
@@ -1261,12 +1264,18 @@ class XPathExplorer(QMainWindow):
             self.lbl_summary.setText("항목이 없습니다. '+ 새 항목' 버튼을 클릭하여 추가하세요.")
 
     def _refresh_table(self, filter_cat=None, refresh_filters: bool = False):
-        """테이블 갱신 - 필터 옵션/행 렌더링 분리."""
+        """테이블 갱신 - 모델/프록시 기반 필터 반영."""
         with perf_span("ui.refresh_table"):
+            if self._table_data_dirty:
+                self.table_model.set_items(self.config.items)
+                self._table_data_dirty = False
             self._refresh_filter_options_if_dirty(force=refresh_filters)
             target_cat = filter_cat if filter_cat is not None else self.combo_filter.currentText()
-            items_to_show = self._collect_filtered_items(target_cat)
-            self._render_table_rows(items_to_show)
+            self.table_proxy.set_category_filter(target_cat, "전체")
+            self.table_proxy.set_tag_filter(self._filter_tag or "모든 태그", "모든 태그")
+            self.table_proxy.set_favorites_only(self._filter_favorites_only)
+            self.table_proxy.set_search_text(self._search_text)
+            items_to_show = self._get_displayed_items()
             self._update_table_summary(items_to_show)
             return items_to_show
 
@@ -1293,32 +1302,63 @@ class XPathExplorer(QMainWindow):
         self._filter_tag = tag
         self._refresh_table()
     
-    # v3.3: 셀 클릭 핸들러 (즐겨찾기 토글)
-    def _on_cell_clicked(self, row, column):
-        """셀 클릭 핸들러"""
-        if column == 0:  # 즐겨찾기 컬럼
-            item_name = self.table.item(row, 2).data(Qt.ItemDataRole.UserRole)
-            item = self.config.get_item(item_name)
+    def _get_displayed_items(self) -> List[XPathItem]:
+        items: List[XPathItem] = []
+        rows = self.table_proxy.rowCount()
+        for row in range(rows):
+            item = self.table_proxy.get_item(row)
             if item:
-                item.is_favorite = not item.is_favorite
-                target_cat = self.combo_filter.currentText()
-                if self._item_matches_filters(item, target_cat):
-                    self._render_table_row(row, item)
-                    self._update_table_summary(self._collect_filtered_items(target_cat))
-                else:
-                    self._refresh_table()
-                status = "추가" if item.is_favorite else "해제"
-                self._show_toast(f"'{item.name}' 즐겨찾기 {status}", "success", 1500)
+                items.append(item)
+        return items
 
-    def _on_item_selected(self):
+    def _on_table_clicked(self, index):
+        """테이블 클릭 핸들러 (즐겨찾기 토글/삭제)."""
+        if not index or not index.isValid():
+            return
+
+        item = self.table_proxy.get_item(index.row())
+        if not item:
+            return
+
+        column = index.column()
+        if column == 0:
+            item.is_favorite = not item.is_favorite
+            self.table_model.notify_item_changed(item.name)
+            self.table_proxy.invalidateFilter()
+            self._update_table_summary(self._get_displayed_items())
+            status = "추가" if item.is_favorite else "해제"
+            self._show_toast(f"'{item.name}' 즐겨찾기 {status}", "success", 1500)
+        elif column == 6:
+            self._delete_item(item.name)
+
+    def _get_current_table_item(self) -> Optional[XPathItem]:
+        """현재 선택된 목록 항목 반환 (QTableWidget/QTableView 호환)."""
+        if hasattr(self.table, "selectedItems"):
+            selected = self.table.selectedItems()
+            if selected:
+                row = selected[0].row()
+                name_item = self.table.item(row, 2)
+                if name_item:
+                    item_name = name_item.data(Qt.ItemDataRole.UserRole)
+                    return self.config.get_item(item_name)
+
+        selection_model = getattr(self.table, "selectionModel", lambda: None)()
+        if selection_model is not None:
+            index = selection_model.currentIndex()
+            if index.isValid():
+                model = self.table.model()
+                if hasattr(model, "get_item"):
+                    item = model.get_item(index.row())
+                    if item:
+                        return item
+                item_name = model.data(model.index(index.row(), 2), Qt.ItemDataRole.UserRole)
+                if item_name:
+                    return self.config.get_item(item_name)
+        return None
+
+    def _on_item_selected(self, *_args):
         """테이블 항목 선택 시 에디터로 로드"""
-        selected = self.table.selectedItems()
-        if not selected: return
-        
-        row = selected[0].row()
-        item_name = self.table.item(row, 2).data(Qt.ItemDataRole.UserRole)  # v3.3: 컬럼 2
-        
-        item = self.config.get_item(item_name)
+        item = self._get_current_table_item()
         if item:
             self._load_to_editor(item)
 
@@ -1399,12 +1439,20 @@ class XPathExplorer(QMainWindow):
             item.sort_order = existing.sort_order
             item.is_verified = existing.is_verified
             item.element_tag = existing.element_tag
+            item.element_text = existing.element_text
+            item.found_window = existing.found_window
+            item.found_frame = existing.found_frame
+            item.alternatives = list(existing.alternatives or [])
+            item.element_attributes = dict(existing.element_attributes or {})
+            item.screenshot_path = existing.screenshot_path
+            item.ai_generated = existing.ai_generated
         
         # 현재 활성 프레임 정보가 있다면 저장 (테스트 후 저장 시 유용)
         if self.browser.current_frame_path:
              item.found_frame = self.browser.current_frame_path
              
         self.config.add_or_update(item)
+        self._table_data_dirty = True
         self._filter_options_dirty = True
         self._refresh_table(refresh_filters=True)
         self._update_undo_redo_actions()  # v4.0
@@ -1422,6 +1470,7 @@ class XPathExplorer(QMainWindow):
                 f"{name} 항목 삭제"
             )
             self.config.remove_item(name)
+            self._table_data_dirty = True
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
             self._clear_editor()
@@ -1443,7 +1492,6 @@ class XPathExplorer(QMainWindow):
             return
             
         self._show_toast("XPath 검색 중...", "info")
-        QApplication.processEvents()
         
         original_frame = self.browser.current_frame_path
 
@@ -1455,9 +1503,12 @@ class XPathExplorer(QMainWindow):
             self.browser.switch_to_frame_by_path(target_frame)
         
         try:
-            result = self.browser.validate_xpath(xpath)
+            result = self.browser.validate_xpath(xpath, preferred_frame=target_frame)
+            success = bool(result.get('found'))
+            name = self.input_name.text().strip()
+            self._record_validation_outcome(name, xpath, success, result)
             
-            if result['found']:
+            if success:
                 msg = f"✅ 발견! (Count: {result.get('count', 1)})"
                 detail = f"Tag: {result.get('tag')}\nText: {result.get('text')}\nFrame: {result.get('frame_path')}"
                 self.txt_result.setPlainText(msg + "\n" + detail)
@@ -1468,24 +1519,10 @@ class XPathExplorer(QMainWindow):
                     self.browser.highlight(xpath, frame_path=result['frame_path'])
                 else:
                     self.browser.highlight(xpath)
-                    
-                # 검증 성공 상태 업데이트 (저장된 항목인 경우)
-                name = self.input_name.text().strip()
-                item = self.config.get_item(name)
-                if item and item.xpath == xpath:
-                    item.is_verified = True
-                    item.element_tag = result.get('tag', '')
-                    item.found_frame = result.get('frame_path', '')
-                    item.record_test(True)  # 통계 기록
-                    self._refresh_table()
             else:
                 self.txt_result.setPlainText(f"❌ 실패\n{result.get('msg')}")
                 self._show_toast("요소를 찾을 수 없습니다.", "error")
-                # 실패 통계 기록
-                name = self.input_name.text().strip()
-                item = self.config.get_item(name)
-                if item and item.xpath == xpath:
-                    item.record_test(False)
+            self._refresh_table()
         finally:
             # 프레임 복구 (항상 원복)
             try:
@@ -1590,12 +1627,79 @@ class XPathExplorer(QMainWindow):
     def _on_validated(self, name, result):
         """개별 검증 결과 처리"""
         item = self.config.get_item(name)
-        if item:
-            item.is_verified = result['found']
-            item.record_test(result['found'])  # 통계 기록
-            if result['found']:
-                item.element_tag = result.get('tag', '')
-                item.found_frame = result.get('frame_path', '')
+        if not item:
+            return
+        self._record_validation_outcome(name, item.xpath, bool(result.get('found')), result)
+
+    def _record_validation_outcome(self, name: str, xpath: str, success: bool, result: Dict[str, Any]):
+        """단일/전체/배치 검증 결과 공통 처리."""
+        item = self.config.get_item(name)
+        if not item:
+            return
+
+        item.is_verified = success
+        item.record_test(success)
+
+        frame_path = (result or {}).get('frame_path', '') or ''
+        if success:
+            item.element_tag = (result or {}).get('tag', '') or item.element_tag
+            item.found_frame = frame_path or item.found_frame
+
+        if self.stats_manager:
+            self.stats_manager.record_test(
+                name,
+                xpath,
+                success,
+                frame_path=frame_path,
+                error_msg=(result or {}).get('msg', '') if not success else "",
+            )
+
+        if not success:
+            if self.table_model is not None:
+                self.table_model.notify_item_changed(name)
+            return
+
+        has_snapshot = False
+        if self.diff_analyzer and hasattr(self.diff_analyzer, "has_snapshot"):
+            has_snapshot = bool(self.diff_analyzer.has_snapshot(name))
+        need_snapshot = (not has_snapshot) or not bool(item.element_attributes)
+
+        try:
+            info = self.browser.get_element_info(
+                xpath,
+                frame_path=frame_path or None,
+                include_attributes=need_snapshot,
+            )
+        except TypeError:
+            # 구 시그니처 호환
+            info = self.browser.get_element_info(xpath, frame_path=frame_path or None)
+        except Exception:
+            info = None
+
+        if not info or not info.get('found'):
+            if self.table_model is not None:
+                self.table_model.notify_item_changed(name)
+            return
+
+        item.element_tag = info.get('tag', item.element_tag) or item.element_tag
+        item.found_frame = info.get('frame_path', frame_path or item.found_frame) or item.found_frame
+
+        attrs = info.get('attributes', {})
+        if need_snapshot and isinstance(attrs, dict):
+            item.element_attributes = dict(attrs)
+            snapshot_payload = {
+                'xpath': xpath,
+                'tag': info.get('tag', ''),
+                'id': info.get('id', ''),
+                'class': info.get('class', ''),
+                'text': info.get('text', ''),
+                'attributes': item.element_attributes,
+            }
+            if self.diff_analyzer and hasattr(self.diff_analyzer, "save_snapshot"):
+                self.diff_analyzer.save_snapshot(name, snapshot_payload)
+
+        if self.table_model is not None:
+            self.table_model.notify_item_changed(name)
 
     def _on_validate_finished(self, found, total):
         """검증 완료"""
@@ -1626,9 +1730,11 @@ class XPathExplorer(QMainWindow):
     def _new_config(self):
         if QMessageBox.question(self, "새 설정", "모든 항목을 지우고 초기화하시겠습니까?") == QMessageBox.StandardButton.Yes:
             self.config = SiteConfig.from_preset("빈 템플릿")
+            self._table_data_dirty = True
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
             self._clear_editor()
+            self._reset_history_baseline()
 
     def _open_config(self):
         fname, _ = QFileDialog.getOpenFileName(self, '설정 열기', '', 'JSON Files (*.json)')
@@ -1637,8 +1743,10 @@ class XPathExplorer(QMainWindow):
                 with open(fname, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.config = SiteConfig.from_dict(data)
+                    self._table_data_dirty = True
                     self._filter_options_dirty = True
                     self._refresh_table(refresh_filters=True)
+                    self._reset_history_baseline()
                     self._show_toast("설정을 불러왔습니다.", "success")
             except Exception as e:
                 self._show_toast(f"로드 실패: {e}", "error")
@@ -1663,30 +1771,38 @@ class XPathExplorer(QMainWindow):
         if not fname: return
         
         try:
-            content = ""
             if fmt == 'json':
                 data = [item.to_dict() for item in self.config.items]
-                content = json.dumps(data, indent=2, ensure_ascii=False)
+                with open(fname, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
             elif fmt == 'csv':
-                content = "Name,XPath,Category,Description\n"
-                for item in self.config.items:
-                    content += f"{item.name},{item.xpath},{item.category},{item.description}\n"
+                with open(fname, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Name", "XPath", "Category", "Description"])
+                    for item in self.config.items:
+                        writer.writerow([item.name, item.xpath, item.category, item.description])
             elif fmt == 'python':
                 content = "# Selenium XPaths\n\nclass XPaths:\n"
                 for item in self.config.items:
                     safe_name = item.name.replace(' ', '_').upper()
-                    content += f"    {safe_name} = \"{item.xpath}\"  # {item.description}\n"
+                    xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
+                    desc_comment = (item.description or "").replace("\n", " ").replace("\r", " ")
+                    content += f"    {safe_name} = {xpath_literal}  # {desc_comment}\n"
+                with open(fname, 'w', encoding='utf-8') as f:
+                    f.write(content)
             elif fmt == 'javascript':
                 content = "const XPaths = {\n"
                 for item in self.config.items:
-                    content += f"    '{item.name}': '{item.xpath}', // {item.description}\n"
+                    name_literal = json.dumps(item.name, ensure_ascii=False)
+                    xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
+                    desc_comment = (item.description or "").replace("\n", " ").replace("\r", " ")
+                    content += f"    {name_literal}: {xpath_literal}, // {desc_comment}\n"
                 content += "};"
-                
-            with open(fname, 'w', encoding='utf-8') as f:
-                f.write(content)
-                
+                with open(fname, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                 
             self._show_toast(f"{fmt.upper()} 내보내기 성공", "success")
-            
+             
         except Exception as e:
             self._show_toast(f"내보내기 실패: {e}", "error")
 
@@ -1708,6 +1824,11 @@ class XPathExplorer(QMainWindow):
         self._show_toast(f"폰트 크기: {self._font_size}", "info", 1000)
 
     def _show_context_menu(self, pos):
+        if hasattr(self.table, "indexAt"):
+            index = self.table.indexAt(pos)
+            if index.isValid():
+                self.table.selectRow(index.row())
+
         menu = QMenu(self)
         
         edit_action = QAction("✏️ 편집", self)
@@ -1725,19 +1846,16 @@ class XPathExplorer(QMainWindow):
         menu.exec(self.table.viewport().mapToGlobal(pos))
         
     def _copy_from_table_context(self, type_idx):
-        selected = self.table.selectedItems()
-        if not selected: return
-        item_name = self.table.item(selected[0].row(), 2).data(Qt.ItemDataRole.UserRole)
-        item = self.config.get_item(item_name)
+        _ = type_idx
+        item = self._get_current_table_item()
         if item:
             QApplication.clipboard().setText(item.xpath)
             self._show_toast("복사되었습니다.", "success")
 
     def _delete_selected(self):
-        selected = self.table.selectedItems()
-        if not selected: return
-        item_name = self.table.item(selected[0].row(), 2).data(Qt.ItemDataRole.UserRole)
-        self._delete_item(item_name)
+        item = self._get_current_table_item()
+        if item:
+            self._delete_item(item.name)
         
     def _show_shortcuts(self):
         shortcuts = [
@@ -1934,10 +2052,15 @@ class XPathExplorer(QMainWindow):
         self.progress_bar.setFormat(f"{message} - ESC로 취소")
 
     def _on_batch_item_tested(self, name: str, success: bool, xpath: str, msg: str):
-        item = self.config.get_item(name)
-        if item:
-            item.record_test(success)
-        self.stats_manager.record_test(name, xpath, success, error_msg=msg if not success else "")
+        self._record_validation_outcome(
+            name=name,
+            xpath=xpath,
+            success=success,
+            result={
+                'found': success,
+                'msg': msg,
+            },
+        )
 
     def _on_batch_test_completed(self, results: list, cancelled: bool):
         self.progress_bar.setVisible(False)
@@ -2042,7 +2165,12 @@ class XPathExplorer(QMainWindow):
                 2: CodeTemplate.PYAUTOGUI
             }
             template = template_map.get(combo_template.currentIndex(), CodeTemplate.SELENIUM_PYTHON)
-            code = self.code_generator.generate(self.config.items, template)
+            try:
+                code = self.code_generator.generate(self.config.items, template)
+            except Exception as e:
+                txt_code.setPlainText(f"# 코드 생성 실패\n# {e}")
+                self._show_toast(f"코드 생성 실패: {e}", "error")
+                return
             txt_code.setPlainText(code)
         
         combo_template.currentIndexChanged.connect(generate_code)
@@ -2139,7 +2267,6 @@ class XPathExplorer(QMainWindow):
                 return
             
             lbl_status.setText("● 브라우저 시작 중...")
-            QApplication.processEvents()
             
             if analyzer.start_browser(url, headless=False):
                 analyzer.start_capture()
@@ -2176,8 +2303,7 @@ class XPathExplorer(QMainWindow):
         
         # 닫기 시 정리
         def on_close():
-            if analyzer._browser:
-                analyzer.close()
+            analyzer.close()
             dialog.reject()
         
         btn_close = QPushButton("닫기")
@@ -2314,7 +2440,6 @@ class XPathExplorer(QMainWindow):
                     )
                     if choice == QMessageBox.StandardButton.Yes:
                         self._show_toast("Chromium 설치 중... (잠시 기다려주세요)", "info", 4000)
-                        QApplication.processEvents()
                         ok = PlaywrightManager.install_chromium()
                         if ok and self.pw_manager.launch(headless=False, stealth=True):
                             if url != "about:blank":
@@ -2340,7 +2465,6 @@ class XPathExplorer(QMainWindow):
         
         scan_type = self.combo_scan_type.currentText()
         self._show_toast(f"{scan_type} 요소 스캔 중...", "info", 2000)
-        QApplication.processEvents()
         
         try:
             with perf_span("ui.scan_page_elements"):
@@ -2383,7 +2507,7 @@ class XPathExplorer(QMainWindow):
         elif element.element_name:
             suggested_name = element.element_name
         else:
-            suggested_name = f"{element.tag}_{self.table.rowCount() + 1}"
+            suggested_name = f"{element.tag}_{len(self.config.items) + 1}"
         
         self.input_name.setText(suggested_name)
         self.input_desc.setText(element.text[:50] if element.text else "")
@@ -2397,6 +2521,11 @@ class XPathExplorer(QMainWindow):
     # =========================================================================
     # v4.0 신규 기능: Undo/Redo
     # =========================================================================
+
+    def _reset_history_baseline(self):
+        """현재 항목 목록을 Undo/Redo 기준 상태로 재설정."""
+        self.history_manager.initialize(self.config.items)
+        self._update_undo_redo_actions()
     
     def _update_undo_redo_actions(self):
         """Undo/Redo 액션 상태 업데이트"""
@@ -2411,7 +2540,7 @@ class XPathExplorer(QMainWindow):
     def _undo(self):
         """실행 취소"""
         restored = self.history_manager.undo()
-        if restored:
+        if restored is not None:
             self._restore_items_from_dicts(restored)
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
@@ -2421,7 +2550,7 @@ class XPathExplorer(QMainWindow):
     def _redo(self):
         """다시 실행"""
         restored = self.history_manager.redo()
-        if restored:
+        if restored is not None:
             self._restore_items_from_dicts(restored)
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
@@ -2456,6 +2585,7 @@ class XPathExplorer(QMainWindow):
             )
             restored_items.append(item)
         self.config.replace_items(restored_items)
+        self._table_data_dirty = True
     
     def _save_item_with_history(self):
         """항목 저장 (히스토리 기록 포함)"""
@@ -2692,6 +2822,7 @@ class XPathExplorer(QMainWindow):
         layout.addWidget(self._ai_confidence_label)
 
         def _apply_ai_result(result):
+            self._ai_last_xpath = result.xpath or ""
             output = f"추천 XPath:\n{result.xpath}\n\n"
             if result.alternative_xpaths:
                 output += "대안:\n" + "\n".join(f"  - {x}" for x in result.alternative_xpaths) + "\n\n"
@@ -2717,6 +2848,7 @@ class XPathExplorer(QMainWindow):
         def _on_ai_failed(request_id: int, error: str):
             if request_id != self._ai_request_id:
                 return
+            self._ai_last_xpath = ""
             self._ai_result_text.setPlainText(f"생성 실패:\n{error}")
             self._ai_confidence_label.setText("")
 
@@ -2739,6 +2871,7 @@ class XPathExplorer(QMainWindow):
                     self.ai_worker.cancel()
 
                 btn_generate.setEnabled(False)
+                self._ai_last_xpath = ""
                 self._ai_result_text.setPlainText("생성 중...")
                 self._ai_confidence_label.setText("")
 
@@ -2756,8 +2889,8 @@ class XPathExplorer(QMainWindow):
         
         btn_apply = QPushButton("📋 편집기에 적용")
         btn_apply.clicked.connect(lambda: (
-            self.input_xpath.setPlainText(self._ai_result_text.toPlainText().split('\n')[1] if self._ai_result_text.toPlainText() else ""),
-            self._show_toast("XPath 적용됨", "success")
+            self.input_xpath.setPlainText(self._ai_last_xpath or ""),
+            self._show_toast("XPath 적용됨", "success") if self._ai_last_xpath else self._show_toast("적용할 XPath가 없습니다.", "warning")
         ))
         btn_layout.addWidget(btn_apply)
         
@@ -3062,8 +3195,13 @@ class XPathExplorer(QMainWindow):
             
         # 통계 저장
         if hasattr(self, 'stats_manager'):
-            self.stats_manager.save()
-            
+            try:
+                self.stats_manager.shutdown(timeout=5.0)
+            except Exception:
+                self.stats_manager.save()
+        
+        log_perf_summary()
+             
         self.browser.close()
         logger.info("앱 종료 완료")
         event.accept()

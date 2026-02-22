@@ -68,8 +68,11 @@
 2. 최적화: XPathOptimizer가 대안 생성 (alternatives 필드)
 3. 스냅샷: DiffAnalyzer가 현재 상태 저장 (element_attributes)
 4. 검증: 브라우저에서 유효성 테스트 (test_count, success_count 업데이트)
+   - 단일/전체/배치 검증은 동일한 결과 처리 경로를 사용해야 함
+   - 성공 시 element_attributes 갱신 + diff_analyzer.save_snapshot 호출
 5. 저장: SiteConfig에 추가, JSON 내보내기
 6. 업데이트: HistoryManager에 변경사항 기록
+7. 기준점 재설정: preset/new/open 직후 history baseline 재초기화
 ```
 
 ---
@@ -523,6 +526,9 @@ logger.debug("프레임 전환: %s", frame_path)
 - [ ] 브라우저 자동화 코드에 적절한 대기/복구가 있는가?
 - [ ] 프레임 전환 후 default_content로 복귀하는가?
 - [ ] 스레드 안전한가? (lock 사용 확인)
+- [ ] 검증 결과가 item 통계와 StatisticsManager에 중복/누락 없이 동일 반영되는가?
+- [ ] Diff 스냅샷이 성공 검증 경로에서 실제로 축적되는가?
+- [ ] 코드 생성 템플릿이 중괄호 문자열로 인해 런타임 KeyError를 내지 않는가?
 
 ---
 
@@ -579,3 +585,40 @@ logger.debug(f"매칭 요소: {count}개")
 element, frame_path = self.browser.find_element_in_all_frames(xpath)
 logger.debug(f"발견 프레임: {frame_path}")
 ```
+
+---
+
+## Performance Refactor Notes (v4.2)
+
+### List Rendering Path
+- Main list uses `QTableView` + `XPathItemTableModel` + `XPathFilterProxyModel`.
+- Filtering must be applied by proxy state (`category/search/favorites/tag`) and `invalidateFilter()`.
+- Avoid per-row widget creation in the main list path.
+
+### Validation Session Path
+- Batch/loop validation should use:
+  - `session = browser.begin_validation_session()`
+  - repeated `validate_xpath(..., session=session)`
+  - `browser.end_validation_session(session)` in `finally`
+- Prefer `preferred_frame` and session/global frame hints before full recursive scan.
+
+### Statistics + Diff Path
+- `StatisticsManager.record_test()` must remain non-blocking for UI paths.
+- Use `shutdown()` during application close to guarantee final flush.
+- In `_record_validation_outcome`, request full attributes only when snapshot baseline is missing:
+  - `need_snapshot = not diff_analyzer.has_snapshot(name) or not item.element_attributes`
+  - call `get_element_info(..., include_attributes=need_snapshot)`
+
+### Perf Metrics
+- Keep perf span names stable:
+  - `ui.refresh_table`
+  - `ui.update_live_preview`
+  - `browser.validate_xpath`
+  - `worker.batch_validate_loop`
+  - `stats.record_test`
+- Emit perf summary at shutdown via `log_perf_summary()`.
+
+### Guardrails
+- Do not modify `PICKER_SCRIPT`.
+- Maintain JSON backward compatibility.
+- Keep UI labels/shortcuts behavior-compatible unless explicitly requested.

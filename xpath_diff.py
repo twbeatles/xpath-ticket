@@ -143,6 +143,9 @@ class XPathDiffAnalyzer:
         """저장된 스냅샷 조회"""
         return self._snapshots.get(item_name)
     
+    def has_snapshot(self, item_name: str) -> bool:
+        return item_name in self._snapshots
+
     def compare_element(
         self, 
         stored_item: Any, 

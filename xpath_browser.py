@@ -7,7 +7,7 @@ import time
 import logging
 from contextlib import contextmanager
 from threading import RLock
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Set
 
 from xpath_constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
 from xpath_perf import perf_span
@@ -446,6 +446,84 @@ class BrowserManager:
 
         return ""
 
+    def begin_validation_session(self) -> Dict[str, Any]:
+        """
+        검증 세션 시작.
+
+        세션 내에서 프레임 목록/히트 힌트/미스 정보를 재사용해
+        배치 검증 시 불필요한 프레임 전수 탐색을 줄입니다.
+        """
+        session: Dict[str, Any] = {
+            "frames": ["main"],
+            "hints": {},
+            "misses": set(),
+        }
+        try:
+            for frame_path, _identifier in self.get_all_frames():
+                if frame_path not in session["frames"]:
+                    session["frames"].append(frame_path)
+        except Exception:
+            # 세션은 최선형 캐시이므로 실패해도 검증 자체는 계속 동작해야 함.
+            pass
+        return session
+
+    def end_validation_session(self, session: Optional[Dict[str, Any]]):
+        """검증 세션 종료 훅(하위 호환을 위해 no-op 유지)."""
+        _ = session
+
+    def _session_get_hint(self, session: Optional[Dict[str, Any]], xpath: str) -> Optional[str]:
+        if not session:
+            return None
+        hints = session.get("hints")
+        if not isinstance(hints, dict):
+            return None
+        value = hints.get(xpath)
+        return value if isinstance(value, str) and value else None
+
+    def _session_set_hint(self, session: Optional[Dict[str, Any]], xpath: str, frame_path: str):
+        if not session or not xpath or not frame_path:
+            return
+        hints = session.get("hints")
+        if isinstance(hints, dict):
+            hints[xpath] = frame_path
+        frames = session.get("frames")
+        if isinstance(frames, list) and frame_path not in frames:
+            frames.append(frame_path)
+
+    def _session_add_miss(self, session: Optional[Dict[str, Any]], xpath: str):
+        if not session or not xpath:
+            return
+        misses = session.get("misses")
+        if isinstance(misses, set):
+            misses.add(xpath)
+
+    def _session_has_miss(self, session: Optional[Dict[str, Any]], xpath: str) -> bool:
+        if not session:
+            return False
+        misses = session.get("misses")
+        if not isinstance(misses, set):
+            return False
+        return xpath in misses
+
+    def _try_find_in_frame(self, xpath: str, frame_path: str) -> Optional[Dict[str, Any]]:
+        """특정 프레임에서 XPath를 조회하고 성공 시 기본 결과를 반환."""
+        try:
+            with self.frame_context(frame_path):
+                element = self.driver.find_element(By.XPATH, xpath)
+                try:
+                    count = len(self.driver.find_elements(By.XPATH, xpath))
+                except Exception:
+                    count = 1
+                return {
+                    "found": True,
+                    "count": count,
+                    "tag": element.tag_name,
+                    "text": element.text[:50] if element.text else "",
+                    "frame_path": frame_path,
+                }
+        except Exception:
+            return None
+
     def get_windows(self) -> List[Dict]:
         """열린 윈도우 목록 - 안정적인 방식으로 조회"""
         with self._lock:
@@ -722,57 +800,74 @@ class BrowserManager:
                 logger.error(f"하이라이트 오류: {e}")
                 return False
             
-    def validate_xpath(self, xpath: str) -> Dict:
-        """XPath 검증 - 중첩 iframe 재귀 탐색"""
+    def validate_xpath(
+        self,
+        xpath: str,
+        preferred_frame: Optional[str] = None,
+        session: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
+        """XPath 검증 - 세션/프레임 힌트를 활용한 중첩 iframe 탐색."""
         with perf_span("browser.validate_xpath"):
             with self.frame_context():
                 if not self.is_alive():
                     return {"found": False, "msg": "브라우저 연결 안됨"}
 
-                frame_path = ""
+                tried: Set[str] = set()
+                candidate_frames: List[str] = []
 
-                # 1) 최근 성공 프레임 힌트 우선 시도
-                hinted_path = self._get_xpath_frame_hint(xpath)
-                if hinted_path:
-                    try:
-                        with self.frame_context(hinted_path):
-                            self.driver.find_element(By.XPATH, xpath)
-                            frame_path = hinted_path
-                    except Exception:
-                        frame_path = ""
+                # 1) 호출자가 지정한 프레임
+                if preferred_frame:
+                    candidate_frames.append(preferred_frame)
 
-                # 2) 힌트 실패 시 전체 탐색
-                if not frame_path:
-                    _, frame_path = self.find_element_in_all_frames(xpath, max_depth=MAX_FRAME_DEPTH)
-                    if not frame_path:
-                        return {"found": False, "msg": "요소를 찾을 수 없음"}
+                # 2) 세션 힌트
+                session_hint = self._session_get_hint(session, xpath)
+                if session_hint and session_hint not in candidate_frames:
+                    candidate_frames.append(session_hint)
 
-                # 3) 발견된 프레임에서 재조회
-                try:
-                    with self.frame_context(frame_path):
-                        try:
-                            element = self.driver.find_element(By.XPATH, xpath)
-                        except NoSuchElementException:
-                            return {"found": False, "msg": "요소를 찾을 수 없음"}
+                # 3) 전역 힌트
+                global_hint = self._get_xpath_frame_hint(xpath)
+                if global_hint and global_hint not in candidate_frames:
+                    candidate_frames.append(global_hint)
 
-                        tag = element.tag_name
-                        text = element.text[:50] if element.text else ""
-
-                        try:
-                            count = len(self.driver.find_elements(By.XPATH, xpath))
-                        except Exception:
-                            count = 1
-
+                for frame_path in candidate_frames:
+                    tried.add(frame_path)
+                    found = self._try_find_in_frame(xpath, frame_path)
+                    if found:
                         self._set_xpath_frame_hint(xpath, frame_path)
-                        return {
-                            "found": True,
-                            "count": count,
-                            "tag": tag,
-                            "text": text,
-                            "frame_path": frame_path
-                        }
-                except Exception:
-                    return {"found": True, "msg": "요소 찾음 (상세 정보 읽기 실패)", "frame_path": frame_path}
+                        self._session_set_hint(session, xpath, frame_path)
+                        return found
+
+                # 4) 세션 프레임 순회
+                session_frames = session.get("frames") if isinstance(session, dict) else None
+                if isinstance(session_frames, list):
+                    for frame_path in session_frames:
+                        if not frame_path or frame_path in tried:
+                            continue
+                        tried.add(frame_path)
+                        found = self._try_find_in_frame(xpath, frame_path)
+                        if found:
+                            self._set_xpath_frame_hint(xpath, frame_path)
+                            self._session_set_hint(session, xpath, frame_path)
+                            return found
+
+                # 5) 세션에서 이미 miss 처리된 XPath는 전수 탐색을 생략
+                if self._session_has_miss(session, xpath):
+                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+
+                # 6) 최후 수단: 전체 프레임 전수 탐색
+                _, frame_path = self.find_element_in_all_frames(xpath, max_depth=MAX_FRAME_DEPTH)
+                if not frame_path:
+                    self._session_add_miss(session, xpath)
+                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+
+                found = self._try_find_in_frame(xpath, frame_path)
+                if not found:
+                    self._session_add_miss(session, xpath)
+                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+
+                self._set_xpath_frame_hint(xpath, frame_path)
+                self._session_set_hint(session, xpath, frame_path)
+                return found
 
     def _get_xpath_frame_hint(self, xpath: str) -> Optional[str]:
         """최근 성공한 XPath-프레임 힌트 조회 (TTL 적용)."""
@@ -819,7 +914,13 @@ class BrowserManager:
                 logger.debug(f"요소 카운트 실패: {e}")
                 return -1
     
-    def get_element_info(self, xpath: str, frame_path: str = None) -> Optional[Dict]:
+    def get_element_info(
+        self,
+        xpath: str,
+        frame_path: str = None,
+        include_attributes: bool = True,
+        session: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict]:
         """
         요소의 상세 정보 반환 (Diff 분석용)
         
@@ -848,9 +949,18 @@ class BrowserManager:
                 return {'found': False, 'msg': '브라우저 연결 안됨'}
 
             try:
-                if frame_path is not None:
-                    if not self.switch_to_frame_by_path(frame_path):
-                        return {'found': False, 'msg': f'프레임 전환 실패: {frame_path}'}
+                resolved_frame = frame_path
+                if resolved_frame is None:
+                    hint = self._session_get_hint(session, xpath) or self._get_xpath_frame_hint(xpath)
+                    if hint:
+                        resolved_frame = hint
+                    else:
+                        _, found_path = self.find_element_in_all_frames(xpath, max_depth=MAX_FRAME_DEPTH)
+                        if found_path:
+                            resolved_frame = found_path
+
+                if resolved_frame is not None and not self.switch_to_frame_by_path(resolved_frame):
+                    return {'found': False, 'msg': f'프레임 전환 실패: {resolved_frame}'}
 
                 try:
                     element = self.driver.find_element(By.XPATH, xpath)
@@ -864,22 +974,26 @@ class BrowserManager:
                     'name': element.get_attribute('name') or '',
                     'class': element.get_attribute('class') or '',
                     'text': (element.text[:100] if element.text else ''),
-                    'count': len(self.driver.find_elements(By.XPATH, xpath))
+                    'count': len(self.driver.find_elements(By.XPATH, xpath)),
+                    'frame_path': resolved_frame or 'main',
                 }
 
-                # 모든 속성 수집
-                try:
-                    attrs_script = """
-                    var el = arguments[0];
-                    var attrs = {};
-                    for (var i = 0; i < el.attributes.length; i++) {
-                        var attr = el.attributes[i];
-                        attrs[attr.name] = attr.value;
-                    }
-                    return attrs;
-                    """
-                    info['attributes'] = self.driver.execute_script(attrs_script, element)
-                except Exception:
+                if include_attributes:
+                    # 모든 속성 수집
+                    try:
+                        attrs_script = """
+                        var el = arguments[0];
+                        var attrs = {};
+                        for (var i = 0; i < el.attributes.length; i++) {
+                            var attr = el.attributes[i];
+                            attrs[attr.name] = attr.value;
+                        }
+                        return attrs;
+                        """
+                        info['attributes'] = self.driver.execute_script(attrs_script, element)
+                    except Exception:
+                        info['attributes'] = {}
+                else:
                     info['attributes'] = {}
 
                 # 부모 정보
@@ -917,6 +1031,9 @@ class BrowserManager:
                 except Exception:
                     info['index'] = 0
 
+                if resolved_frame:
+                    self._set_xpath_frame_hint(xpath, resolved_frame)
+                    self._session_set_hint(session, xpath, resolved_frame)
                 return info
 
             except Exception as e:
