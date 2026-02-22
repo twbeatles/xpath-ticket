@@ -37,7 +37,7 @@ class CodeGenerator:
     def __init__(self):
         self.indent = "    "
 
-    def generate(self, items: List, template: CodeTemplate, actions: List[ActionStep] = None) -> str:
+    def generate(self, items: List, template: CodeTemplate, actions: Optional[List[ActionStep]] = None) -> str:
         """
         XPath 항목들로 자동화 코드 생성
 

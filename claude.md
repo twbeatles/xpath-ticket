@@ -622,3 +622,20 @@ logger.debug(f"발견 프레임: {frame_path}")
 - Do not modify `PICKER_SCRIPT`.
 - Maintain JSON backward compatibility.
 - Keep UI labels/shortcuts behavior-compatible unless explicitly requested.
+
+---
+
+## Module Split Update (v4.2)
+
+- Legacy entrypoint remains: `xpath 조사기(모든 티켓 사이트).py`
+- Main app class is now composed from package modules:
+  - `xpath_explorer/main_window.py`
+  - `xpath_explorer/runtime.py`
+  - `xpath_explorer/mixins/ui_mixin.py`
+  - `xpath_explorer/mixins/browser_mixin.py`
+  - `xpath_explorer/mixins/data_mixin.py`
+  - `xpath_explorer/mixins/tools_mixin.py`
+
+Implementation rule:
+- Add new `XPathExplorer` methods to the correct mixin by responsibility.
+- Keep launch/API compatibility by preserving the legacy entrypoint wrapper.

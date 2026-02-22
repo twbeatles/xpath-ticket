@@ -128,6 +128,38 @@ class ToastWidget(QFrame):
         self._shadow.setBlurRadius(30)
         self._shadow.setColor(QColor(0, 0, 0, 120))
         self._shadow.setOffset(0, 8)
+
+    def _ensure_shadow_effect(self) -> QGraphicsDropShadowEffect:
+        """Qt가 기존 effect를 삭제한 경우 안전하게 재생성한다."""
+        shadow = getattr(self, "_shadow", None)
+        if shadow is not None:
+            try:
+                shadow.blurRadius()
+                return shadow
+            except RuntimeError:
+                pass
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 120))
+        shadow.setOffset(0, 8)
+        self._shadow = shadow
+        return shadow
+
+    def _ensure_opacity_effect(self) -> QGraphicsOpacityEffect:
+        """Qt가 기존 effect를 삭제한 경우 안전하게 재생성한다."""
+        opacity_effect = getattr(self, "_opacity_effect", None)
+        if opacity_effect is not None:
+            try:
+                opacity_effect.opacity()
+                return opacity_effect
+            except RuntimeError:
+                pass
+
+        opacity_effect = QGraphicsOpacityEffect(self)
+        opacity_effect.setOpacity(1.0)
+        self._opacity_effect = opacity_effect
+        return opacity_effect
         
     def show_toast(self, message: str, toast_type: str = "info", duration: int = 3000):
         """
@@ -180,8 +212,9 @@ class ToastWidget(QFrame):
         """)
         
         # 그림자 색상 업데이트
-        self._shadow.setColor(QColor(theme['glow']))
-        self.setGraphicsEffect(self._shadow)
+        shadow = self._ensure_shadow_effect()
+        shadow.setColor(QColor(theme['glow']))
+        self.setGraphicsEffect(shadow)
         
         # 컨텐츠 설정
         self.lbl_icon.setText(theme['icon'])
@@ -220,11 +253,12 @@ class ToastWidget(QFrame):
         self._cleanup_animations()
         
         # 투명도 효과 설정
-        self.setGraphicsEffect(self._opacity_effect)
-        self._opacity_effect.setOpacity(0)
+        opacity_effect = self._ensure_opacity_effect()
+        self.setGraphicsEffect(opacity_effect)
+        opacity_effect.setOpacity(0)
         
         # 페이드 인
-        self._fade_anim = QPropertyAnimation(self._opacity_effect, b"opacity", self)
+        self._fade_anim = QPropertyAnimation(opacity_effect, b"opacity", self)
         self._fade_anim.setDuration(300)
         self._fade_anim.setStartValue(0.0)
         self._fade_anim.setEndValue(1.0)
@@ -243,8 +277,9 @@ class ToastWidget(QFrame):
     def _on_slide_in_finished(self):
         """슬라이드 인 완료 후 그림자 효과 적용"""
         # 그림자 다시 적용 (opacity effect와 충돌 방지)
-        self._shadow.setBlurRadius(25)
-        self.setGraphicsEffect(self._shadow)
+        shadow = self._ensure_shadow_effect()
+        shadow.setBlurRadius(25)
+        self.setGraphicsEffect(shadow)
     
     def _start_fade_out(self):
         """페이드 아웃 + 슬라이드 업 애니메이션"""
@@ -252,11 +287,12 @@ class ToastWidget(QFrame):
         self._cleanup_animations()
         
         # 투명도 효과로 전환
-        self.setGraphicsEffect(self._opacity_effect)
-        self._opacity_effect.setOpacity(1.0)
+        opacity_effect = self._ensure_opacity_effect()
+        self.setGraphicsEffect(opacity_effect)
+        opacity_effect.setOpacity(1.0)
         
         # 페이드 아웃
-        self._fade_out_anim = QPropertyAnimation(self._opacity_effect, b"opacity", self)
+        self._fade_out_anim = QPropertyAnimation(opacity_effect, b"opacity", self)
         self._fade_out_anim.setDuration(250)
         self._fade_out_anim.setStartValue(1.0)
         self._fade_out_anim.setEndValue(0.0)

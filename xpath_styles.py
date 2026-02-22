@@ -510,7 +510,6 @@ QLineEdit#url_input_large {
 QLineEdit#url_input_large:focus {
     border: 2px solid #89b4fa;
     background-color: rgba(49, 50, 68, 1);
-    box-shadow: 0 0 10px rgba(137, 180, 250, 0.3);
 }
 
 QLineEdit#url_input_large:hover:!focus {

@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v4.1 - PyInstaller Spec (최적화)
-빌드: pyinstaller xpath_explorer.spec
+XPath Explorer v4.2 - PyInstaller spec (optimized).
+Build: pyinstaller xpath_explorer.spec
 """
 
 import os
+from PyInstaller.utils.hooks import collect_submodules
 os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
 
 # ============================================================================
@@ -15,6 +16,7 @@ hiddenimports = [
     'xpath_ai', 'xpath_diff', 'xpath_history', 'xpath_optimizer',
     'xpath_constants', 'xpath_styles', 'xpath_config', 'xpath_widgets',
     'xpath_browser', 'xpath_workers', 'xpath_codegen', 'xpath_statistics',
+    'xpath_table_model', 'xpath_filter_proxy',
 
     # OpenAI
     'openai',
@@ -37,6 +39,9 @@ hiddenimports = [
     # UC Driver
     'undetected_chromedriver',
 ]
+
+# Project package split support: include all submodules under xpath_explorer/.
+hiddenimports += collect_submodules('xpath_explorer')
 
 # ============================================================================
 # 제외 모듈 (경량화)

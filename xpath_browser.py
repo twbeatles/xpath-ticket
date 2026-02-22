@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 XPath Explorer Browser Manager
 """
@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Any, Tuple, Set
 from xpath_constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
 from xpath_perf import perf_span
 
-# 로거 설정
+# 濡쒓굅 ?ㅼ젙
 logger = logging.getLogger('XPathExplorer')
 
 # Selenium Imports
@@ -29,7 +29,7 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
-    logger.error("Selenium 모듈이 설치되지 않았습니다.")
+    logger.error("Selenium 紐⑤뱢???ㅼ튂?섏? ?딆븯?듬땲??")
 
 try:
     import undetected_chromedriver as uc
@@ -45,42 +45,81 @@ except ImportError:
 
 
 class BrowserManager:
-    """브라우저 관리"""
+    """Browser manager for Selenium-based exploration."""
     
     def __init__(self):
         self.driver = None
-        self.current_frame_path = ""  # 현재 활성 프레임 경로
-        self.frame_cache = []  # 캐시된 프레임 목록
-        self.frame_cache_time = 0  # 캐시 생성 시간
-        self.FRAME_CACHE_DURATION = FRAME_CACHE_DURATION  # 캐시 유효 시간 (초)
+        self.current_frame_path = ""  # ?꾩옱 ?쒖꽦 ?꾨젅??寃쎈줈
+        self.frame_cache = []  # 罹먯떆???꾨젅??紐⑸줉
+        self.frame_cache_time = 0  # 罹먯떆 ?앹꽦 ?쒓컙
+        self.FRAME_CACHE_DURATION = FRAME_CACHE_DURATION  # 罹먯떆 ?좏슚 ?쒓컙 (珥?
         self._xpath_frame_hints: Dict[str, Tuple[str, float]] = {}
-        self._lock = RLock()  # WebDriver 접근 직렬화 (QThread 경쟁 방지)
+        self._lock = RLock()  # WebDriver ?묎렐 吏곷젹??(QThread 寃쎌웳 諛⑹?)
+        self._last_alive_error: str = ""
+        self._root_window_handle: str = ""
+
+    @staticmethod
+    def _is_invalid_session_error(error: Exception) -> bool:
+        msg = str(error).lower()
+        return (
+            "invalid session id" in msg
+            or "session deleted" in msg
+            or "session not created" in msg
+        )
+
+    @staticmethod
+    def _short_webdriver_error(error: Exception) -> str:
+        msg = getattr(error, "msg", str(error))
+        if not msg:
+            return str(error)
+        return str(msg).splitlines()[0].strip()
+
+    def _mark_driver_dead(self):
+        """
+        Drop broken driver reference immediately.
+        This prevents periodic health checks from repeatedly logging the same
+        invalid-session stack traces.
+        """
+        driver = self.driver
+        self.driver = None
+        self._invalidate_frame_cache()
+        self._root_window_handle = ""
+
+        # Prevent undetected_chromedriver.__del__ from retrying quit on
+        # already-invalid Win handles during interpreter shutdown.
+        if driver is not None and UC_AVAILABLE:
+            try:
+                module_name = getattr(driver.__class__, "__module__", "")
+                if module_name.startswith("undetected_chromedriver"):
+                    setattr(driver, "quit", lambda *args, **kwargs: None)
+            except Exception:
+                pass
 
     @contextmanager
     def frame_context(self, frame_path: Optional[str] = None):
         """
-        프레임 컨텍스트 보존/원복 컨텍스트 매니저.
+        ?꾨젅??而⑦뀓?ㅽ듃 蹂댁〈/?먮났 而⑦뀓?ㅽ듃 留ㅻ땲?.
 
-        - frame_path가 None이면 "프레임 전환 없이" 현재 컨텍스트를 보존/원복만 합니다.
-        - frame_path가 "main" 또는 ""이면 default_content로 이동합니다.
-        - frame_path가 지정되면 해당 프레임으로 이동합니다.
+        - frame_path媛 None?대㈃ "?꾨젅???꾪솚 ?놁씠" ?꾩옱 而⑦뀓?ㅽ듃瑜?蹂댁〈/?먮났留??⑸땲??
+        - frame_path媛 "main" ?먮뒗 ""?대㈃ default_content濡??대룞?⑸땲??
+        - frame_path媛 吏?뺣릺硫??대떦 ?꾨젅?꾩쑝濡??대룞?⑸땲??
 
-        어떤 예외가 나더라도 종료 시 원래 프레임으로 복구를 시도하며,
-        복구 실패 시 default_content로 최종 방어합니다.
+        ?대뼡 ?덉쇅媛 ?섎뜑?쇰룄 醫낅즺 ???먮옒 ?꾨젅?꾩쑝濡?蹂듦뎄瑜??쒕룄?섎ŉ,
+        蹂듦뎄 ?ㅽ뙣 ??default_content濡?理쒖쥌 諛⑹뼱?⑸땲??
         """
         with self._lock:
             original_frame_path = self.current_frame_path
             try:
                 if frame_path is not None:
                     if not self.switch_to_frame_by_path(frame_path):
-                        raise Exception(f"프레임 전환 실패: {frame_path}")
+                        raise Exception(f"?꾨젅???꾪솚 ?ㅽ뙣: {frame_path}")
                 yield
             finally:
                 try:
-                    # 원래 프레임으로 복귀
+                    # ?먮옒 ?꾨젅?꾩쑝濡?蹂듦?
                     self.switch_to_frame_by_path(original_frame_path if original_frame_path else "main")
                 except Exception:
-                    # 최종 방어: default_content
+                    # 理쒖쥌 諛⑹뼱: default_content
                     try:
                         if self.driver:
                             self.driver.switch_to.default_content()
@@ -88,17 +127,17 @@ class BrowserManager:
                         pass
             
     def create_driver(self, use_undetected: bool = True) -> bool:
-        """드라이버 생성"""
+        """?쒕씪?대쾭 ?앹꽦"""
         with self._lock:
             try:
-                logger.info("브라우저 드라이버 생성 시작...")
+                logger.info("釉뚮씪?곗? ?쒕씪?대쾭 ?앹꽦 ?쒖옉...")
                 if use_undetected and UC_AVAILABLE:
                     options = uc.ChromeOptions()
                     options.add_argument('--start-maximized')
                     options.add_argument('--disable-popup-blocking')
                     options.add_argument('--lang=ko-KR')
                     self.driver = uc.Chrome(options=options, use_subprocess=True)
-                    logger.info("Undetected Chrome 드라이버 생성 완료")
+                    logger.info("Undetected Chrome ?쒕씪?대쾭 ?앹꽦 ?꾨즺")
                 else:
                     options = Options()
                     options.add_argument('--start-maximized')
@@ -112,26 +151,43 @@ class BrowserManager:
                         self.driver = webdriver.Chrome(service=service, options=options)
                     else:
                         self.driver = webdriver.Chrome(options=options)
-                    logger.info("표준 Chrome 드라이버 생성 완료")
-                
+                    logger.info("?쒖? Chrome ?쒕씪?대쾭 ?앹꽦 ?꾨즺")
+
+                try:
+                    self._root_window_handle = self.driver.current_window_handle
+                except Exception:
+                    self._root_window_handle = ""
+
                 return True
             except Exception as e:
-                logger.error(f"드라이버 생성 실패: {e}")
+                logger.error(f"?쒕씪?대쾭 ?앹꽦 ?ㅽ뙣: {e}")
                 return False
             
     def close(self):
-        """브라우저 닫기"""
+        """釉뚮씪?곗? ?リ린"""
         with self._lock:
-            if self.driver:
-                try:
-                    self.driver.quit()
-                except Exception as e:
-                    logger.debug(f"드라이버 종료 중 오류 (무시됨): {e}")
-                    pass
+            if not self.driver:
+                return
+            driver = self.driver
+            try:
+                driver.quit()
+            except Exception as e:
+                logger.debug(f"?쒕씪?대쾭 醫낅즺 以??ㅻ쪟 (臾댁떆??: {e}")
+            finally:
+                # __del__ double-quit noise guard (undetected_chromedriver)
+                if UC_AVAILABLE:
+                    try:
+                        module_name = getattr(driver.__class__, "__module__", "")
+                        if module_name.startswith("undetected_chromedriver"):
+                            setattr(driver, "quit", lambda *args, **kwargs: None)
+                    except Exception:
+                        pass
                 self.driver = None
+                self._invalidate_frame_cache()
+                self._root_window_handle = ""
     
     def _invalidate_frame_cache(self):
-        """프레임 캐시 무효화"""
+        """Invalidate cached frame metadata."""
         with self._lock:
             self.frame_cache = []
             self.frame_cache_time = 0
@@ -139,67 +195,84 @@ class BrowserManager:
             self._xpath_frame_hints.clear()
             
     def is_alive(self) -> bool:
-        """연결 상태 확인 - 현재 윈도우가 닫혀도 다른 윈도우로 자동 전환"""
+        """?곌껐 ?곹깭 ?뺤씤 - ?꾩옱 ?덈룄?곌? ?ロ????ㅻⅨ ?덈룄?곕줈 ?먮룞 ?꾪솚"""
         with self._lock:
             if not self.driver:
                 return False
             try:
-                # 현재 윈도우 핸들 확인 시도
+                # ?꾩옱 ?덈룄???몃뱾 ?뺤씤 ?쒕룄
                 _ = self.driver.current_window_handle
+                self._last_alive_error = ""
                 return True
             except NoSuchWindowException:
-                logger.warning("현재 윈도우가 닫혀습니다. 다른 윈도우로 전환을 시도합니다.")
+                logger.warning("?꾩옱 ?덈룄?곌? ?ロ??듬땲?? ?ㅻⅨ ?덈룄?곕줈 ?꾪솚???쒕룄?⑸땲??")
                 return self._recover_to_available_window()
             except WebDriverException as e:
-                # 브라우저 연결 끊김, 세션 종료 등
-                logger.warning(f"WebDriver 연결 문제: {e}")
+                # invalid session? 蹂듦뎄 ??곸씠 ?꾨땲??利됱떆 ?뺣━?댁빞 寃쎄퀬 ?ㅽ뙵??硫덉텣??
+                if self._is_invalid_session_error(e):
+                    short = self._short_webdriver_error(e)
+                    if self._last_alive_error != short:
+                        logger.warning(f"WebDriver ?몄뀡 醫낅즺 媛먯?: {short}")
+                    self._last_alive_error = short
+                    self._mark_driver_dead()
+                    return False
+                short = self._short_webdriver_error(e)
+                if self._last_alive_error != short:
+                    logger.warning(f"WebDriver ?곌껐 臾몄젣: {short}")
+                self._last_alive_error = short
                 return self._recover_to_available_window()
             except Exception as e:
-                logger.error(f"브라우저 연결 확인 실패: {e}")
+                logger.error(f"釉뚮씪?곗? ?곌껐 ?뺤씤 ?ㅽ뙣: {e}")
                 return False
             
     def _recover_to_available_window(self) -> bool:
-        """사용 가능한 다른 윈도우로 자동 복구"""
+        """?ъ슜 媛?ν븳 ?ㅻⅨ ?덈룄?곕줈 ?먮룞 蹂듦뎄"""
         with self._lock:
             try:
                 handles = self.driver.window_handles
                 if handles:
-                    self.driver.switch_to.window(handles[-1])  # 마지막(보통 최신) 윈도우로 전환
+                    self.driver.switch_to.window(handles[-1])  # 留덉?留?蹂댄넻 理쒖떊) ?덈룄?곕줈 ?꾪솚
                     self._invalidate_frame_cache()
-                    logger.info(f"윈도우 복구 성공: {self.driver.title}")
+                    logger.info(f"?덈룄??蹂듦뎄 ?깃났: {self.driver.title}")
                     return True
                 else:
-                    logger.error("사용 가능한 윈도우가 없습니다.")
+                    logger.error("?ъ슜 媛?ν븳 ?덈룄?곌? ?놁뒿?덈떎.")
                     return False
+            except WebDriverException as e:
+                if self._is_invalid_session_error(e):
+                    self._mark_driver_dead()
+                    return False
+                logger.debug(f"?덈룄??蹂듦뎄 以?WebDriver ?ㅻ쪟: {self._short_webdriver_error(e)}")
+                return False
             except Exception as e:
-                logger.debug(f"윈도우 복구 중 오류: {e}")
+                logger.debug(f"?덈룄??蹂듦뎄 以??ㅻ쪟: {e}")
                 return False
 
     def ensure_valid_window(self):
-        """유효한 윈도우 상태 보장 (외부에서 호출 가능)"""
+        """?좏슚???덈룄???곹깭 蹂댁옣 (?몃??먯꽌 ?몄텧 媛??"""
         with self._lock:
             if not self.is_alive():
-                raise Exception("브라우저가 연결되지 않았습니다.")
+                raise Exception("釉뚮씪?곗?媛 ?곌껐?섏? ?딆븯?듬땲??")
             
     def navigate(self, url: str):
-        """URL 이동"""
+        """URL ?대룞"""
         with self._lock:
             if self.is_alive():
                 try:
                     self.driver.get(url)
-                    self._invalidate_frame_cache()  # 네비게이션 시 캐시 무효화
+                    self._invalidate_frame_cache()  # ?ㅻ퉬寃뚯씠????罹먯떆 臾댄슚??
                 except Exception as e:
-                    logger.error(f"이동 실패: {e}")
+                    logger.error(f"?대룞 ?ㅽ뙣: {e}")
 
     # -------------------------------------------------------------------------
-    # Frame 및 Element 관리
+    # Frame 諛?Element 愿由?
     # -------------------------------------------------------------------------
 
     def get_all_frames(self, max_depth: int = MAX_FRAME_DEPTH) -> List[tuple]:
-        """모든 iframe을 재귀적으로 탐색 (인터파크 중첩 iframe 지원)"""
+        """紐⑤뱺 iframe???ш??곸쑝濡??먯깋 (?명꽣?뚰겕 以묒꺽 iframe 吏??"""
         with self._lock:
             self.ensure_valid_window()
-            # 캐시 확인
+            # 罹먯떆 ?뺤씤
             current_time = time.time()
             if (self.frame_cache and 
                 current_time - self.frame_cache_time < self.FRAME_CACHE_DURATION):
@@ -209,28 +282,28 @@ class BrowserManager:
             original_handle = self.driver.current_window_handle
             
             try:
-                # 메인 컨텐츠로 초기화
+                # 硫붿씤 而⑦뀗痢좊줈 珥덇린??
                 self.driver.switch_to.default_content()
                 self._scan_frames(frames_list, "", 0, max_depth)
                 
-                # 캐시 업데이트
+                # 罹먯떆 ?낅뜲?댄듃
                 self.frame_cache = frames_list.copy()
                 self.frame_cache_time = current_time
                 
             except Exception as e:
-                logger.error(f"프레임 스캔 중 오류: {e}")
-                # 오류 발생 시 캐시 초기화
+                logger.error(f"?꾨젅???ㅼ틪 以??ㅻ쪟: {e}")
+                # ?ㅻ쪟 諛쒖깮 ??罹먯떆 珥덇린??
                 self.frame_cache = []
                 self.frame_cache_time = 0
             finally:
-                # 복구
+                # 蹂듦뎄
                 try:
                     self.driver.switch_to.window(original_handle)
                     self.driver.switch_to.default_content()
-                    self.current_frame_path = ""  # 프레임 경로 초기화
+                    self.current_frame_path = ""  # ?꾨젅??寃쎈줈 珥덇린??
                 except Exception as e:
-                    logger.debug(f"프레임 복구 중 오류: {e}")
-                    # 복구 실패 시 캐시 무효화 및 프레임 경로 초기화
+                    logger.debug(f"?꾨젅??蹂듦뎄 以??ㅻ쪟: {e}")
+                    # 蹂듦뎄 ?ㅽ뙣 ??罹먯떆 臾댄슚??諛??꾨젅??寃쎈줈 珥덇린??
                     self.frame_cache = []
                     self.frame_cache_time = 0
                     self.current_frame_path = ""
@@ -241,46 +314,46 @@ class BrowserManager:
         if depth > max_depth:
             return
 
-        # 현재 컨텍스트의 모든 iframe 찾기
+        # ?꾩옱 而⑦뀓?ㅽ듃??紐⑤뱺 iframe 李얘린
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
         except Exception:
-            return  # iframe 검색 실패
+            return  # iframe 寃???ㅽ뙣
 
         for i, frame in enumerate(iframes):
             try:
-                # 프레임 식별자 (ID > Name > Index)
+                # ?꾨젅???앸퀎??(ID > Name > Index)
                 frame_id = frame.get_attribute("id")
                 frame_name = frame.get_attribute("name")
                 
                 identifier = frame_id if frame_id else (frame_name if frame_name else f"index={i}")
                 
-                # 경로 구성
+                # 寃쎈줈 援ъ꽦
                 current_path = f"{parent_path}/{identifier}" if parent_path else identifier
                 
-                # 결과에 추가
+                # 寃곌낵??異붽?
                 results_list.append((current_path, identifier))
                 
-                # 해당 프레임으로 전환하여 재귀 탐색
+                # ?대떦 ?꾨젅?꾩쑝濡??꾪솚?섏뿬 ?ш? ?먯깋
                 self.driver.switch_to.frame(frame)
                 self._scan_frames(results_list, current_path, depth + 1, max_depth)
                 
-                # 상위로 복귀
+                # ?곸쐞濡?蹂듦?
                 self.driver.switch_to.parent_frame()
                 
             except StaleElementReferenceException:
-                # 프레임이 DOM에서 사라짐
+                # ?꾨젅?꾩씠 DOM?먯꽌 ?щ씪吏?
                 continue
             except Exception as e:
-                logger.debug(f"프레임 내부 스캔 실패 ({identifier}): {e}")
+                logger.debug(f"?꾨젅???대? ?ㅼ틪 ?ㅽ뙣 ({identifier}): {e}")
                 try:
                     self.driver.switch_to.parent_frame()
                 except Exception as e:
-                    logger.debug(f"부모 프레임 복귀 실패: {e}")
+                    logger.debug(f"遺紐??꾨젅??蹂듦? ?ㅽ뙣: {e}")
                     pass
 
     def switch_to_frame_by_path(self, frame_path: str) -> bool:
-        """프레임 경로로 전환 (예: 'ifrmSeat/ifrmSeatDetail')"""
+        """?꾨젅??寃쎈줈濡??꾪솚 (?? 'ifrmSeat/ifrmSeatDetail')"""
         with self._lock:
             self.ensure_valid_window()
             original_frame_path = self.current_frame_path
@@ -291,7 +364,7 @@ class BrowserManager:
                     self.current_frame_path = ""
                     return True
                 except Exception as e:
-                    logger.error(f"default_content 전환 실패: {e}")
+                    logger.error(f"default_content ?꾪솚 ?ㅽ뙣: {e}")
                     return False
                 
             try:
@@ -300,15 +373,15 @@ class BrowserManager:
                 
                 for part in parts:
                     found = False
-                    # 1. ID/Name로 찾기
+                    # 1. ID/Name濡?李얘린
                     try:
                         self.driver.switch_to.frame(part)
                         found = True
                         continue
                     except (NoSuchFrameException, Exception):
-                        pass  # ID로 찾기 실패, 다음 방법 시도
+                        pass  # ID濡?李얘린 ?ㅽ뙣, ?ㅼ쓬 諛⑸쾿 ?쒕룄
                     
-                    # 2. WebElement로 찾기 (index=N 형식 처리)
+                    # 2. WebElement濡?李얘린 (index=N ?뺤떇 泥섎━)
                     if part.startswith("index="):
                         idx = int(part.split("=")[1])
                         frames = self.driver.find_elements(By.TAG_NAME, "iframe")
@@ -318,15 +391,15 @@ class BrowserManager:
                             continue
                     
                     if not found:
-                        raise Exception(f"프레임을 찾을 수 없음: {part}")
+                        raise Exception(f"?꾨젅?꾩쓣 李얠쓣 ???놁쓬: {part}")
                 
-                # 성공 시에만 상태 업데이트
+                # ?깃났 ?쒖뿉留??곹깭 ?낅뜲?댄듃
                 self.current_frame_path = frame_path
                 return True
                 
             except Exception as e:
-                logger.error(f"프레임 전환 실패 ({frame_path}): {e}")
-                # 실패 시 상태 오염 방지: default_content로 복구, current_frame_path는 원래 값 유지
+                logger.error(f"?꾨젅???꾪솚 ?ㅽ뙣 ({frame_path}): {e}")
+                # ?ㅽ뙣 ???곹깭 ?ㅼ뿼 諛⑹?: default_content濡?蹂듦뎄, current_frame_path???먮옒 媛??좎?
                 try:
                     self.driver.switch_to.default_content()
                 except Exception:
@@ -336,10 +409,10 @@ class BrowserManager:
 
     def find_element_in_all_frames(self, xpath: str, max_depth: int = MAX_FRAME_DEPTH) -> Tuple[Optional[Any], str]:
         """
-        모든 프레임에서 요소 검색, (element, frame_path) 반환.
+        紐⑤뱺 ?꾨젅?꾩뿉???붿냼 寃?? (element, frame_path) 諛섑솚.
 
-        안정성을 위해 iframe에서 발견된 경우 element는 반환하지 않고(frame 컨텍스트가 맞지 않기 쉬움),
-        frame_path만 반환합니다. 호출자는 frame_path로 전환 후 재조회하는 방식으로 사용하세요.
+        ?덉젙?깆쓣 ?꾪빐 iframe?먯꽌 諛쒓껄??寃쎌슦 element??諛섑솚?섏? ?딄퀬(frame 而⑦뀓?ㅽ듃媛 留욎? ?딄린 ?ъ?),
+        frame_path留?諛섑솚?⑸땲?? ?몄텧?먮뒗 frame_path濡??꾪솚 ???ъ“?뚰븯??諛⑹떇?쇰줈 ?ъ슜?섏꽭??
         """
         with perf_span("browser.find_element_in_all_frames"):
             with self._lock:
@@ -352,7 +425,7 @@ class BrowserManager:
                 found_path = ""
 
                 try:
-                    # 1. 메인 컨텐츠에서 먼저 검색
+                    # 1. 硫붿씤 而⑦뀗痢좎뿉??癒쇱? 寃??
                     self.driver.switch_to.default_content()
                     try:
                         self.driver.find_element(By.XPATH, xpath)
@@ -361,16 +434,16 @@ class BrowserManager:
                     except NoSuchElementException:
                         pass
 
-                    # 2. 프레임 재귀 검색 (search 함수는 항상 parent_frame을 정리함)
+                    # 2. ?꾨젅???ш? 寃??(search ?⑥닔????긽 parent_frame???뺣━??
                     found_path = self._find_xpath_in_frames(xpath, "", 0, max_depth)
                     if found_path:
-                        # element는 호출자가 frame_path로 재조회하도록 유도 (컨텍스트 오염 방지)
+                        # element???몄텧?먭? frame_path濡??ъ“?뚰븯?꾨줉 ?좊룄 (而⑦뀓?ㅽ듃 ?ㅼ뿼 諛⑹?)
                         return None, found_path
 
                 except Exception as e:
-                    logger.error(f"전체 검색 오류: {e}")
+                    logger.error(f"?꾩껜 寃???ㅻ쪟: {e}")
                 finally:
-                    # 항상 원래 컨텍스트로 복구
+                    # ??긽 ?먮옒 而⑦뀓?ㅽ듃濡?蹂듦뎄
                     try:
                         self.driver.switch_to.window(original_handle)
                     except Exception:
@@ -387,8 +460,8 @@ class BrowserManager:
 
     def _find_xpath_in_frames(self, xpath: str, parent_path: str = "", depth: int = 0, max_depth: int = MAX_FRAME_DEPTH) -> str:
         """
-        모든 프레임에서 XPath를 검색하고, 발견 시 frame_path를 반환.
-        (프레임 스택은 항상 parent_frame로 정리되도록 구성)
+        紐⑤뱺 ?꾨젅?꾩뿉??XPath瑜?寃?됲븯怨? 諛쒓껄 ??frame_path瑜?諛섑솚.
+        (?꾨젅???ㅽ깮? ??긽 parent_frame濡??뺣━?섎룄濡?援ъ꽦)
         """
         if depth > max_depth:
             return ""
@@ -406,14 +479,14 @@ class BrowserManager:
                 self.driver.switch_to.frame(frame)
                 parent_ok = True
                 try:
-                    # 현재 프레임에서 먼저 검색
+                    # ?꾩옱 ?꾨젅?꾩뿉??癒쇱? 寃??
                     try:
                         self.driver.find_element(By.XPATH, xpath)
                         return current_path
                     except NoSuchElementException:
                         pass
 
-                    # 하위 프레임 재귀
+                    # ?섏쐞 ?꾨젅???ш?
                     found = self._find_xpath_in_frames(xpath, current_path, depth + 1, max_depth)
                     if found:
                         return found
@@ -421,7 +494,7 @@ class BrowserManager:
                     try:
                         self.driver.switch_to.parent_frame()
                     except Exception:
-                        # parent_frame 실패 시 default_content로 복구(상태 오염 방지)
+                        # parent_frame ?ㅽ뙣 ??default_content濡?蹂듦뎄(?곹깭 ?ㅼ뿼 諛⑹?)
                         try:
                             self.driver.switch_to.default_content()
                         except Exception:
@@ -434,7 +507,7 @@ class BrowserManager:
             except StaleElementReferenceException:
                 continue
             except Exception:
-                # 다음 프레임 탐색 지속
+                # ?ㅼ쓬 ?꾨젅???먯깋 吏??
                 try:
                     self.driver.switch_to.parent_frame()
                 except Exception:
@@ -448,10 +521,10 @@ class BrowserManager:
 
     def begin_validation_session(self) -> Dict[str, Any]:
         """
-        검증 세션 시작.
+        寃利??몄뀡 ?쒖옉.
 
-        세션 내에서 프레임 목록/히트 힌트/미스 정보를 재사용해
-        배치 검증 시 불필요한 프레임 전수 탐색을 줄입니다.
+        ?몄뀡 ?댁뿉???꾨젅??紐⑸줉/?덊듃 ?뚰듃/誘몄뒪 ?뺣낫瑜??ъ궗?⑺빐
+        諛곗튂 寃利???遺덊븘?뷀븳 ?꾨젅???꾩닔 ?먯깋??以꾩엯?덈떎.
         """
         session: Dict[str, Any] = {
             "frames": ["main"],
@@ -463,12 +536,12 @@ class BrowserManager:
                 if frame_path not in session["frames"]:
                     session["frames"].append(frame_path)
         except Exception:
-            # 세션은 최선형 캐시이므로 실패해도 검증 자체는 계속 동작해야 함.
+            # ?몄뀡? 理쒖꽑??罹먯떆?대?濡??ㅽ뙣?대룄 寃利??먯껜??怨꾩냽 ?숈옉?댁빞 ??
             pass
         return session
 
     def end_validation_session(self, session: Optional[Dict[str, Any]]):
-        """검증 세션 종료 훅(하위 호환을 위해 no-op 유지)."""
+        """寃利??몄뀡 醫낅즺 ???섏쐞 ?명솚???꾪빐 no-op ?좎?)."""
         _ = session
 
     def _session_get_hint(self, session: Optional[Dict[str, Any]], xpath: str) -> Optional[str]:
@@ -506,7 +579,7 @@ class BrowserManager:
         return xpath in misses
 
     def _try_find_in_frame(self, xpath: str, frame_path: str) -> Optional[Dict[str, Any]]:
-        """특정 프레임에서 XPath를 조회하고 성공 시 기본 결과를 반환."""
+        """?뱀젙 ?꾨젅?꾩뿉??XPath瑜?議고쉶?섍퀬 ?깃났 ??湲곕낯 寃곌낵瑜?諛섑솚."""
         try:
             with self.frame_context(frame_path):
                 element = self.driver.find_element(By.XPATH, xpath)
@@ -525,53 +598,90 @@ class BrowserManager:
             return None
 
     def get_windows(self) -> List[Dict]:
-        """열린 윈도우 목록 - 안정적인 방식으로 조회"""
+        """?대┛ ?덈룄??紐⑸줉 - ?앹뾽 ?곗꽑 ?뺣젹濡?議고쉶"""
         with self._lock:
             if not self.is_alive():
                 return []
 
             windows = []
             current_handle = ""
+            handles: List[str] = []
             try:
                 current_handle = self.driver.current_window_handle
             except Exception as e:
-                logger.debug(f"현재 윈도우 핸들 확인 실패 (무시): {e}")
+                logger.debug(f"?꾩옱 ?덈룄???몃뱾 ?뺤씤 ?ㅽ뙣 (臾댁떆): {e}")
                 pass
 
-            for handle in self.driver.window_handles:
+            try:
+                handles = list(self.driver.window_handles)
+            except Exception as e:
+                logger.debug(f"?덈룄???몃뱾 議고쉶 ?ㅽ뙣: {e}")
+                return []
+
+            if not handles:
+                return []
+
+            if not self._root_window_handle or self._root_window_handle not in handles:
+                self._root_window_handle = handles[0]
+
+            for order, handle in enumerate(handles):
                 try:
                     self.driver.switch_to.window(handle)
+                    opener_exists = False
+                    try:
+                        opener_exists = bool(self.driver.execute_script("return !!window.opener;"))
+                    except Exception:
+                        opener_exists = False
+
+                    is_popup = (handle != self._root_window_handle) or opener_exists
                     windows.append({
                         "handle": handle,
                         "title": self.driver.title,
                         "url": self.driver.current_url,
-                        "current": (handle == current_handle)
+                        "current": (handle == current_handle),
+                        "is_popup": is_popup,
+                        "_order": order,
                     })
                 except NoSuchWindowException:
                     continue
                 except Exception as e:
-                    logger.error(f"윈도우 정보 조회 실패: {e}")
+                    logger.error(f"?덈룄???뺣낫 議고쉶 ?ㅽ뙣: {e}")
 
-            # 원래 윈도우로 복귀
+            # ?먮옒 ?덈룄?곕줈 蹂듦?
             if current_handle:
                 try:
                     self.driver.switch_to.window(current_handle)
                 except Exception as e:
-                    logger.debug(f"원래 윈도우 복귀 실패: {e}")
-                    if self.driver.window_handles:
-                        self.driver.switch_to.window(self.driver.window_handles[-1])
+                    logger.debug(f"?먮옒 ?덈룄??蹂듦? ?ㅽ뙣: {e}")
+                    try:
+                        fallback_handles = list(self.driver.window_handles)
+                    except Exception:
+                        fallback_handles = []
+                    if fallback_handles:
+                        self.driver.switch_to.window(fallback_handles[-1])
+
+            windows.sort(
+                key=lambda w: (
+                    0 if w.get("is_popup") else 1,          # popup first
+                    0 if w.get("current") else 1,           # current first within group
+                    -int(w.get("_order", 0)),               # newest first
+                )
+            )
+
+            for window in windows:
+                window.pop("_order", None)
 
             return windows
 
     def switch_window(self, handle: str) -> bool:
-        """윈도우 전환 - 실패시 대체 윈도우로 전환"""
+        """?덈룄???꾪솚 - ?ㅽ뙣???泥??덈룄?곕줈 ?꾪솚"""
         with self._lock:
             try:
                 self.driver.switch_to.window(handle)
                 self._invalidate_frame_cache()
                 return True
             except Exception as e:
-                logger.error(f"윈도우 전환 실패: {e}")
+                logger.error(f"?덈룄???꾪솚 ?ㅽ뙣: {e}")
                 return self._recover_to_available_window()
 
     # -------------------------------------------------------------------------
@@ -579,19 +689,47 @@ class BrowserManager:
     # -------------------------------------------------------------------------
 
     def start_picker(self, overlay_mode: bool = False):
-        """요소 선택 모드 시작 - 모든 iframe에 주입"""
-        with self.frame_context("main"):
+        """?붿냼 ?좏깮 紐⑤뱶 ?쒖옉 - 紐⑤뱺 ?덈룄???앹뾽 ?곗꽑) + iframe??二쇱엯"""
+        with self._lock:
             self.ensure_valid_window()
-
-            # 메인 컨텐츠 주입 (항상 실행)
+            original_frame_path = self.current_frame_path
             try:
-                self.driver.execute_script(PICKER_SCRIPT)
-                logger.info("Main frame picker injected")
-            except Exception as e:
-                logger.error(f"메인 프레임 스크립트 주입 실패: {e}")
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
 
-            # 모든 iframe에 재귀 주입
-            self._inject_to_frames()
+            try:
+                handles = list(self.driver.window_handles)
+            except Exception:
+                handles = []
+
+            if not handles:
+                return
+
+            if self._root_window_handle and self._root_window_handle in handles:
+                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
+            else:
+                scan_handles = handles
+
+            injected_count = 0
+            for handle in scan_handles:
+                try:
+                    self.driver.switch_to.window(handle)
+                    self.driver.switch_to.default_content()
+                    self.driver.execute_script(PICKER_SCRIPT)
+                    injected_count += 1
+                    self._inject_to_frames()
+                except Exception as e:
+                    logger.debug(f"?덈룄??picker 二쇱엯 ?ㅽ뙣({handle[:8]}...): {e}")
+
+            if current_handle:
+                try:
+                    self.driver.switch_to.window(current_handle)
+                    self.switch_to_frame_by_path(original_frame_path or "main")
+                except Exception:
+                    self._recover_to_available_window()
+
+            logger.info(f"Picker injected windows={injected_count}")
 
     def _inject_to_frames(self, depth=0, max_depth=MAX_FRAME_DEPTH):
         if depth > max_depth:
@@ -600,26 +738,26 @@ class BrowserManager:
         try:
             iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
         except Exception:
-            return  # iframe 검색 실패
+            return  # iframe 寃???ㅽ뙣
 
         for frame in iframes:
             try:
                 self.driver.switch_to.frame(frame)
                 abort = False
                 try:
-                    # 스크립트 주입
+                    # ?ㅽ겕由쏀듃 二쇱엯
                     try:
                         self.driver.execute_script(PICKER_SCRIPT)
                     except Exception:
-                        pass  # 보안 제한 등으로 실패할 수 있음
+                        pass  # 蹂댁븞 ?쒗븳 ?깆쑝濡??ㅽ뙣?????덉쓬
 
-                    # 재귀 탐색
+                    # ?ш? ?먯깋
                     self._inject_to_frames(depth + 1, max_depth)
                 finally:
                     try:
                         self.driver.switch_to.parent_frame()
                     except Exception:
-                        # parent_frame 실패 시 컨텍스트 오염 방지
+                        # parent_frame ?ㅽ뙣 ??而⑦뀓?ㅽ듃 ?ㅼ뿼 諛⑹?
                         try:
                             self.driver.switch_to.default_content()
                         except Exception:
@@ -632,29 +770,66 @@ class BrowserManager:
                 continue
 
     def get_picker_result(self) -> Optional[Dict]:
-        """선택 결과 가져오기 - 모든 프레임에서 검색"""
-        with self.frame_context():
+        """Get picker result across windows (popup-first) and frames."""
+        with self._lock:
             if not self.is_alive():
                 return "CANCELLED"
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
 
             try:
-                # 1. 메인 프레임 확인
-                with self.frame_context("main"):
-                    result = self.driver.execute_script("return window.__pickerResult;")
-                    if result:
-                        if isinstance(result, dict):
-                            result['frame'] = 'main'
-                        return result
+                handles = list(self.driver.window_handles)
+            except Exception:
+                handles = []
 
-                    # 2. iframe 확인 (재귀)
-                    return self._find_picker_result_in_frames()
+            if self._root_window_handle and self._root_window_handle in handles:
+                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
+            else:
+                scan_handles = handles
 
-            except Exception as e:
-                logger.error(f"결과 확인 중 오류: {e}")
+            try:
+                for handle in scan_handles:
+                    try:
+                        self.driver.switch_to.window(handle)
+                        self.driver.switch_to.default_content()
+
+                        result = self.driver.execute_script("return window.__pickerResult;")
+                        if result:
+                            if isinstance(result, dict):
+                                result["frame"] = "main"
+                                result["window_handle"] = handle
+                                result["window_title"] = self.driver.title
+                                result["is_popup"] = bool(
+                                    self._root_window_handle and handle != self._root_window_handle
+                                )
+                            return result
+
+                        result = self._find_picker_result_in_frames()
+                        if result and isinstance(result, dict):
+                            result["window_handle"] = handle
+                            result["window_title"] = self.driver.title
+                            result["is_popup"] = bool(
+                                self._root_window_handle and handle != self._root_window_handle
+                            )
+                            return result
+                    except NoSuchWindowException:
+                        continue
+                    except Exception as e:
+                        logger.debug(f"?덈룄??picker 寃곌낵 ?뺤씤 ?ㅽ뙣({handle[:8]}...): {e}")
                 return None
+            finally:
+                if current_handle:
+                    try:
+                        self.driver.switch_to.window(current_handle)
+                        self.switch_to_frame_by_path(original_frame_path or "main")
+                    except Exception:
+                        self._recover_to_available_window()
 
     def _find_picker_result_in_frames(self, path: str = "", depth: int = 0, max_depth: int = MAX_FRAME_DEPTH):
-        """프레임을 재귀적으로 탐색하여 picker result를 찾음 (항상 parent_frame 정리)"""
+        """?꾨젅?꾩쓣 ?ш??곸쑝濡??먯깋?섏뿬 picker result瑜?李얠쓬 (??긽 parent_frame ?뺣━)"""
         if depth > max_depth:
             return None
 
@@ -679,7 +854,7 @@ class BrowserManager:
 
                     found = self._find_picker_result_in_frames(current_path, depth + 1, max_depth)
                     if found:
-                        # 하위에서 찾은 경우 frame 경로가 없으면 보강
+                        # ?섏쐞?먯꽌 李얠? 寃쎌슦 frame 寃쎈줈媛 ?놁쑝硫?蹂닿컯
                         if isinstance(found, dict) and 'frame' not in found:
                             found['frame'] = current_path
                         return found
@@ -701,20 +876,48 @@ class BrowserManager:
         return None
 
     def is_picker_active(self) -> bool:
-        """선택 모드 활성화 여부 - 모든 프레임 검사"""
-        with self.frame_context():
+        """Check whether picker is active across windows and frames."""
+        with self._lock:
             if not self.is_alive():
                 return False
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
 
             try:
-                with self.frame_context("main"):
-                    active = self.driver.execute_script("return window.__pickerActive;")
-                    if active:
-                        return True
-
-                    return self._check_active_in_frames()
+                handles = list(self.driver.window_handles)
             except Exception:
-                return False  # 피커 상태 확인 실패
+                handles = []
+
+            if self._root_window_handle and self._root_window_handle in handles:
+                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
+            else:
+                scan_handles = handles
+
+            try:
+                for handle in scan_handles:
+                    try:
+                        self.driver.switch_to.window(handle)
+                        self.driver.switch_to.default_content()
+                        active = self.driver.execute_script("return window.__pickerActive;")
+                        if active:
+                            return True
+                        if self._check_active_in_frames():
+                            return True
+                    except NoSuchWindowException:
+                        continue
+                    except Exception:
+                        continue
+                return False
+            finally:
+                if current_handle:
+                    try:
+                        self.driver.switch_to.window(current_handle)
+                        self.switch_to_frame_by_path(original_frame_path or "main")
+                    except Exception:
+                        self._recover_to_available_window()
 
     def _check_active_in_frames(self, depth: int = 0, max_depth: int = MAX_FRAME_DEPTH) -> bool:
         if depth > max_depth:
@@ -752,7 +955,7 @@ class BrowserManager:
         return False
         
     def highlight(self, xpath: str, duration: int = 2500, frame_path: str = None) -> bool:
-        """요소 하이라이트 - 중첩 iframe 지원"""
+        """Highlight matched element, including nested iframe context."""
         with self.frame_context():
             self.ensure_valid_window()
 
@@ -776,7 +979,7 @@ class BrowserManager:
                     except NoSuchElementException:
                         return False
 
-                    # 하이라이트 실행
+                    # ?섏씠?쇱씠???ㅽ뻾
                     self.driver.execute_script("""
                         var el = arguments[0];
                         var original = el.style.outline;
@@ -797,7 +1000,7 @@ class BrowserManager:
                 return True
 
             except Exception as e:
-                logger.error(f"하이라이트 오류: {e}")
+                logger.error(f"?섏씠?쇱씠???ㅻ쪟: {e}")
                 return False
             
     def validate_xpath(
@@ -806,25 +1009,25 @@ class BrowserManager:
         preferred_frame: Optional[str] = None,
         session: Optional[Dict[str, Any]] = None,
     ) -> Dict:
-        """XPath 검증 - 세션/프레임 힌트를 활용한 중첩 iframe 탐색."""
+        """XPath 寃利?- ?몄뀡/?꾨젅???뚰듃瑜??쒖슜??以묒꺽 iframe ?먯깋."""
         with perf_span("browser.validate_xpath"):
             with self.frame_context():
                 if not self.is_alive():
-                    return {"found": False, "msg": "브라우저 연결 안됨"}
+                    return {"found": False, "msg": "釉뚮씪?곗? ?곌껐 ?덈맖"}
 
                 tried: Set[str] = set()
                 candidate_frames: List[str] = []
 
-                # 1) 호출자가 지정한 프레임
+                # 1) Try caller-provided preferred frame first.
                 if preferred_frame:
                     candidate_frames.append(preferred_frame)
 
-                # 2) 세션 힌트
+                # 2) ?몄뀡 ?뚰듃
                 session_hint = self._session_get_hint(session, xpath)
                 if session_hint and session_hint not in candidate_frames:
                     candidate_frames.append(session_hint)
 
-                # 3) 전역 힌트
+                # 3) ?꾩뿭 ?뚰듃
                 global_hint = self._get_xpath_frame_hint(xpath)
                 if global_hint and global_hint not in candidate_frames:
                     candidate_frames.append(global_hint)
@@ -837,7 +1040,7 @@ class BrowserManager:
                         self._session_set_hint(session, xpath, frame_path)
                         return found
 
-                # 4) 세션 프레임 순회
+                # 4) ?몄뀡 ?꾨젅???쒗쉶
                 session_frames = session.get("frames") if isinstance(session, dict) else None
                 if isinstance(session_frames, list):
                     for frame_path in session_frames:
@@ -850,27 +1053,27 @@ class BrowserManager:
                             self._session_set_hint(session, xpath, frame_path)
                             return found
 
-                # 5) 세션에서 이미 miss 처리된 XPath는 전수 탐색을 생략
+                # 5) ?몄뀡?먯꽌 ?대? miss 泥섎━??XPath???꾩닔 ?먯깋???앸왂
                 if self._session_has_miss(session, xpath):
-                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+                    return {"found": False, "msg": "?붿냼瑜?李얠쓣 ???놁쓬"}
 
-                # 6) 최후 수단: 전체 프레임 전수 탐색
+                # 6) 理쒗썑 ?섎떒: ?꾩껜 ?꾨젅???꾩닔 ?먯깋
                 _, frame_path = self.find_element_in_all_frames(xpath, max_depth=MAX_FRAME_DEPTH)
                 if not frame_path:
                     self._session_add_miss(session, xpath)
-                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+                    return {"found": False, "msg": "?붿냼瑜?李얠쓣 ???놁쓬"}
 
                 found = self._try_find_in_frame(xpath, frame_path)
                 if not found:
                     self._session_add_miss(session, xpath)
-                    return {"found": False, "msg": "요소를 찾을 수 없음"}
+                    return {"found": False, "msg": "?붿냼瑜?李얠쓣 ???놁쓬"}
 
                 self._set_xpath_frame_hint(xpath, frame_path)
                 self._session_set_hint(session, xpath, frame_path)
                 return found
 
     def _get_xpath_frame_hint(self, xpath: str) -> Optional[str]:
-        """최근 성공한 XPath-프레임 힌트 조회 (TTL 적용)."""
+        """理쒓렐 ?깃났??XPath-?꾨젅???뚰듃 議고쉶 (TTL ?곸슜)."""
         hint = self._xpath_frame_hints.get(xpath)
         if not hint:
             return None
@@ -881,25 +1084,25 @@ class BrowserManager:
         return frame_path
 
     def _set_xpath_frame_hint(self, xpath: str, frame_path: str):
-        """XPath-프레임 힌트 저장."""
+        """XPath-?꾨젅???뚰듃 ???"""
         if not xpath or not frame_path:
             return
         self._xpath_frame_hints[xpath] = (frame_path, time.time())
 
     # =========================================================================
-    # v4.0 신규: 스크린샷, 요소 카운트, 상세 정보
+    # v4.0 ?좉퇋: ?ㅽ겕由곗꺑, ?붿냼 移댁슫?? ?곸꽭 ?뺣낫
     # =========================================================================
     
-    def count_elements(self, xpath: str, frame_path: str = None) -> int:
+    def count_elements(self, xpath: str, frame_path: Optional[str] = None) -> int:
         """
-        XPath에 매칭되는 모든 요소 개수 반환 (실시간 미리보기용)
+        XPath??留ㅼ묶?섎뒗 紐⑤뱺 ?붿냼 媛쒖닔 諛섑솚 (?ㅼ떆媛?誘몃━蹂닿린??
         
         Args:
-            xpath: 검색할 XPath
-            frame_path: 프레임 경로 (None이면 현재 프레임)
+            xpath: 寃?됲븷 XPath
+            frame_path: ?꾨젅??寃쎈줈 (None?대㈃ ?꾩옱 ?꾨젅??
         
         Returns:
-            매칭 요소 개수 (오류 시 -1)
+            留ㅼ묶 ?붿냼 媛쒖닔 (?ㅻ쪟 ??-1)
         """
         with self.frame_context():
             if not self.is_alive():
@@ -911,22 +1114,22 @@ class BrowserManager:
                         return len(self.driver.find_elements(By.XPATH, xpath))
                 return len(self.driver.find_elements(By.XPATH, xpath))
             except Exception as e:
-                logger.debug(f"요소 카운트 실패: {e}")
+                logger.debug(f"?붿냼 移댁슫???ㅽ뙣: {e}")
                 return -1
     
     def get_element_info(
         self,
         xpath: str,
-        frame_path: str = None,
+        frame_path: Optional[str] = None,
         include_attributes: bool = True,
         session: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict]:
         """
-        요소의 상세 정보 반환 (Diff 분석용)
+        ?붿냼???곸꽭 ?뺣낫 諛섑솚 (Diff 遺꾩꽍??
         
         Args:
-            xpath: 요소 XPath
-            frame_path: 프레임 경로
+            xpath: ?붿냼 XPath
+            frame_path: ?꾨젅??寃쎈줈
         
         Returns:
             {
@@ -946,7 +1149,7 @@ class BrowserManager:
         """
         with self.frame_context():
             if not self.is_alive():
-                return {'found': False, 'msg': '브라우저 연결 안됨'}
+                return {'found': False, 'msg': '釉뚮씪?곗? ?곌껐 ?덈맖'}
 
             try:
                 resolved_frame = frame_path
@@ -960,12 +1163,12 @@ class BrowserManager:
                             resolved_frame = found_path
 
                 if resolved_frame is not None and not self.switch_to_frame_by_path(resolved_frame):
-                    return {'found': False, 'msg': f'프레임 전환 실패: {resolved_frame}'}
+                    return {'found': False, 'msg': f'?꾨젅???꾪솚 ?ㅽ뙣: {resolved_frame}'}
 
                 try:
                     element = self.driver.find_element(By.XPATH, xpath)
                 except NoSuchElementException:
-                    return {'found': False, 'msg': '요소를 찾을 수 없음'}
+                    return {'found': False, 'msg': '?붿냼瑜?李얠쓣 ???놁쓬'}
 
                 info = {
                     'found': True,
@@ -979,7 +1182,7 @@ class BrowserManager:
                 }
 
                 if include_attributes:
-                    # 모든 속성 수집
+                    # 紐⑤뱺 ?띿꽦 ?섏쭛
                     try:
                         attrs_script = """
                         var el = arguments[0];
@@ -996,7 +1199,7 @@ class BrowserManager:
                 else:
                     info['attributes'] = {}
 
-                # 부모 정보
+                # 遺紐??뺣낫
                 try:
                     parent_script = """
                     var el = arguments[0].parentElement;
@@ -1017,7 +1220,7 @@ class BrowserManager:
                     info['parent_id'] = ''
                     info['parent_class'] = ''
 
-                # 형제 중 인덱스
+                # ?뺤젣 以??몃뜳??
                 try:
                     index_script = """
                     var el = arguments[0];
@@ -1037,20 +1240,20 @@ class BrowserManager:
                 return info
 
             except Exception as e:
-                logger.error(f"요소 정보 조회 실패: {e}")
+                logger.error(f"?붿냼 ?뺣낫 議고쉶 ?ㅽ뙣: {e}")
                 return {'found': False, 'msg': str(e)}
     
-    def screenshot_element(self, xpath: str, save_path: str, frame_path: str = None) -> bool:
+    def screenshot_element(self, xpath: str, save_path: str, frame_path: Optional[str] = None) -> bool:
         """
-        요소 스크린샷 저장
+        ?붿냼 ?ㅽ겕由곗꺑 ???
         
         Args:
-            xpath: 요소 XPath
-            save_path: 저장할 경로 (.png)
-            frame_path: 프레임 경로
+            xpath: ?붿냼 XPath
+            save_path: ??ν븷 寃쎈줈 (.png)
+            frame_path: ?꾨젅??寃쎈줈
         
         Returns:
-            성공 여부
+            ?깃났 ?щ?
         """
         with self.frame_context():
             if not self.is_alive():
@@ -1064,16 +1267,19 @@ class BrowserManager:
                 try:
                     element = self.driver.find_element(By.XPATH, xpath)
                 except NoSuchElementException:
-                    logger.error(f"스크린샷 대상 요소 없음: {xpath}")
+                    logger.error(f"?ㅽ겕由곗꺑 ????붿냼 ?놁쓬: {xpath}")
                     return False
 
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
                 time.sleep(0.3)
 
                 element.screenshot(save_path)
-                logger.info(f"요소 스크린샷 저장: {save_path}")
+                logger.info(f"?붿냼 ?ㅽ겕由곗꺑 ??? {save_path}")
                 return True
 
             except Exception as e:
-                logger.error(f"스크린샷 저장 실패: {e}")
+                logger.error(f"?ㅽ겕由곗꺑 ????ㅽ뙣: {e}")
                 return False
+
+
+

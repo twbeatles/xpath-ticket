@@ -415,3 +415,20 @@ self.toast.show_toast("ì„±ê³µ!", "success", 3000)
 self.toast.show_toast("ê²½ê³ !", "warning", 3000)
 self.toast.show_toast("ì˜¤ë¥˜!", "error", 3000)
 ```
+
+---
+
+## Module Split Update (v4.2)
+
+- Legacy entrypoint remains: `xpath Á¶»ç±â(¸ðµç Æ¼ÄÏ »çÀÌÆ®).py`
+- Main app class is now composed from package modules:
+  - `xpath_explorer/main_window.py`
+  - `xpath_explorer/runtime.py`
+  - `xpath_explorer/mixins/ui_mixin.py`
+  - `xpath_explorer/mixins/browser_mixin.py`
+  - `xpath_explorer/mixins/data_mixin.py`
+  - `xpath_explorer/mixins/tools_mixin.py`
+
+Implementation rule:
+- Add new `XPathExplorer` methods to the correct mixin by responsibility.
+- Keep launch/API compatibility by preserving the legacy entrypoint wrapper.

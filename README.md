@@ -133,3 +133,21 @@ MIT License
   - `save()` keeps synchronous flush semantics
   - `shutdown(timeout=...)` flushes and stops writer thread
 - Perf metrics are aggregated by `perf_span` and summarized on app shutdown (`count/avg/p95/max`).
+
+## Modular Layout (v4.2 Split)
+
+- Legacy entrypoint file is kept for compatibility:
+  - `xpath 조사기(모든 티켓 사이트).py` -> imports and runs new app package.
+- Main window composition moved to:
+  - `xpath_explorer/main_window.py`
+- Runtime logger bootstrap moved to:
+  - `xpath_explorer/runtime.py`
+- Former monolithic `XPathExplorer` methods are split by responsibility:
+  - `xpath_explorer/mixins/ui_mixin.py`
+  - `xpath_explorer/mixins/browser_mixin.py`
+  - `xpath_explorer/mixins/data_mixin.py`
+  - `xpath_explorer/mixins/tools_mixin.py`
+
+Compatibility policy:
+- Existing launch command is unchanged.
+- Existing JSON schema and user-facing UI labels are unchanged.

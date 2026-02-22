@@ -470,78 +470,105 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
 ]
 
-# 탐지 우회 스크립트 (WebDriver 플래그 숨김, fingerprint 위장)
+# 탐지 우회 스크립트 (WebDriver/Playwright 흔적 최소화 + fingerprint 위장)
 STEALTH_SCRIPT = """
 () => {
-    // WebDriver 플래그 제거
-    Object.defineProperty(navigator, 'webdriver', {
-        get: () => undefined
-    });
-    
-    // Chrome 속성 추가 (자동화 도구 탐지 우회)
-    window.chrome = {
-        runtime: {},
-        loadTimes: function() {},
-        csi: function() {},
-        app: {}
+    const defineGetter = (obj, prop, value) => {
+        try {
+            Object.defineProperty(obj, prop, {
+                get: () => value,
+                configurable: true,
+            });
+        } catch (_) {}
     };
-    
-    // Permissions 위장
-    const originalQuery = window.navigator.permissions.query;
-    window.navigator.permissions.query = (parameters) => (
-        parameters.name === 'notifications' ?
-            Promise.resolve({ state: Notification.permission }) :
-            originalQuery(parameters)
-    );
-    
-    // Languages 설정
-    Object.defineProperty(navigator, 'languages', {
-        get: () => ['ko-KR', 'ko', 'en-US', 'en']
-    });
-    
-    // 플러그인 위장
-    Object.defineProperty(navigator, 'plugins', {
-        get: () => [
-            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
-            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-            { name: 'Native Client', filename: 'internal-nacl-plugin' }
-        ]
-    });
-    
-    // Canvas fingerprint 랜덤화
-    const originalGetContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function(type, attributes) {
-        const context = originalGetContext.call(this, type, attributes);
-        if (type === '2d') {
-            const originalGetImageData = context.getImageData;
-            context.getImageData = function(x, y, width, height) {
-                const imageData = originalGetImageData.call(this, x, y, width, height);
-                // 약간의 노이즈 추가
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    imageData.data[i] = Math.max(0, Math.min(255, imageData.data[i] + (Math.random() * 2 - 1)));
+
+    // 핵심 자동화 플래그 숨김
+    defineGetter(navigator, 'webdriver', undefined);
+    defineGetter(navigator, 'platform', 'Win32');
+    defineGetter(navigator, 'vendor', 'Google Inc.');
+    defineGetter(navigator, 'hardwareConcurrency', 8);
+    defineGetter(navigator, 'deviceMemory', 8);
+    defineGetter(navigator, 'maxTouchPoints', 0);
+    defineGetter(navigator, 'languages', ['ko-KR', 'ko', 'en-US', 'en']);
+
+    // Playwright 흔적 제거
+    try { delete window.__playwright__binding__; } catch (_) {}
+    try { delete window.__pwInitScripts; } catch (_) {}
+    try { delete window._playwright; } catch (_) {}
+
+    // Chrome 객체 위장
+    if (!window.chrome) {
+        Object.defineProperty(window, 'chrome', {
+            value: {
+                runtime: {},
+                app: { isInstalled: false },
+                csi: () => ({}),
+                loadTimes: () => ({}),
+            },
+            configurable: true,
+        });
+    } else if (!window.chrome.runtime) {
+        try { window.chrome.runtime = {}; } catch (_) {}
+    }
+
+    // plugins / mimeTypes 위장
+    const fakePlugins = [
+        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
+    ];
+    defineGetter(navigator, 'plugins', fakePlugins);
+    defineGetter(navigator, 'mimeTypes', [
+        { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+        { type: 'text/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+    ]);
+
+    // Permissions API 위장
+    const permissions = navigator.permissions;
+    if (permissions && typeof permissions.query === 'function') {
+        try {
+            const originalQuery = permissions.query.bind(permissions);
+            permissions.query = (parameters) => {
+                if (parameters && parameters.name === 'notifications') {
+                    return Promise.resolve({ state: Notification.permission });
                 }
-                return imageData;
+                return originalQuery(parameters);
             };
-        }
-        return context;
-    };
-    
+        } catch (_) {}
+    }
+
+    // userAgentData 누락 탐지 완화
+    if (!('userAgentData' in navigator)) {
+        defineGetter(navigator, 'userAgentData', {
+            brands: [
+                { brand: 'Chromium', version: '131' },
+                { brand: 'Google Chrome', version: '131' },
+            ],
+            mobile: false,
+            platform: 'Windows',
+            getHighEntropyValues: async () => ({
+                architecture: 'x86',
+                model: '',
+                platform: 'Windows',
+                platformVersion: '10.0.0',
+                uaFullVersion: '131.0.0.0',
+            }),
+        });
+    }
+
     // WebGL 렌더러 위장
-    const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-        if (parameter === 37445) return 'Intel Inc.';
-        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-        return getParameter.call(this, parameter);
+    const patchWebGL = (proto) => {
+        if (!proto || !proto.getParameter) return;
+        const originalGetParameter = proto.getParameter;
+        proto.getParameter = function(parameter) {
+            // UNMASKED_VENDOR_WEBGL / UNMASKED_RENDERER_WEBGL
+            if (parameter === 37445) return 'Intel Inc.';
+            if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+            return originalGetParameter.call(this, parameter);
+        };
     };
-    
-    // Headless 탐지 우회
-    Object.defineProperty(navigator, 'hardwareConcurrency', {
-        get: () => 8
-    });
-    
-    Object.defineProperty(navigator, 'deviceMemory', {
-        get: () => 8
-    });
+    patchWebGL(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
+    patchWebGL(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
 }
 """
 

@@ -6,6 +6,7 @@ Playwright 기반 브라우저 관리 및 자동 탐색 기능
 """
 
 import logging
+import asyncio
 import random
 import json
 import re
@@ -77,6 +78,7 @@ class PlaywrightManager:
         self._request_handler = None
         self._response_handler = None
         self._headless = False
+        self.last_error: str = ""
         
     @property
     def is_available(self) -> bool:
@@ -87,6 +89,26 @@ class PlaywrightManager:
     def page(self) -> Optional[Page]:
         """현재 페이지 객체"""
         return self._page
+
+    @staticmethod
+    def _pick_user_agent(stealth: bool) -> str:
+        """스텔스 모드에서는 Chromium과 궁합이 좋은 Windows Chrome UA를 우선 선택."""
+        if not USER_AGENTS:
+            return (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            )
+
+        if stealth:
+            chrome_like = [
+                ua for ua in USER_AGENTS
+                if "Windows NT" in ua and "Chrome/" in ua and "Firefox/" not in ua
+            ]
+            if chrome_like:
+                return random.choice(chrome_like)
+
+        return random.choice(USER_AGENTS)
 
     @staticmethod
     def install_chromium() -> bool:
@@ -129,11 +151,28 @@ class PlaywrightManager:
         """
         if not PLAYWRIGHT_AVAILABLE:
             logger.error("Playwright가 설치되지 않았습니다.")
+            self.last_error = "Playwright is not installed"
             return False
-            
+
+        self.last_error = ""
+
+        # Playwright sync API는 실행 중인 asyncio loop 내부에서 동작하지 않는다.
         try:
-            # 랜덤 User-Agent 선택
-            user_agent = random.choice(USER_AGENTS)
+            running_loop = asyncio.get_running_loop()
+            if running_loop.is_running():
+                self.last_error = "sync_playwright cannot run inside an active asyncio loop"
+                logger.error(
+                    "Playwright Sync API는 asyncio 루프 내부에서 실행할 수 없습니다. "
+                    "현재 경로는 Async API 또는 별도 스레드/프로세스가 필요합니다."
+                )
+                return False
+        except RuntimeError:
+            # 현재 스레드에 실행 중 asyncio loop 없음 (정상)
+            pass
+             
+        try:
+            # 랜덤 User-Agent 선택 (stealth 모드에서는 Chrome 계열 우선)
+            user_agent = self._pick_user_agent(stealth)
             
             self._playwright = sync_playwright().start()
             
@@ -154,10 +193,23 @@ class PlaywrightManager:
                     '--headless=new',  # 새로운 headless 모드 (탐지 어려움)
                 ])
             
-            self._browser = self._playwright.chromium.launch(
-                headless=headless,
-                args=launch_args
-            )
+            launch_kwargs = {
+                "headless": headless,
+                "args": launch_args,
+                "ignore_default_args": ["--enable-automation"],
+            }
+
+            # 가능한 경우 시스템 Chrome 채널 우선 사용 (탐지 회피에 유리)
+            self._browser = None
+            if stealth:
+                try:
+                    self._browser = self._playwright.chromium.launch(channel="chrome", **launch_kwargs)
+                    logger.info("Playwright system Chrome 채널로 실행")
+                except Exception as e:
+                    logger.debug(f"system Chrome 채널 실행 실패, bundled Chromium으로 폴백: {e}")
+
+            if self._browser is None:
+                self._browser = self._playwright.chromium.launch(**launch_kwargs)
             self._headless = headless
             
             # 컨텍스트 생성 (fingerprint 설정)
@@ -170,6 +222,10 @@ class PlaywrightManager:
                 permissions=['geolocation'],
                 color_scheme='light',
                 device_scale_factor=1,
+                extra_http_headers={
+                    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Upgrade-Insecure-Requests": "1",
+                },
             )
             
             self._page = self._context.new_page()
@@ -184,15 +240,24 @@ class PlaywrightManager:
             return True
             
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"Playwright 브라우저 실행 실패: {e}")
             return False
     
     def _apply_stealth(self):
         """탐지 우회 스크립트 적용"""
+        # 모든 페이지/팝업/프레임에 적용되도록 context 기준으로 init script 주입
+        if self._context:
+            self._context.add_init_script(STEALTH_SCRIPT)
+
+        # 이미 열린 현재 페이지에도 즉시 적용
         if self._page:
-            # 모든 페이지 로드 전에 스크립트 주입
-            self._page.add_init_script(STEALTH_SCRIPT)
-            logger.debug("Stealth 스크립트 적용됨")
+            try:
+                self._page.evaluate(STEALTH_SCRIPT)
+            except Exception:
+                pass
+
+        logger.debug("Stealth 스크립트 적용됨")
     
     def close(self):
         """브라우저 종료 (안전한 리소스 정리)"""
@@ -848,6 +913,10 @@ class NetworkAnalyzer:
             return False
         # navigate()는 timeout 시 None을 반환할 수 있으므로 False만 실패로 간주
         return self._manager.navigate(url) is not False
+
+    @property
+    def last_error(self) -> str:
+        return self._manager.last_error
 
     def start_capture(self):
         self._manager.start_network_monitoring()
