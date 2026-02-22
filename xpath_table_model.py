@@ -9,6 +9,7 @@ from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QColor
 
 from xpath_config import XPathItem
+from xpath_constants import category_to_label
 
 
 class XPathItemTableModel(QAbstractTableModel):
@@ -72,7 +73,7 @@ class XPathItemTableModel(QAbstractTableModel):
             if col == self.COLUMN_NAME:
                 return item.name
             if col == self.COLUMN_CATEGORY:
-                return item.category
+                return category_to_label(item.category)
             if col == self.COLUMN_DESCRIPTION:
                 if item.tags:
                     return f"{item.description} [{', '.join(item.tags)}]"
@@ -163,4 +164,3 @@ class XPathItemTableModel(QAbstractTableModel):
         left = self.index(row, 0)
         right = self.index(row, self.columnCount() - 1)
         self.dataChanged.emit(left, right)
-

@@ -27,6 +27,7 @@ from xpath_constants import (
     APP_TITLE, APP_VERSION, SITE_PRESETS,
     BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
     LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
+    category_to_label, category_to_value,
 )
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
@@ -93,15 +94,22 @@ class ExplorerDataMixin:
             return
 
         categories = sorted(self.config.get_categories())
-        current_cat = self.combo_filter.currentText() or "전체"
+        current_cat = self.combo_filter.currentData()
+        if not isinstance(current_cat, str):
+            current_cat = category_to_value(self.combo_filter.currentText() or "")
         self.combo_filter.blockSignals(True)
         self.combo_filter.clear()
-        self.combo_filter.addItem("전체")
-        self.combo_filter.addItems(categories)
-        if current_cat == "전체" or current_cat in categories:
-            self.combo_filter.setCurrentText(current_cat)
-        else:
+        self.combo_filter.addItem("전체", "")
+        for category in categories:
+            self.combo_filter.addItem(category_to_label(category), category)
+        if not current_cat:
             self.combo_filter.setCurrentIndex(0)
+        else:
+            category_index = self.combo_filter.findData(current_cat)
+            if category_index >= 0:
+                self.combo_filter.setCurrentIndex(category_index)
+            else:
+                self.combo_filter.setCurrentIndex(0)
         self.combo_filter.blockSignals(False)
 
         all_tags = set()
@@ -123,7 +131,8 @@ class ExplorerDataMixin:
         self._filter_options_dirty = False
 
     def _item_matches_filters(self, item: XPathItem, target_cat: str) -> bool:
-        if target_cat != "전체" and item.category != target_cat:
+        normalized_category = category_to_value(target_cat or "")
+        if normalized_category and item.category != normalized_category:
             return False
 
         if self._search_text:
@@ -175,8 +184,14 @@ class ExplorerDataMixin:
                 self.table_model.set_items(self.config.items)
                 self._table_data_dirty = False
             self._refresh_filter_options_if_dirty(force=refresh_filters)
-            target_cat = filter_cat if filter_cat is not None else self.combo_filter.currentText()
-            self.table_proxy.set_category_filter(target_cat, "전체")
+            target_cat = category_to_value(filter_cat or "") if filter_cat is not None else ""
+            if not target_cat:
+                combo_data = self.combo_filter.currentData()
+                if isinstance(combo_data, str):
+                    target_cat = combo_data
+                else:
+                    target_cat = category_to_value(self.combo_filter.currentText() or "")
+            self.table_proxy.set_category_filter(target_cat, "")
             self.table_proxy.set_tag_filter(self._filter_tag or "모든 태그", "모든 태그")
             self.table_proxy.set_favorites_only(self._filter_favorites_only)
             self.table_proxy.set_search_text(self._search_text)
@@ -253,7 +268,11 @@ class ExplorerDataMixin:
 
     def _load_to_editor(self, item: XPathItem):
         self.input_name.setText(item.name)
-        self.input_category.setCurrentText(item.category)
+        category_index = self.input_category.findData(item.category)
+        if category_index >= 0:
+            self.input_category.setCurrentIndex(category_index)
+        else:
+            self.input_category.setCurrentText(category_to_label(item.category))
         self.input_desc.setText(item.description)
         self.input_xpath.setPlainText(item.xpath)
         self.input_css.setText(item.css_selector)
@@ -261,14 +280,14 @@ class ExplorerDataMixin:
         self.input_tags.setText(", ".join(item.tags))
         
         # 결과창에 메타데이터 표시
-        meta = f"Last Verified: {'Success' if item.is_verified else 'Not verified'}\n"
-        if item.element_tag: meta += f"Tag: {item.element_tag}\n"
-        if item.found_frame: meta += f"Frame: {item.found_frame}\n"
+        meta = f"최근 검증: {'성공' if item.is_verified else '미검증'}\n"
+        if item.element_tag: meta += f"태그: {item.element_tag}\n"
+        if item.found_frame: meta += f"프레임: {item.found_frame}\n"
         # v3.3: 통계 표시
         if item.test_count > 0:
-            meta += f"Tests: {item.test_count} (Success: {item.success_rate:.0f}%)\n"
+            meta += f"테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n"
         if item.last_tested:
-            meta += f"Last Test: {item.last_tested[:10]}\n"
+            meta += f"최근 테스트: {item.last_tested[:10]}\n"
         
         self.txt_result.setPlainText(meta)
 
@@ -285,7 +304,11 @@ class ExplorerDataMixin:
         self.input_css.clear()
         self.txt_result.clear()
         self.input_tags.clear()  # v3.3
-        self.input_category.setCurrentText("common")
+        default_category = self.input_category.findData("common")
+        if default_category >= 0:
+            self.input_category.setCurrentIndex(default_category)
+        else:
+            self.input_category.setCurrentText("공통")
 
     def _save_item(self):
         """항목 저장 - v3.3: 태그 및 통계 보존, v4.0: 히스토리 기록"""
@@ -310,10 +333,14 @@ class ExplorerDataMixin:
         tags_text = self.input_tags.text().strip()
         tags = [t.strip() for t in tags_text.split(",") if t.strip()]
             
+        category_value = self.input_category.currentData()
+        if not isinstance(category_value, str) or not category_value:
+            category_value = category_to_value(self.input_category.currentText().strip())
+
         item = XPathItem(
             name=name,
             xpath=xpath,
-            category=self.input_category.currentText(),
+            category=category_value,
             description=self.input_desc.text(),
             css_selector=self.input_css.text().strip(),
             tags=tags
@@ -403,7 +430,7 @@ class ExplorerDataMixin:
             self._reset_history_baseline()
 
     def _open_config(self):
-        fname, _ = QFileDialog.getOpenFileName(self, '설정 열기', '', 'JSON Files (*.json)')
+        fname, _ = QFileDialog.getOpenFileName(self, '설정 열기', '', 'JSON 파일 (*.json)')
         if fname:
             try:
                 with open(fname, 'r', encoding='utf-8') as f:
@@ -418,7 +445,7 @@ class ExplorerDataMixin:
                 self._show_toast(f"로드 실패: {e}", "error")
 
     def _save_config(self):
-        fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{self.config.name}.json", 'JSON Files (*.json)')
+        fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{self.config.name}.json", 'JSON 파일 (*.json)')
         if fname:
             try:
                 with open(fname, 'w', encoding='utf-8') as f:
@@ -433,7 +460,7 @@ class ExplorerDataMixin:
             self._show_toast("내보낼 항목이 없습니다.", "warning")
             return
             
-        fname, _ = QFileDialog.getSaveFileName(self, f'{fmt.upper()}로 내보내기', f"xpath_export", f'{fmt.upper()} Files (*.{fmt})')
+        fname, _ = QFileDialog.getSaveFileName(self, f'{fmt.upper()}로 내보내기', f"xpath_export", f'{fmt.upper()} 파일 (*.{fmt})')
         if not fname: return
         
         try:
@@ -444,7 +471,7 @@ class ExplorerDataMixin:
             elif fmt == 'csv':
                 with open(fname, 'w', encoding='utf-8', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(["Name", "XPath", "Category", "Description"])
+                    writer.writerow(["이름", "XPath", "카테고리", "설명"])
                     for item in self.config.items:
                         writer.writerow([item.name, item.xpath, item.category, item.description])
             elif fmt == 'python':
@@ -559,7 +586,7 @@ class ExplorerDataMixin:
         
         table = QTableWidget()
         table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["날짜", "Tag", "XPath", "Frame"])
+        table.setHorizontalHeaderLabels(["날짜", "??", "XPath", "???"])
         history_hh = table.horizontalHeader()
         if history_hh is not None:
             history_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -653,7 +680,7 @@ class ExplorerDataMixin:
         driver = self.browser.driver
         if driver is None:
             return
-        fname, _ = QFileDialog.getSaveFileName(self, '쿠키 저장', 'cookies.json', 'JSON (*.json)')
+        fname, _ = QFileDialog.getSaveFileName(self, '쿠키 저장', 'cookies.json', 'JSON 파일 (*.json)')
         if fname:
             try:
                 cookies = driver.get_cookies()
@@ -669,7 +696,7 @@ class ExplorerDataMixin:
         driver = self.browser.driver
         if driver is None:
             return
-        fname, _ = QFileDialog.getOpenFileName(self, '쿠키 열기', '', 'JSON (*.json)')
+        fname, _ = QFileDialog.getOpenFileName(self, '쿠키 열기', '', 'JSON 파일 (*.json)')
         if fname:
             try:
                 with open(fname, 'r', encoding='utf-8') as f:

@@ -180,7 +180,7 @@ class ExplorerToolsMixin:
         # 템플릿 선택
         layout.addWidget(QLabel("코드 템플릿:"))
         combo_template = QComboBox()
-        combo_template.addItems(["Selenium (Python)", "Playwright (Python)", "PyAutoGUI"])
+        combo_template.addItems(["Selenium (파이썬)", "Playwright (파이썬)", "PyAutoGUI"])
         layout.addWidget(combo_template)
         
         # 코드 미리보기
@@ -223,7 +223,7 @@ class ExplorerToolsMixin:
         btn_save = QPushButton("💾 파일로 저장")
         def save_code():
             ext = ".py" if combo_template.currentIndex() < 2 else ".py"
-            fname, _ = QFileDialog.getSaveFileName(dialog, "코드 저장", "macro_script", f"Python (*.py)")
+            fname, _ = QFileDialog.getSaveFileName(dialog, "코드 저장", "macro_script", "파이썬 파일 (*.py)")
             if fname:
                 with open(fname, 'w', encoding='utf-8') as f:
                     f.write(txt_code.toPlainText())
@@ -497,8 +497,11 @@ class ExplorerToolsMixin:
             self._show_toast("Playwright 브라우저가 실행되지 않았습니다.", "warning")
             return
         
-        scan_type = self.combo_scan_type.currentText()
-        self._show_toast(f"{scan_type} 요소 스캔 중...", "info", 2000)
+        scan_label = self.combo_scan_type.currentText()
+        scan_type = self.combo_scan_type.currentData()
+        if not isinstance(scan_type, str) or not scan_type:
+            scan_type = scan_label
+        self._show_toast(f"{scan_label} 스캔 중...", "info", 2000)
         
         try:
             with perf_span("ui.scan_page_elements"):
@@ -524,7 +527,7 @@ class ExplorerToolsMixin:
 
                 self.table_scan_results.setUpdatesEnabled(True)
                 self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
-                self._show_toast(f"{len(elements)}개의 {scan_type} 요소를 찾았습니다.", "success")
+                self._show_toast(f"{len(elements)}개의 {scan_label}를 찾았습니다.", "success")
             
         except Exception as e:
             self.table_scan_results.setUpdatesEnabled(True)
@@ -881,14 +884,14 @@ class ExplorerToolsMixin:
         layout = QVBoxLayout(dialog)
         
         # Provider 선택
-        layout.addWidget(QLabel("AI Provider:"))
+        layout.addWidget(QLabel("AI 제공자:"))
         combo_provider = QComboBox()
         combo_provider.addItems(["openai", "gemini"])
         combo_provider.setCurrentText(self.ai_assistant._provider)
         layout.addWidget(combo_provider)
         
-        # API Key 입력
-        layout.addWidget(QLabel("API Key:"))
+        # API 키 입력
+        layout.addWidget(QLabel("API 키:"))
         input_key = QLineEdit()
         input_key.setEchoMode(QLineEdit.EchoMode.Password)
         if self.ai_assistant._provider == "openai":
@@ -898,13 +901,13 @@ class ExplorerToolsMixin:
         layout.addWidget(input_key)
         
         # Model 입력
-        layout.addWidget(QLabel("Model:"))
+        layout.addWidget(QLabel("모델:"))
         input_model = QLineEdit()
         input_model.setText(self.ai_assistant._model)
         layout.addWidget(input_model)
         
         # 힌트
-        lbl_hint = QLabel("OpenAI: gpt-4o-mini, gpt-4o\nGemini: gemini-flash-latest, gemini-pro")
+        lbl_hint = QLabel("OpenAI 권장: gpt-4o-mini, gpt-4o\nGemini 권장: gemini-flash-latest, gemini-pro")
         lbl_hint.setStyleSheet("color: #7f849c; font-size: 11px;")
         layout.addWidget(lbl_hint)
         

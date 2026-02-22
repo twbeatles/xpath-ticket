@@ -731,6 +731,185 @@ class BrowserManager:
 
             logger.info(f"Picker injected windows={injected_count}")
 
+    def _picker_scan_handles(self) -> List[str]:
+        try:
+            handles = list(self.driver.window_handles)
+        except Exception:
+            handles = []
+        if self._root_window_handle and self._root_window_handle in handles:
+            return [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
+        return handles
+
+    def _execute_picker_lock_script(self) -> bool:
+        try:
+            return bool(self.driver.execute_script(
+                """
+                return (function() {
+                    if (!window.__pickerActive) return false;
+                    if (typeof window.__pickerLockCurrent === 'function') {
+                        return !!window.__pickerLockCurrent();
+                    }
+                    return false;
+                })();
+                """
+            ))
+        except Exception:
+            return False
+
+    def _execute_picker_unlock_script(self) -> bool:
+        try:
+            return bool(self.driver.execute_script(
+                """
+                return (function() {
+                    if (!window.__pickerActive) return false;
+                    if (typeof window.__pickerUnlock === 'function') {
+                        return !!window.__pickerUnlock();
+                    }
+                    if (window.__pickerLocked) {
+                        window.__pickerLocked = false;
+                        window.__lockedData = null;
+                        return true;
+                    }
+                    return false;
+                })();
+                """
+            ))
+        except Exception:
+            return False
+
+    def _lock_picker_in_frames(self, depth: int = 0, max_depth: int = MAX_FRAME_DEPTH) -> bool:
+        if depth > max_depth:
+            return False
+        try:
+            iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+        except Exception:
+            return False
+
+        for frame in iframes:
+            try:
+                self.driver.switch_to.frame(frame)
+                abort = False
+                try:
+                    if self._execute_picker_lock_script():
+                        return True
+                    if self._lock_picker_in_frames(depth + 1, max_depth):
+                        return True
+                finally:
+                    try:
+                        self.driver.switch_to.parent_frame()
+                    except Exception:
+                        try:
+                            self.driver.switch_to.default_content()
+                        except Exception:
+                            pass
+                        abort = True
+                if abort:
+                    return False
+            except Exception:
+                continue
+        return False
+
+    def _unlock_picker_in_frames(self, depth: int = 0, max_depth: int = MAX_FRAME_DEPTH) -> bool:
+        if depth > max_depth:
+            return False
+        try:
+            iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+        except Exception:
+            return False
+
+        for frame in iframes:
+            try:
+                self.driver.switch_to.frame(frame)
+                abort = False
+                try:
+                    if self._execute_picker_unlock_script():
+                        return True
+                    if self._unlock_picker_in_frames(depth + 1, max_depth):
+                        return True
+                finally:
+                    try:
+                        self.driver.switch_to.parent_frame()
+                    except Exception:
+                        try:
+                            self.driver.switch_to.default_content()
+                        except Exception:
+                            pass
+                        abort = True
+                if abort:
+                    return False
+            except Exception:
+                continue
+        return False
+
+    def lock_picker_current(self) -> bool:
+        """앱 버튼으로 현재 호버된 요소를 강제 고정한다."""
+        with self._lock:
+            if not self.is_alive():
+                return False
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
+
+            scan_handles = self._picker_scan_handles()
+            try:
+                for handle in scan_handles:
+                    try:
+                        self.driver.switch_to.window(handle)
+                        self.driver.switch_to.default_content()
+                        if self._execute_picker_lock_script():
+                            return True
+                        if self._lock_picker_in_frames():
+                            return True
+                    except NoSuchWindowException:
+                        continue
+                    except Exception as e:
+                        logger.debug(f"picker 강제 고정 실패({handle[:8]}...): {e}")
+                return False
+            finally:
+                if current_handle:
+                    try:
+                        self.driver.switch_to.window(current_handle)
+                        self.switch_to_frame_by_path(original_frame_path or "main")
+                    except Exception:
+                        self._recover_to_available_window()
+
+    def unlock_picker_current(self) -> bool:
+        """앱 버튼으로 현재 고정을 강제 해제한다."""
+        with self._lock:
+            if not self.is_alive():
+                return False
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
+
+            unlocked_any = False
+            scan_handles = self._picker_scan_handles()
+            try:
+                for handle in scan_handles:
+                    try:
+                        self.driver.switch_to.window(handle)
+                        self.driver.switch_to.default_content()
+                        if self._execute_picker_unlock_script():
+                            unlocked_any = True
+                        if self._unlock_picker_in_frames():
+                            unlocked_any = True
+                    except NoSuchWindowException:
+                        continue
+                    except Exception as e:
+                        logger.debug(f"picker 강제 해제 실패({handle[:8]}...): {e}")
+                return unlocked_any
+            finally:
+                if current_handle:
+                    try:
+                        self.driver.switch_to.window(current_handle)
+                        self.switch_to_frame_by_path(original_frame_path or "main")
+                    except Exception:
+                        self._recover_to_available_window()
+
     def _inject_to_frames(self, depth=0, max_depth=MAX_FRAME_DEPTH):
         if depth > max_depth:
             return

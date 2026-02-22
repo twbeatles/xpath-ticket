@@ -27,6 +27,7 @@ from xpath_constants import (
     APP_TITLE, APP_VERSION, SITE_PRESETS,
     BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
     LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
+    CATEGORY_LABELS,
 )
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
@@ -138,10 +139,10 @@ class ExplorerUIMixin:
         
         export_menu = cast(QMenu, file_menu.addMenu('내보내기(&E)'))
         formats = [
-             ('JSON (*.json)', 'json'),
-             ('CSV (*.csv)', 'csv'),
-             ('Python Selenium (*.py)', 'python'),
-             ('JavaScript (*.js)', 'javascript')
+             ('JSON 파일 (*.json)', 'json'),
+             ('CSV 파일 (*.csv)', 'csv'),
+             ('파이썬 Selenium (*.py)', 'python'),
+             ('자바스크립트 (*.js)', 'javascript')
         ]
         for name, fmt in formats:
             action = QAction(name, self)
@@ -477,9 +478,9 @@ class ExplorerUIMixin:
         
         filter_layout.addWidget(QLabel("카테고리:"))
         self.combo_filter = NoWheelComboBox()
-        self.combo_filter.addItem("전체")
+        self.combo_filter.addItem("전체", "")
         self.combo_filter.setMinimumWidth(90)
-        self.combo_filter.currentTextChanged.connect(lambda t: self._refresh_table(t))
+        self.combo_filter.currentIndexChanged.connect(lambda _=None: self._refresh_table())
         filter_layout.addWidget(self.combo_filter)
         
         filter_layout.addWidget(QLabel("태그:"))
@@ -585,6 +586,22 @@ class ExplorerUIMixin:
         self.chk_overlay = QCheckBox("오버레이 모드 (클릭 방지)")
         self.chk_overlay.setToolTip("체크 시 웹페이지의 버튼이 클릭되지 않고 선택만 됩니다.")
         picker_layout.addWidget(self.chk_overlay)
+
+        picker_action_row = QHBoxLayout()
+        self.btn_picker_lock = QPushButton("📌 현재 요소 고정")
+        self.btn_picker_lock.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_picker_lock.setToolTip("브라우저에서 마우스를 올린 요소를 즉시 고정합니다.")
+        self.btn_picker_lock.clicked.connect(self._force_lock_picker)
+        self.btn_picker_lock.setEnabled(False)
+        picker_action_row.addWidget(self.btn_picker_lock)
+
+        self.btn_picker_unlock = QPushButton("🔓 고정 해제")
+        self.btn_picker_unlock.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_picker_unlock.setToolTip("현재 고정된 요소를 해제하고 선택 모드로 돌아갑니다.")
+        self.btn_picker_unlock.clicked.connect(self._force_unlock_picker)
+        self.btn_picker_unlock.setEnabled(False)
+        picker_action_row.addWidget(self.btn_picker_unlock)
+        picker_layout.addLayout(picker_action_row)
         
         group_picker.setLayout(picker_layout)
         editor_layout.addWidget(group_picker)
@@ -595,13 +612,14 @@ class ExplorerUIMixin:
         form_layout.setSpacing(10)
         
         self.input_name = QLineEdit()
-        self.input_name.setPlaceholderText("예: login_btn")
+        self.input_name.setPlaceholderText("예: 로그인_버튼")
         form_layout.addRow(QLabel("이름:"), self.input_name)
         
         # 카테고리 (NoWheelComboBox 사용)
         self.input_category = NoWheelComboBox()
         self.input_category.setEditable(True)
-        self.input_category.addItems(["login", "booking", "seat", "captcha", "popup", "common"])
+        for value, label in CATEGORY_LABELS.items():
+            self.input_category.addItem(label, value)
         form_layout.addRow(QLabel("카테고리:"), self.input_category)
         
         self.input_desc = QLineEdit()
@@ -618,7 +636,7 @@ class ExplorerUIMixin:
         editor_layout.addWidget(group_edit)
         
         # 3. XPath & CSS
-        group_code = QGroupBox("선택자 (Selectors)")
+        group_code = QGroupBox("선택자")
         code_layout = QVBoxLayout()
         
         # XPath
@@ -662,7 +680,7 @@ class ExplorerUIMixin:
         code_layout.addLayout(xpath_row)
         
         # CSS
-        code_layout.addWidget(QLabel("CSS Selector:"))
+        code_layout.addWidget(QLabel("CSS 선택자:"))
         css_row = QHBoxLayout()
         self.input_css = QLineEdit()
         self.input_css.setPlaceholderText("#example .cls")
@@ -671,7 +689,7 @@ class ExplorerUIMixin:
         # CSS 복사 버튼
         btn_copy_css = QPushButton("📋")
         btn_copy_css.setObjectName("icon_btn")
-        btn_copy_css.setToolTip("CSS Selector 복사")
+        btn_copy_css.setToolTip("CSS 선택자 복사")
         btn_copy_css.clicked.connect(self._copy_css)
         css_row.addWidget(btn_copy_css)
         
@@ -680,7 +698,7 @@ class ExplorerUIMixin:
         # 테스트 & 저장 버튼
         btn_row = QHBoxLayout()
         
-        self.btn_test = QPushButton("검증 (Test)")
+        self.btn_test = QPushButton("검증")
         self.btn_test.setObjectName("warning")
         self.btn_test.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_test.setToolTip("현재 입력된 XPath가 브라우저에서 올바르게 동작하는지 확인합니다. (Ctrl+T)")
@@ -775,8 +793,12 @@ class ExplorerUIMixin:
         type_row = QHBoxLayout()
         type_row.addWidget(QLabel("스캔 타입:"))
         self.combo_scan_type = NoWheelComboBox()
-        self.combo_scan_type.addItems(["interactive", "button", "input", "link", "form"])
-        self.combo_scan_type.setToolTip("interactive: 버튼, 링크, 입력 필드 등 상호작용 가능한 요소")
+        self.combo_scan_type.addItem("상호작용 요소", "interactive")
+        self.combo_scan_type.addItem("버튼", "button")
+        self.combo_scan_type.addItem("입력 필드", "input")
+        self.combo_scan_type.addItem("링크", "link")
+        self.combo_scan_type.addItem("폼", "form")
+        self.combo_scan_type.setToolTip("버튼, 링크, 입력 필드 등 상호작용 가능한 요소를 선택해 스캔합니다.")
         type_row.addWidget(self.combo_scan_type, 1)
         scan_settings_layout.addLayout(type_row)
         
@@ -798,7 +820,7 @@ class ExplorerUIMixin:
         
         self.table_scan_results = QTableWidget()
         self.table_scan_results.setColumnCount(4)
-        self.table_scan_results.setHorizontalHeaderLabels(["XPath", "Tag", "Text", "사용"])
+        self.table_scan_results.setHorizontalHeaderLabels(["XPath", "태그", "텍스트", "사용"])
         scan_hh = self.table_scan_results.horizontalHeader()
         if scan_hh is not None:
             scan_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -856,7 +878,7 @@ class ExplorerUIMixin:
         btn_zoom_in.setFixedSize(24, 24)
         btn_zoom_in.clicked.connect(self._increase_font)
         
-        self.status_layout.addWidget(QLabel("Font:"))
+        self.status_layout.addWidget(QLabel("글꼴:"))
         self.status_layout.addWidget(btn_zoom_out)
         self.status_layout.addWidget(btn_zoom_in)
 

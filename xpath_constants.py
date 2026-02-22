@@ -116,6 +116,35 @@ PICKER_SCRIPT = '''
     document.body.appendChild(info);
     
     var lastElement = null;
+
+    function isPickerUiElement(target) {
+        if (!target || !(target instanceof Element)) return true;
+        return (
+            target.classList.contains('__picker_info') ||
+            target.classList.contains('__picker_tooltip') ||
+            target.classList.contains('__picker_btn') ||
+            target.id === '__pickerStyle' ||
+            !!target.closest('.__picker_tooltip') ||
+            !!target.closest('.__picker_info')
+        );
+    }
+
+    function getHoverTarget() {
+        if (lastElement && lastElement.isConnected && !isPickerUiElement(lastElement)) {
+            return lastElement;
+        }
+        try {
+            var hovered = document.querySelectorAll(':hover');
+            if (!hovered || hovered.length === 0) return null;
+            var candidate = hovered[hovered.length - 1];
+            if (candidate && !isPickerUiElement(candidate)) {
+                return candidate;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    }
     
     // XPath 생성 함수
     function getXPath(element) {
@@ -135,7 +164,7 @@ PICKER_SCRIPT = '''
         }
     }
     
-    // CSS Selector 생성 함수
+    // CSS 선택자 생성 함수
     function getCssSelector(el) {
         if (!(el instanceof Element)) return;
         var path = [];
@@ -167,9 +196,7 @@ PICKER_SCRIPT = '''
         e.stopPropagation();
         var target = e.target;
         
-        if (target.classList.contains('__picker_info') || 
-            target.classList.contains('__picker_tooltip') ||
-            target.id === '__pickerStyle') return;
+        if (isPickerUiElement(target)) return;
             
         if (lastElement) {
             lastElement.classList.remove('__picker_highlight');
@@ -187,18 +214,18 @@ PICKER_SCRIPT = '''
         
         tooltip.style.display = 'block';
         tooltip.innerHTML = `
-            <div><strong>Tag:</strong> ${tag}</div>
+            <div><strong>태그:</strong> ${tag}</div>
             <div><strong>XPath:</strong> ${xpath}</div>
             <div><strong>CSS:</strong> ${css}</div>
-            ${text ? `<div><strong>Text:</strong> ${text}</div>` : ''}
-            <div style="margin-top:5px; font-size:11px; color:#aaa;">(Click to lock/unlock capture)</div>
+            ${text ? `<div><strong>텍스트:</strong> ${text}</div>` : ''}
+            <div style="margin-top:5px; font-size:11px; color:#aaa;">(클릭하면 캡처 고정/해제를 전환합니다)</div>
         `;
     }
     
     // 클릭 핸들러
     function onClick(e) {
         // Picker UI 클릭은 무시
-        if (e.target.closest('.__picker_tooltip') || e.target.closest('.__picker_info')) {
+        if (isPickerUiElement(e.target)) {
             // 버튼 클릭 처리 등은 여기서 별도로 하지 않음 (버튼에 이벤트 리스너 추가 방식 권장)
             return;
         }
@@ -219,8 +246,16 @@ PICKER_SCRIPT = '''
     }
     
     function lock(target) {
+        if (!target || !target.isConnected || isPickerUiElement(target)) {
+            return false;
+        }
         window.__pickerLocked = true;
+        if (lastElement && lastElement !== target) {
+            lastElement.classList.remove('__picker_highlight');
+        }
         target.classList.add('__picker_locked');
+        target.classList.remove('__picker_highlight');
+        lastElement = target;
         
         var xpath = getXPath(target);
         var css = getCssSelector(target);
@@ -230,20 +265,15 @@ PICKER_SCRIPT = '''
         // 툴팁 업데이트 (버튼 추가)
         tooltip.className = '__picker_tooltip locked';
         tooltip.innerHTML = `
-            <div style="color:#ffd166; margin-bottom:5px;">🔒 LOCKED (Press 'Use This' to select)</div>
-            <div><strong>Tag:</strong> ${tag}</div>
+            <div style="color:#ffd166; margin-bottom:5px;">🔒 고정됨 ('이 요소 사용'을 눌러 선택)</div>
+            <div><strong>태그:</strong> ${tag}</div>
             <div style="margin:5px 0; padding:5px; background:rgba(0,0,0,0.3); border-radius:4px;">${xpath}</div>
-            <button class="__picker_btn __picker_btn_copy" id="__btnUse">Use This Element</button>
-            <button class="__picker_btn __picker_btn_unlock" id="__btnUnlock">Unlock</button>
+            <button class="__picker_btn __picker_btn_copy" id="__btnUse">이 요소 사용</button>
+            <button class="__picker_btn __picker_btn_unlock" id="__btnUnlock">잠금 해제</button>
         `;
         
         document.getElementById('__btnUse').onclick = function() {
-            window.__pickerResult = {
-                xpath: xpath,
-                css: css,
-                tag: tag,
-                text: text
-            };
+            window.__pickerUseLocked();
         };
         
         document.getElementById('__btnUnlock').onclick = function() {
@@ -259,9 +289,38 @@ PICKER_SCRIPT = '''
         };
         
         info.className = '__picker_info locked';
-        info.innerHTML = '🔒 요소가 고정되었습니다. "Use This Element"를 클릭하여 선택하세요.';
+        info.innerHTML = '🔒 요소가 고정되었습니다. "이 요소 사용"을 클릭하여 선택하세요.';
+        return true;
     }
-    
+
+    function lockCurrent() {
+        if (window.__pickerLocked && window.__lockedData && window.__lockedData.element && window.__lockedData.element.isConnected) {
+            return true;
+        }
+        var target = getHoverTarget();
+        if (!target) {
+            info.className = '__picker_info';
+            info.innerHTML = '⚠️ 고정할 요소가 없습니다. 브라우저에서 원하는 요소 위에 마우스를 올린 뒤 다시 시도하세요.';
+            return false;
+        }
+        return lock(target);
+    }
+
+    function useLocked() {
+        if (!window.__lockedData) return false;
+        var text = window.__lockedData.text;
+        if ((!text || text.length === 0) && window.__lockedData.element && window.__lockedData.element.isConnected) {
+            text = (window.__lockedData.element.textContent || '').trim();
+        }
+        window.__pickerResult = {
+            xpath: window.__lockedData.xpath,
+            css: window.__lockedData.css,
+            tag: window.__lockedData.tag,
+            text: text || ''
+        };
+        return true;
+    }
+
     function unlock() {
         window.__pickerLocked = false;
         if (window.__lockedData && window.__lockedData.element) {
@@ -274,8 +333,27 @@ PICKER_SCRIPT = '''
         info.innerHTML = '🎯 요소 선택 모드 (ESC: 취소, 클릭: 고정/해제)';
         
         // 마우스 호버 다시 활성화될 때 툴팁 내용 리셋은 onMouseOver에서 처리됨
+        return true;
     }
-    
+
+    // 외부(앱 버튼)에서 호출 가능한 API
+    window.__pickerLockCurrent = function() {
+        return lockCurrent();
+    };
+    window.__pickerUnlock = function() {
+        return unlock();
+    };
+    window.__pickerUseLocked = function() {
+        return useLocked();
+    };
+    window.__pickerState = function() {
+        return {
+            active: !!window.__pickerActive,
+            locked: !!window.__pickerLocked,
+            hasLocked: !!window.__lockedData
+        };
+    };
+
     // 키보드 핸들러 (ESC)
     function onKeyDown(e) {
         if (e.key === 'Escape') {
@@ -581,3 +659,29 @@ SCAN_SELECTORS = {
     'form': 'form, input, select, textarea',
     'all': '*'
 }
+
+# 카테고리 표시명 매핑 (UI 표시용)
+CATEGORY_LABELS = {
+    "login": "로그인",
+    "booking": "예매",
+    "seat": "좌석",
+    "captcha": "캡차",
+    "popup": "팝업",
+    "common": "공통",
+    "main": "메인",
+    "payment": "결제",
+    "district": "구역",
+    "window": "창",
+}
+
+CATEGORY_LABEL_TO_VALUE = {label: value for value, label in CATEGORY_LABELS.items()}
+
+
+def category_to_label(value: str) -> str:
+    """카테고리 내부값을 한글 표시명으로 변환."""
+    return CATEGORY_LABELS.get(value, value)
+
+
+def category_to_value(label_or_value: str) -> str:
+    """카테고리 표시명/내부값을 내부값으로 정규화."""
+    return CATEGORY_LABEL_TO_VALUE.get(label_or_value, label_or_value)

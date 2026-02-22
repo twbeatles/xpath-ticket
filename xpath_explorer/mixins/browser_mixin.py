@@ -68,6 +68,8 @@ class ExplorerBrowserMixin:
         input_name: QLineEdit
         txt_result: QTextEdit
         chk_overlay: QCheckBox
+        btn_picker_lock: QPushButton
+        btn_picker_unlock: QPushButton
         progress_bar: QProgressBar
         lbl_live_preview: QLabel
 
@@ -88,6 +90,15 @@ class ExplorerBrowserMixin:
         def _add_to_history(self, xpath: str, css: str, tag: str, frame: str) -> None: ...
         def show(self) -> None: ...
         def hide(self) -> None: ...
+
+    def _set_picker_action_enabled(self, enabled: bool):
+        """요소 선택기 고정/해제 버튼 활성 상태 동기화."""
+        btn_lock = getattr(self, "btn_picker_lock", None)
+        if btn_lock is not None:
+            btn_lock.setEnabled(enabled)
+        btn_unlock = getattr(self, "btn_picker_unlock", None)
+        if btn_unlock is not None:
+            btn_unlock.setEnabled(enabled)
 
     def _check_browser(self):
         """브라우저 연결 상태 주기적 확인 (popup/window 변화 포함)."""
@@ -132,6 +143,7 @@ class ExplorerBrowserMixin:
             self.combo_windows.clear()
             self.combo_frames.clear()
             self._last_window_count = 0
+            self._set_picker_action_enabled(False)
 
         # 스타일 리로드 (색상 변경 적용)
         status_style = self.lbl_status.style()
@@ -146,7 +158,12 @@ class ExplorerBrowserMixin:
     def _toggle_browser(self):
         """브라우저 열기/닫기"""
         if self.browser.is_alive():
+            if self.picker_watcher:
+                self.picker_watcher.stop()
+                self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
+                self.picker_watcher = None
             self.browser.close()
+            self._set_picker_action_enabled(False)
             self._show_toast("브라우저가 종료되었습니다.", "info")
         else:
             # 설정의 URL 사용
@@ -216,12 +233,12 @@ class ExplorerBrowserMixin:
         current_handle = None
 
         for i, win in enumerate(windows):
-            title = win['title'] if win['title'] else f"Window {i+1}"
+            title = win['title'] if win['title'] else f"창 {i+1}"
             if len(title) > 30:
                 title = title[:27] + "..."
 
             is_popup = bool(win.get("is_popup"))
-            label_prefix = "[POPUP] " if is_popup else ""
+            label_prefix = "[팝업] " if is_popup else ""
             self.combo_windows.addItem(f"{label_prefix}{title}", win['handle'])
             handles.append(win['handle'])
 
@@ -278,7 +295,7 @@ class ExplorerBrowserMixin:
             self.combo_frames.blockSignals(True)
             try:
                 self.combo_frames.clear()
-                self.combo_frames.addItem("Main Content", "main")
+                self.combo_frames.addItem("메인 문서", "main")
                 
                 if not self.browser.is_alive():
                     return
@@ -318,8 +335,8 @@ class ExplorerBrowserMixin:
             self._record_validation_outcome(name, xpath, success, result)
             
             if success:
-                msg = f"✅ 발견! (Count: {result.get('count', 1)})"
-                detail = f"Tag: {result.get('tag')}\nText: {result.get('text')}\nFrame: {result.get('frame_path')}"
+                msg = f"✅ 발견! (개수: {result.get('count', 1)})"
+                detail = f"태그: {result.get('tag')}\n텍스트: {result.get('text')}\n프레임: {result.get('frame_path')}"
                 self.txt_result.setPlainText(msg + "\n" + detail)
                 self._show_toast("요소를 찾았습니다!", "success")
                 
@@ -354,20 +371,51 @@ class ExplorerBrowserMixin:
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 실행해주세요.", "warning")
             return
-            
+
+        if self.picker_watcher and self.picker_watcher.isRunning():
+            self._show_toast("요소 선택 모드가 이미 실행 중입니다.", "info")
+            return
+
         self.picker_watcher = PickerWatcher(self.browser)
         self.picker_watcher.picked.connect(self._on_picked)
         self.picker_watcher.cancelled.connect(self._on_pick_cancelled)
         
         self.browser.start_picker(overlay_mode=self.chk_overlay.isChecked())
         self.picker_watcher.start()
-        
-        self._show_toast("요소 선택 모드 시작! 브라우저에서 요소를 클릭하세요. (ESC: 취소)", "info", 5000)
-        self.hide() # 메인창 숨김
+        self._set_picker_action_enabled(True)
+
+        self._show_toast(
+            "요소 선택 모드 시작: 브라우저에서 요소에 마우스를 올린 뒤 '현재 요소 고정' 버튼을 누르세요. (ESC: 취소)",
+            "info",
+            6000,
+        )
+
+    def _force_lock_picker(self):
+        """앱 버튼으로 현재 호버 요소를 강제 고정."""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
+            return
+        if not self.browser.is_picker_active():
+            self._show_toast("먼저 '요소 선택 시작'을 실행하세요.", "warning")
+            return
+        if self.browser.lock_picker_current():
+            self._show_toast("현재 요소를 고정했습니다. 브라우저에서 '이 요소 사용'을 눌러 캡처하세요.", "success")
+        else:
+            self._show_toast("고정할 요소를 찾지 못했습니다. 브라우저에서 대상 요소 위에 마우스를 올려주세요.", "warning")
+
+    def _force_unlock_picker(self):
+        """앱 버튼으로 현재 고정을 강제 해제."""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
+            return
+        if self.browser.unlock_picker_current():
+            self._show_toast("요소 고정을 해제했습니다.", "info")
+        else:
+            self._show_toast("해제할 고정 요소가 없습니다.", "info")
 
     def _on_picked(self, result):
         """요소 선택 완료"""
-        self.show()
+        self._set_picker_action_enabled(False)
         if self.picker_watcher:
             self.picker_watcher.stop()
             self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
@@ -385,10 +433,10 @@ class ExplorerBrowserMixin:
         # 에디터 채우기
         self.input_xpath.setPlainText(xpath)
         self.input_css.setText(css)
-        self.input_desc.setText(f"Selected: {tag} ({text[:20]})")
+        self.input_desc.setText(f"선택됨: {tag} ({text[:20]})")
         
         # 결과창 업데이트
-        self.txt_result.setPlainText(f"Captured from: {frame}\nTag: {tag}\nText: {text}")
+        self.txt_result.setPlainText(f"캡처 위치: {frame}\n태그: {tag}\n텍스트: {text}")
         
         self._show_toast("요소 정보가 캡처되었습니다.", "success")
         
@@ -404,7 +452,7 @@ class ExplorerBrowserMixin:
 
     def _on_pick_cancelled(self):
         """요소 선택 취소"""
-        self.show()
+        self._set_picker_action_enabled(False)
         if self.picker_watcher:
             self.picker_watcher.stop()
             self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
@@ -593,7 +641,7 @@ class ExplorerBrowserMixin:
         
         # 저장 경로 선택
         fname, _ = QFileDialog.getSaveFileName(
-            cast(QWidget, self), "스크린샷 저장", "element_screenshot.png", "PNG (*.png)"
+            cast(QWidget, self), "스크린샷 저장", "element_screenshot.png", "PNG 파일 (*.png)"
         )
         
         if not fname:

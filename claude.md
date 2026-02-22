@@ -588,47 +588,47 @@ logger.debug(f"발견 프레임: {frame_path}")
 
 ---
 
-## Performance Refactor Notes (v4.2)
+## 성능 리팩터링 메모 (v4.2)
 
-### List Rendering Path
-- Main list uses `QTableView` + `XPathItemTableModel` + `XPathFilterProxyModel`.
-- Filtering must be applied by proxy state (`category/search/favorites/tag`) and `invalidateFilter()`.
-- Avoid per-row widget creation in the main list path.
+### 목록 렌더링 경로
+- 메인 목록은 `QTableView` + `XPathItemTableModel` + `XPathFilterProxyModel` 구조를 사용합니다.
+- 필터링은 프록시 상태(`category/search/favorites/tag`)와 `invalidateFilter()` 기반으로 적용해야 합니다.
+- 메인 목록 경로에서 행별 위젯 생성은 피합니다.
 
-### Validation Session Path
-- Batch/loop validation should use:
+### 검증 세션 경로
+- 배치/반복 검증 시 다음 패턴을 사용합니다.
   - `session = browser.begin_validation_session()`
-  - repeated `validate_xpath(..., session=session)`
-  - `browser.end_validation_session(session)` in `finally`
-- Prefer `preferred_frame` and session/global frame hints before full recursive scan.
+  - 반복 `validate_xpath(..., session=session)`
+  - `finally`에서 `browser.end_validation_session(session)`
+- 전체 재귀 스캔 전에 `preferred_frame` 및 세션/전역 프레임 힌트를 우선 사용합니다.
 
-### Statistics + Diff Path
-- `StatisticsManager.record_test()` must remain non-blocking for UI paths.
-- Use `shutdown()` during application close to guarantee final flush.
-- In `_record_validation_outcome`, request full attributes only when snapshot baseline is missing:
+### 통계 + Diff 경로
+- `StatisticsManager.record_test()`는 UI 경로에서 non-blocking 특성을 유지해야 합니다.
+- 앱 종료 시 최종 저장 보장을 위해 `shutdown()`을 호출합니다.
+- `_record_validation_outcome`에서는 스냅샷 기준이 없을 때만 전체 속성을 요청합니다.
   - `need_snapshot = not diff_analyzer.has_snapshot(name) or not item.element_attributes`
-  - call `get_element_info(..., include_attributes=need_snapshot)`
+  - `get_element_info(..., include_attributes=need_snapshot)` 호출
 
-### Perf Metrics
-- Keep perf span names stable:
+### 성능 지표
+- 성능 span 이름은 고정 유지합니다.
   - `ui.refresh_table`
   - `ui.update_live_preview`
   - `browser.validate_xpath`
   - `worker.batch_validate_loop`
   - `stats.record_test`
-- Emit perf summary at shutdown via `log_perf_summary()`.
+- 종료 시 `log_perf_summary()`로 요약을 출력합니다.
 
-### Guardrails
-- Do not modify `PICKER_SCRIPT`.
-- Maintain JSON backward compatibility.
-- Keep UI labels/shortcuts behavior-compatible unless explicitly requested.
+### 가드레일
+- `PICKER_SCRIPT`는 수정하지 않습니다.
+- JSON 하위 호환성을 유지합니다.
+- 별도 요청이 없는 한 UI 라벨/단축키 동작 호환을 유지합니다.
 
 ---
 
-## Module Split Update (v4.2)
+## 모듈 분할 업데이트 (v4.2)
 
-- Legacy entrypoint remains: `xpath 조사기(모든 티켓 사이트).py`
-- Main app class is now composed from package modules:
+- 레거시 진입점은 계속 유지합니다: `xpath 조사기(모든 티켓 사이트).py`
+- 메인 앱 클래스는 아래 패키지 모듈 조합으로 구성됩니다.
   - `xpath_explorer/main_window.py`
   - `xpath_explorer/runtime.py`
   - `xpath_explorer/mixins/ui_mixin.py`
@@ -636,6 +636,6 @@ logger.debug(f"발견 프레임: {frame_path}")
   - `xpath_explorer/mixins/data_mixin.py`
   - `xpath_explorer/mixins/tools_mixin.py`
 
-Implementation rule:
-- Add new `XPathExplorer` methods to the correct mixin by responsibility.
-- Keep launch/API compatibility by preserving the legacy entrypoint wrapper.
+구현 원칙:
+- 새 `XPathExplorer` 메서드는 책임에 맞는 mixin에 추가합니다.
+- 레거시 진입점 래퍼를 유지해 실행/API 호환성을 지킵니다.

@@ -418,10 +418,10 @@ self.toast.show_toast("오류!", "error", 3000)
 
 ---
 
-## Module Split Update (v4.2)
+## 모듈 분할 업데이트 (v4.2)
 
-- Legacy entrypoint remains: `xpath �����(��� Ƽ�� ����Ʈ).py`
-- Main app class is now composed from package modules:
+- 레거시 진입점은 유지합니다: `xpath 조사기(모든 티켓 사이트).py`
+- 메인 앱 클래스는 아래 패키지 모듈 조합으로 구성됩니다.
   - `xpath_explorer/main_window.py`
   - `xpath_explorer/runtime.py`
   - `xpath_explorer/mixins/ui_mixin.py`
@@ -429,6 +429,6 @@ self.toast.show_toast("오류!", "error", 3000)
   - `xpath_explorer/mixins/data_mixin.py`
   - `xpath_explorer/mixins/tools_mixin.py`
 
-Implementation rule:
-- Add new `XPathExplorer` methods to the correct mixin by responsibility.
-- Keep launch/API compatibility by preserving the legacy entrypoint wrapper.
+구현 원칙:
+- 새 `XPathExplorer` 메서드는 책임에 맞는 mixin에 추가합니다.
+- 레거시 진입점 래퍼를 유지해 실행/API 호환성을 지킵니다.
