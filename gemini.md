@@ -17,27 +17,35 @@
 | **AI 통합** | OpenAI API, Google GenAI SDK |
 | **테마** | Catppuccin Mocha (다크 테마) |
 
+### 핵심 기능 하이라이트 (현재 코드 기준)
+- 창/팝업/iframe 전체 DOM을 단일 `.htm`으로 저장 (Selenium + Playwright)
+- DOM 기준선 비교 리포트(`render_dom_diff_report_htm`) 지원
+- XPath 템플릿 라이브러리 + JSON 배치 시나리오 실행기 제공
+- 오류 텔레메트리 대시보드 + Markdown 리포트 저장 제공
+- Undo/Redo는 `HISTORY_MAX_SIZE=50` 기본 제한(설정 상수로 조정 가능)
+
 ---
 
 ## 🏗️ 프로젝트 구조
 
 ```
 xpath/
-├── xpath 조사기(모든 티켓 사이트).py  # 메인 애플리케이션 (진입점, ~2900줄)
-├── xpath_ai.py                       # AI 어시스턴트 (OpenAI/Gemini)
-├── xpath_browser.py                  # Selenium 브라우저 제어 (~800줄)
-├── xpath_playwright.py               # Playwright 통합
-├── xpath_optimizer.py                # XPath 최적화 및 대안 생성
-├── xpath_history.py                  # Undo/Redo 히스토리 관리
-├── xpath_diff.py                     # 요소 변경사항 분석 (스냅샷 기반)
-├── xpath_config.py                   # 설정 및 데이터 클래스
-├── xpath_constants.py                # 상수, 프리셋, 스크립트 (~550줄)
-├── xpath_codegen.py                  # 코드 생성기 (Python/JS)
-├── xpath_statistics.py               # 테스트 통계
-├── xpath_styles.py                   # UI 스타일시트 (Catppuccin)
-├── xpath_widgets.py                  # 커스텀 PyQt6 위젯 (~730줄)
-├── xpath_workers.py                  # 백그라운드 워커 스레드
-└── README.md                         # 프로젝트 문서
+├── xpath 조사기(모든 티켓 사이트).py      # 레거시 진입점 래퍼
+├── xpath_explorer/
+│   ├── main_window.py                # 실제 앱 조합 진입점
+│   ├── runtime.py                    # 로깅/오류 텔레메트리
+│   └── mixins/
+│       ├── ui_mixin.py               # UI 조립
+│       ├── browser_mixin.py          # Selenium 액션 + DOM 저장
+│       ├── data_mixin.py             # CRUD/설정/내보내기
+│       └── tools_mixin.py            # AI/배치/템플릿/Playwright/DOM diff
+├── xpath_browser.py                  # Selenium 코어
+├── xpath_playwright.py               # Playwright 코어 (동적 import 경로 있음)
+├── xpath_dom_export.py               # DOM HTM 렌더링 + DOM diff 렌더링
+├── xpath_workers.py                  # 백그라운드 워커(배치 시나리오 포함)
+├── xpath_table_model.py              # QTableView 모델
+├── xpath_filter_proxy.py             # 검색/필터 프록시
+└── tests/                            # 회귀 테스트
 ```
 
 ---
@@ -285,7 +293,7 @@ def _escape_xpath_text(self, text: str) -> str:
 ### 새로운 기능 추가 시
 1. 관련 모듈에 기능 구현
 2. `xpath_config.py`에 필요한 필드 추가 (기본값 필수)
-3. 메인 애플리케이션에 UI 연동
+3. `ui_mixin.py`에 진입점 추가 후 해당 mixin에 UI 핸들러 연동
 4. `from_dict`에서 하위 호환성 처리
 
 ### XPath 관련 기능
@@ -428,6 +436,7 @@ self.toast.show_toast("오류!", "error", 3000)
   - `xpath_explorer/mixins/browser_mixin.py`
   - `xpath_explorer/mixins/data_mixin.py`
   - `xpath_explorer/mixins/tools_mixin.py`
+  - `xpath_dom_export.py` (DOM 리포트 렌더링 공통 모듈)
 
 구현 원칙:
 - 새 `XPathExplorer` 메서드는 책임에 맞는 mixin에 추가합니다.

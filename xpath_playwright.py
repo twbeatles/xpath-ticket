@@ -18,6 +18,7 @@ from pathlib import Path
 
 # 상수 임포트
 from xpath_constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
+from xpath_dom_export import DomSnapshot
 from xpath_perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
@@ -810,6 +811,132 @@ class PlaywrightManager:
         except Exception as e:
             logger.error(f"PDF 저장 실패: {e}")
             return False
+
+    def collect_dom_snapshots(self, include_frames: bool = True) -> List[DomSnapshot]:
+        """Collect DOM snapshots from all open pages (popups) and frames."""
+        if not self.is_alive() or not self._context:
+            return []
+
+        snapshots: List[DomSnapshot] = []
+        root_page = self._page
+
+        try:
+            pages = list(self._context.pages)
+        except Exception:
+            pages = [self._page] if self._page else []
+
+        if root_page and root_page in pages:
+            ordered_pages = [p for p in pages if p != root_page] + [root_page]
+        else:
+            ordered_pages = pages
+
+        for page_index, page in enumerate(ordered_pages, start=1):
+            window_id = f"page-{page_index}"
+            is_popup = bool(root_page and page is not root_page)
+
+            try:
+                if hasattr(page, "is_closed") and page.is_closed():
+                    raise Exception("page is closed")
+            except Exception as e:
+                snapshots.append(
+                    DomSnapshot(
+                        engine="playwright",
+                        window_id=window_id,
+                        window_title="",
+                        window_url="",
+                        is_popup=is_popup,
+                        frame_path="main",
+                        frame_label="main",
+                        document_url="",
+                        html="",
+                        error=str(e),
+                    )
+                )
+                continue
+
+            try:
+                window_title = str(page.title() or "")
+            except Exception:
+                window_title = ""
+            try:
+                window_url = str(page.url or "")
+            except Exception:
+                window_url = ""
+
+            frame_targets: List[tuple[Any, str, str]] = []
+
+            def walk_frames(frame, path: str, label: str):
+                frame_targets.append((frame, path, label))
+                if not include_frames:
+                    return
+                try:
+                    children = list(getattr(frame, "child_frames", []) or [])
+                except Exception:
+                    children = []
+                for idx, child in enumerate(children, start=1):
+                    child_name = ""
+                    try:
+                        child_name = str(getattr(child, "name", "") or "")
+                    except Exception:
+                        child_name = ""
+                    identifier = child_name or f"index={idx}"
+                    child_path = identifier if path in ("", "main") else f"{path}/{identifier}"
+                    walk_frames(child, child_path, identifier)
+
+            try:
+                walk_frames(page.main_frame, "main", "main")
+            except Exception as e:
+                snapshots.append(
+                    DomSnapshot(
+                        engine="playwright",
+                        window_id=window_id,
+                        window_title=window_title,
+                        window_url=window_url,
+                        is_popup=is_popup,
+                        frame_path="main",
+                        frame_label="main",
+                        document_url="",
+                        html="",
+                        error=str(e),
+                    )
+                )
+                continue
+
+            for frame, frame_path, frame_label in frame_targets:
+                doc_url = ""
+                html = ""
+                error_text = ""
+                try:
+                    try:
+                        doc_url = str(getattr(frame, "url", "") or "")
+                    except Exception:
+                        doc_url = ""
+                    html = str(
+                        frame.evaluate(
+                            "() => document.documentElement ? document.documentElement.outerHTML : "
+                            "(document.body ? document.body.outerHTML : '')"
+                        )
+                        or ""
+                    )
+                except Exception as e:
+                    error_text = str(e)
+
+                snapshots.append(
+                    DomSnapshot(
+                        engine="playwright",
+                        window_id=window_id,
+                        window_title=window_title,
+                        window_url=window_url,
+                        is_popup=is_popup,
+                        frame_path=frame_path or "main",
+                        frame_label=frame_label or frame_path or "main",
+                        document_url=doc_url,
+                        html=html,
+                        error=error_text,
+                    )
+                )
+
+        return snapshots
     
     # =========================================================================
     # iframe 처리

@@ -27,6 +27,7 @@ from xpath_constants import (
     APP_TITLE, APP_VERSION, SITE_PRESETS,
     BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
     LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
+    category_to_label,
 )
 from xpath_styles import STYLE
 from xpath_config import XPathItem, SiteConfig
@@ -34,10 +35,10 @@ from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator,
 from xpath_browser import BrowserManager
 from xpath_workers import (
     PickerWatcher, ValidateWorker, LivePreviewWorker,
-    AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker,
+    AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker, BatchScenarioWorker,
 )
 from xpath_perf import perf_span, log_perf_summary
-from xpath_codegen import CodeGenerator, CodeTemplate
+from xpath_codegen import CodeGenerator, CodeTemplate, XPathTemplate
 from xpath_statistics import StatisticsManager
 from xpath_optimizer import XPathOptimizer, XPathAlternative
 from xpath_history import HistoryManager
@@ -45,8 +46,9 @@ from xpath_ai import XPathAIAssistant
 from xpath_diff import XPathDiffAnalyzer
 from xpath_table_model import XPathItemTableModel
 from xpath_filter_proxy import XPathFilterProxyModel
+from xpath_dom_export import render_dom_report_htm, render_dom_diff_report_htm, diff_dom_snapshots
 
-from xpath_explorer.runtime import logger
+from xpath_explorer.runtime import logger, error_telemetry
 
 
 class ExplorerToolsMixin:
@@ -118,6 +120,218 @@ class ExplorerToolsMixin:
         )
         if ok and category is not None:
             self._batch_test(category)
+
+    @staticmethod
+    def _default_scenario_json() -> str:
+        sample = {
+            "name": "기본 시나리오",
+            "steps": [
+                {"name": "로그인 ID 확인", "action": "validate_item", "item": "login_id"},
+                {"name": "잠시 대기", "action": "wait", "seconds": 0.5},
+                {"name": "예매 버튼 확인", "action": "validate_xpath", "xpath": "//a[contains(.,'예매하기')]"},
+            ],
+        }
+        return json.dumps(sample, ensure_ascii=False, indent=2)
+
+    def _show_batch_scenario_runner(self):
+        """JSON 시나리오 기반 배치 실행기."""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🧪 배치 시나리오 실행기")
+        dialog.resize(980, 680)
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(10)
+
+        layout.addWidget(QLabel("시나리오 JSON"))
+        input_json = QPlainTextEdit()
+        input_json.setPlainText(self._default_scenario_json())
+        input_json.setStyleSheet("font-family: 'Consolas', monospace;")
+        input_json.setMinimumHeight(220)
+        layout.addWidget(input_json)
+
+        control_row = QHBoxLayout()
+        btn_load = QPushButton("📂 JSON 불러오기")
+        btn_save = QPushButton("💾 JSON 저장")
+        btn_run = QPushButton("▶ 실행")
+        btn_cancel = QPushButton("⏹ 취소")
+        btn_cancel.setEnabled(False)
+        control_row.addWidget(btn_load)
+        control_row.addWidget(btn_save)
+        control_row.addStretch()
+        control_row.addWidget(btn_run)
+        control_row.addWidget(btn_cancel)
+        layout.addLayout(control_row)
+
+        progress = QProgressBar()
+        progress.setValue(0)
+        layout.addWidget(progress)
+
+        lbl_summary = QLabel("대기 중")
+        lbl_summary.setStyleSheet("color: #6c7086;")
+        layout.addWidget(lbl_summary)
+
+        table = QTableWidget()
+        table.setColumnCount(7)
+        table.setHorizontalHeaderLabels(["#", "이름", "액션", "대상", "결과", "메시지", "ms"])
+        table_hh = table.horizontalHeader()
+        if table_hh is not None:
+            table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+            table_hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+            table_hh.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        table_vh = table.verticalHeader()
+        if table_vh is not None:
+            table_vh.setVisible(False)
+        layout.addWidget(table, 1)
+
+        worker: Optional[BatchScenarioWorker] = None
+
+        def set_run_state(running: bool):
+            btn_run.setEnabled(not running)
+            btn_cancel.setEnabled(running)
+            btn_load.setEnabled(not running)
+            btn_save.setEnabled(not running)
+
+        def append_step_row(row: Dict[str, Any]):
+            r = table.rowCount()
+            table.insertRow(r)
+            table.setItem(r, 0, QTableWidgetItem(str(row.get("step", r + 1))))
+            table.setItem(r, 1, QTableWidgetItem(str(row.get("name", ""))))
+            table.setItem(r, 2, QTableWidgetItem(str(row.get("action", ""))))
+            table.setItem(r, 3, QTableWidgetItem(str(row.get("target", ""))))
+
+            success = bool(row.get("success"))
+            status_item = QTableWidgetItem("✅" if success else "❌")
+            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            table.setItem(r, 4, status_item)
+            table.setItem(r, 5, QTableWidgetItem(str(row.get("msg", ""))))
+            table.setItem(r, 6, QTableWidgetItem(str(row.get("duration_ms", 0))))
+
+            if row.get("action") in ("validate_item", "item"):
+                item_name = str(row.get("item_name", "") or "")
+                xpath = str(row.get("xpath", "") or "")
+                if item_name and xpath and self.config.get_item(item_name):
+                    self._record_validation_outcome(
+                        name=item_name,
+                        xpath=xpath,
+                        success=success,
+                        result={
+                            "found": success,
+                            "msg": row.get("msg", ""),
+                            "frame_path": row.get("frame_path", ""),
+                            "count": row.get("count", 0),
+                        },
+                    )
+
+        def on_progress(value: int, message: str):
+            progress.setValue(value)
+            lbl_summary.setText(message)
+
+        def on_completed(results: list, cancelled: bool, scenario_name: str):
+            nonlocal worker
+            worker = None
+            self.scenario_worker = None
+            set_run_state(False)
+            self._refresh_table()
+
+            success_count = sum(1 for row in results if row.get("success"))
+            total = len(results)
+            status_text = "취소됨" if cancelled else "완료"
+            lbl_summary.setText(
+                f"{scenario_name} {status_text}: 성공 {success_count}/{total}"
+            )
+            toast_type = "warning" if cancelled else "success"
+            self._show_toast(
+                f"시나리오 {status_text}: 성공 {success_count}/{total}",
+                toast_type,
+            )
+
+        def start_run():
+            nonlocal worker
+            if worker is not None and worker.isRunning():
+                return
+
+            if not self.browser.is_alive():
+                self._show_toast("브라우저 연결이 끊어졌습니다.", "warning")
+                return
+
+            try:
+                scenario = json.loads(input_json.toPlainText().strip() or "{}")
+            except json.JSONDecodeError as e:
+                self._show_toast(f"JSON 파싱 실패: {e}", "error")
+                return
+
+            if not isinstance(scenario, dict) or not isinstance(scenario.get("steps"), list):
+                self._show_toast("시나리오 형식이 올바르지 않습니다. (steps 배열 필요)", "warning")
+                return
+
+            table.setRowCount(0)
+            progress.setValue(0)
+            lbl_summary.setText("시나리오 시작...")
+
+            worker = BatchScenarioWorker(self.browser, list(self.config.items), scenario)
+            self.scenario_worker = worker
+            worker.progress.connect(on_progress)
+            worker.step_completed.connect(append_step_row)
+            worker.completed.connect(on_completed)
+            set_run_state(True)
+            worker.start()
+
+        def cancel_run():
+            if worker is not None and worker.isRunning():
+                worker.cancel()
+
+        def load_json_file():
+            fname, _ = QFileDialog.getOpenFileName(
+                dialog,
+                "시나리오 JSON 불러오기",
+                "",
+                "JSON 파일 (*.json)",
+            )
+            if not fname:
+                return
+            try:
+                with open(fname, "r", encoding="utf-8") as f:
+                    input_json.setPlainText(f.read())
+            except Exception as e:
+                self._show_toast(f"시나리오 파일 로드 실패: {e}", "error")
+
+        def save_json_file():
+            fname, _ = QFileDialog.getSaveFileName(
+                dialog,
+                "시나리오 JSON 저장",
+                "batch_scenario.json",
+                "JSON 파일 (*.json)",
+            )
+            if not fname:
+                return
+            try:
+                with open(fname, "w", encoding="utf-8") as f:
+                    f.write(input_json.toPlainText())
+                self._show_toast(f"시나리오 저장 완료: {fname}", "success")
+            except Exception as e:
+                self._show_toast(f"시나리오 저장 실패: {e}", "error")
+
+        btn_run.clicked.connect(start_run)
+        btn_cancel.clicked.connect(cancel_run)
+        btn_load.clicked.connect(load_json_file)
+        btn_save.clicked.connect(save_json_file)
+
+        def on_dialog_close():
+            if worker is not None and worker.isRunning():
+                worker.cancel()
+                worker.wait(WORKER_WAIT_TIMEOUT)
+            self.scenario_worker = None
+
+        dialog.finished.connect(lambda _=None: on_dialog_close())
+        dialog.exec()
 
     def _show_batch_report(self, results: list, cancelled: bool = False):
         """배치 테스트 결과 리포트"""
@@ -236,6 +450,125 @@ class ExplorerToolsMixin:
         btn_layout.addWidget(btn_close)
         
         layout.addLayout(btn_layout)
+        dialog.exec()
+
+    def _show_xpath_template_library(self):
+        """XPath 템플릿 라이브러리 다이얼로그."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("📚 XPath 템플릿 라이브러리")
+        dialog.resize(920, 620)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("카테고리:"))
+        combo_category = QComboBox()
+        combo_category.addItem("전체", "")
+        for category in sorted({t.category for t in self.code_generator.list_xpath_templates()}):
+            combo_category.addItem(category_to_label(category), category)
+        filter_row.addWidget(combo_category)
+
+        filter_row.addWidget(QLabel("검색:"))
+        input_keyword = QLineEdit()
+        input_keyword.setPlaceholderText("템플릿명, XPath, 설명 검색")
+        filter_row.addWidget(input_keyword, 1)
+        layout.addLayout(filter_row)
+
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["카테고리", "템플릿명", "XPath", "설명", "사용"])
+        table_hh = table.horizontalHeader()
+        if table_hh is not None:
+            table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            table_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+            table_hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        table_vh = table.verticalHeader()
+        if table_vh is not None:
+            table_vh.setVisible(False)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        layout.addWidget(table, 1)
+
+        lbl_summary = QLabel("")
+        lbl_summary.setStyleSheet("color: #6c7086;")
+        layout.addWidget(lbl_summary)
+
+        current_rows: List[XPathTemplate] = []
+
+        def apply_template(template: XPathTemplate):
+            self.input_xpath.setPlainText(template.xpath)
+            if not self.input_desc.text().strip():
+                self.input_desc.setText(template.description)
+            if not self.input_name.text().strip():
+                self.input_name.setText(template.name.replace(" ", "_"))
+            if hasattr(self, "right_tabs") and self.right_tabs is not None:
+                self.right_tabs.setCurrentIndex(0)
+            self._show_toast(f"템플릿 적용: {template.name}", "success")
+            dialog.accept()
+
+        def refresh_table():
+            nonlocal current_rows
+            keyword = input_keyword.text().strip()
+            category = str(combo_category.currentData() or "")
+            current_rows = self.code_generator.list_xpath_templates(
+                category=category,
+                keyword=keyword,
+            )
+
+            table.setRowCount(len(current_rows))
+            for row, template in enumerate(current_rows):
+                table.setItem(row, 0, QTableWidgetItem(category_to_label(template.category)))
+                table.setItem(row, 1, QTableWidgetItem(template.name))
+
+                xpath_item = QTableWidgetItem(template.xpath)
+                xpath_item.setToolTip(template.xpath)
+                table.setItem(row, 2, xpath_item)
+                table.setItem(row, 3, QTableWidgetItem(template.description))
+
+                btn_apply = QPushButton("적용")
+                btn_apply.setObjectName("success")
+                btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_apply.clicked.connect(lambda _checked=False, t=template: apply_template(t))
+                table.setCellWidget(row, 4, btn_apply)
+
+            lbl_summary.setText(f"템플릿 {len(current_rows)}개")
+
+        def on_double_click(row: int, _column: int):
+            if 0 <= row < len(current_rows):
+                apply_template(current_rows[row])
+
+        table.cellDoubleClicked.connect(on_double_click)
+        combo_category.currentIndexChanged.connect(lambda _=None: refresh_table())
+        input_keyword.textChanged.connect(lambda _=None: refresh_table())
+        refresh_table()
+
+        btn_row = QHBoxLayout()
+        btn_copy = QPushButton("📋 선택 XPath 복사")
+        btn_copy.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_row.addWidget(btn_copy)
+
+        def copy_selected():
+            row = table.currentRow()
+            if row < 0 or row >= len(current_rows):
+                self._show_toast("복사할 템플릿을 선택하세요.", "warning")
+                return
+            clipboard = QApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(current_rows[row].xpath)
+            self._show_toast("XPath가 클립보드에 복사되었습니다.", "success")
+
+        btn_copy.clicked.connect(copy_selected)
+
+        btn_row.addStretch()
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        btn_row.addWidget(btn_close)
+        layout.addLayout(btn_row)
+
         dialog.exec()
 
     def _show_network_analyzer(self):
@@ -437,6 +770,304 @@ class ExplorerToolsMixin:
         
         dialog.exec()
 
+    def _show_validation_history_panel(self):
+        """최근 검증 결과를 실시간으로 보여주는 히스토리 패널."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🕒 실시간 검증 히스토리")
+        dialog.resize(980, 580)
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(10)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("상태:"))
+        combo_status = QComboBox()
+        combo_status.addItem("전체", "all")
+        combo_status.addItem("성공만", "success")
+        combo_status.addItem("실패만", "failed")
+        filter_row.addWidget(combo_status)
+        filter_row.addWidget(QLabel("이름 필터:"))
+        input_name = QLineEdit()
+        input_name.setPlaceholderText("항목명 포함 검색")
+        filter_row.addWidget(input_name, 1)
+        filter_row.addWidget(QLabel("최대"))
+        spin_limit = QSpinBox()
+        spin_limit.setMinimum(10)
+        spin_limit.setMaximum(500)
+        spin_limit.setSingleStep(10)
+        spin_limit.setValue(50)
+        filter_row.addWidget(spin_limit)
+        filter_row.addWidget(QLabel("건"))
+        layout.addLayout(filter_row)
+
+        table = QTableWidget()
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["시간", "항목", "XPath", "결과", "프레임", "메시지"])
+        table_hh = table.horizontalHeader()
+        if table_hh is not None:
+            table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            table_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        table_vh = table.verticalHeader()
+        if table_vh is not None:
+            table_vh.setVisible(False)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        layout.addWidget(table, 1)
+
+        lbl_summary = QLabel("")
+        lbl_summary.setStyleSheet("color: #6c7086;")
+        layout.addWidget(lbl_summary)
+
+        def refresh_view():
+            records = self.stats_manager.get_recent_history(limit=500)
+            status_filter = str(combo_status.currentData() or "all")
+            name_filter = input_name.text().strip().lower()
+            limit = spin_limit.value()
+
+            filtered = []
+            for record in records:
+                if status_filter == "success" and not record.success:
+                    continue
+                if status_filter == "failed" and record.success:
+                    continue
+                if name_filter and name_filter not in record.item_name.lower():
+                    continue
+                filtered.append(record)
+
+            filtered = filtered[:limit]
+            table.setRowCount(0)
+            for record in filtered:
+                row = table.rowCount()
+                table.insertRow(row)
+                table.setItem(row, 0, QTableWidgetItem(record.timestamp[:19]))
+                table.setItem(row, 1, QTableWidgetItem(record.item_name))
+                xpath_item = QTableWidgetItem(record.xpath)
+                xpath_item.setToolTip(record.xpath)
+                table.setItem(row, 2, xpath_item)
+                status_item = QTableWidgetItem("✅" if record.success else "❌")
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                table.setItem(row, 3, status_item)
+                table.setItem(row, 4, QTableWidgetItem(record.frame_path or "main"))
+                table.setItem(row, 5, QTableWidgetItem(record.error_msg or ("Found" if record.success else "")))
+
+            success_count = sum(1 for r in filtered if r.success)
+            fail_count = len(filtered) - success_count
+            lbl_summary.setText(
+                f"표시 {len(filtered)}건 | 성공 {success_count}건 | 실패 {fail_count}건"
+            )
+
+        timer = QTimer(dialog)
+        timer.setInterval(1000)
+        timer.timeout.connect(refresh_view)
+        timer.start()
+
+        combo_status.currentIndexChanged.connect(lambda _=None: refresh_view())
+        input_name.textChanged.connect(lambda _=None: refresh_view())
+        spin_limit.valueChanged.connect(lambda _=None: refresh_view())
+        refresh_view()
+
+        btn_row = QHBoxLayout()
+        btn_refresh = QPushButton("↻ 새로고침")
+        btn_refresh.clicked.connect(refresh_view)
+        btn_row.addWidget(btn_refresh)
+        btn_row.addStretch()
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        btn_row.addWidget(btn_close)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
+
+    def _collect_active_dom_snapshots(self) -> Tuple[List[Any], str]:
+        """현재 활성 브라우저(Selenium/Playwright)의 DOM 스냅샷 수집."""
+        if self.browser.is_alive():
+            return self.browser.collect_dom_snapshots(include_frames=True), "Selenium"
+        if self.pw_manager and self.pw_manager.is_alive():
+            return self.pw_manager.collect_dom_snapshots(include_frames=True), "Playwright"
+        return [], ""
+
+    def _export_dom_diff_report(self):
+        """기준선 대비 현재 DOM 비교 리포트 생성/저장."""
+        snapshots, source = self._collect_active_dom_snapshots()
+        if not snapshots:
+            self._show_toast("활성 브라우저가 없습니다. Selenium 또는 Playwright를 먼저 연결하세요.", "warning")
+            return
+
+        baseline = list(getattr(self, "_dom_diff_baseline", []) or [])
+        if not baseline:
+            self._dom_diff_baseline = list(snapshots)
+            self._dom_diff_source = source
+            self._show_toast("DOM 기준선을 저장했습니다. 변경 후 다시 실행하면 diff 리포트를 생성합니다.", "success", 3500)
+            return
+
+        default_name = f"dom_diff_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        fname, _ = QFileDialog.getSaveFileName(
+            cast(QWidget, self),
+            "DOM 비교 리포트 저장",
+            default_name,
+            "HTM 파일 (*.htm *.html)",
+        )
+        if not fname:
+            return
+        if not fname.lower().endswith((".htm", ".html")):
+            fname += ".htm"
+
+        try:
+            report = render_dom_diff_report_htm(
+                baseline,
+                snapshots,
+                source_label=f"{source} DOM",
+            )
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(report)
+
+            changes = diff_dom_snapshots(baseline, snapshots)
+            changed_count = len(changes)
+            self._dom_diff_baseline = list(snapshots)
+            self._dom_diff_source = source
+            self._show_toast(
+                f"DOM 비교 리포트 저장 완료: {fname} (변경 {changed_count}건)",
+                "success",
+                5000,
+            )
+        except Exception as e:
+            logger.error(f"DOM 비교 리포트 저장 실패: {e}")
+            self._show_toast(f"DOM 비교 리포트 저장 실패: {e}", "error")
+
+    def _show_error_telemetry(self):
+        """오류 텔레메트리 대시보드."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🚨 오류 텔레메트리")
+        dialog.resize(860, 560)
+
+        layout = QVBoxLayout(dialog)
+
+        lbl_summary = QLabel()
+        lbl_summary.setStyleSheet("font-size: 14px; font-weight: bold; padding: 8px;")
+        layout.addWidget(lbl_summary)
+
+        tabs = QTabWidget()
+        layout.addWidget(tabs, 1)
+
+        tab_top = QWidget()
+        top_layout = QVBoxLayout(tab_top)
+        table_top = QTableWidget()
+        table_top.setColumnCount(4)
+        table_top.setHorizontalHeaderLabels(["횟수", "모듈", "함수", "메시지"])
+        top_hh = table_top.horizontalHeader()
+        if top_hh is not None:
+            top_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            top_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            top_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            top_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        top_layout.addWidget(table_top)
+        tabs.addTab(tab_top, "Top 오류")
+
+        tab_recent = QWidget()
+        recent_layout = QVBoxLayout(tab_recent)
+        table_recent = QTableWidget()
+        table_recent.setColumnCount(4)
+        table_recent.setHorizontalHeaderLabels(["시간", "레벨", "위치", "메시지"])
+        recent_hh = table_recent.horizontalHeader()
+        if recent_hh is not None:
+            recent_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            recent_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            recent_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            recent_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        recent_layout.addWidget(table_recent)
+        tabs.addTab(tab_recent, "최근 이벤트")
+
+        def refresh_view():
+            summary = error_telemetry.get_summary(top_n=30)
+            lbl_summary.setText(
+                f"누적 오류: {summary['total_errors']}건 | "
+                f"치명 오류: {summary['critical_count']}건 | "
+                f"고유 오류 유형: {summary['unique_error_types']}개 | "
+                f"버퍼 이벤트: {summary['buffered_events']}건"
+            )
+
+            table_top.setRowCount(0)
+            for row_data in summary["top_errors"]:
+                row = table_top.rowCount()
+                table_top.insertRow(row)
+                table_top.setItem(row, 0, QTableWidgetItem(str(row_data["count"])))
+                table_top.setItem(row, 1, QTableWidgetItem(row_data["module"]))
+                table_top.setItem(row, 2, QTableWidgetItem(row_data["function"]))
+                table_top.setItem(row, 3, QTableWidgetItem(row_data["message"]))
+
+            recent_events = error_telemetry.get_recent_events(limit=200)
+            table_recent.setRowCount(0)
+            for event in recent_events:
+                row = table_recent.rowCount()
+                table_recent.insertRow(row)
+                location = f"{event.module}.{event.function}:{event.line}"
+                table_recent.setItem(row, 0, QTableWidgetItem(event.timestamp_iso))
+                table_recent.setItem(row, 1, QTableWidgetItem(event.level))
+                table_recent.setItem(row, 2, QTableWidgetItem(location))
+                table_recent.setItem(row, 3, QTableWidgetItem(event.message))
+
+        refresh_view()
+
+        btn_layout = QHBoxLayout()
+
+        btn_save = QPushButton("💾 리포트 저장")
+
+        def save_report():
+            default_name = f"error_telemetry_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            fname, _ = QFileDialog.getSaveFileName(
+                cast(QWidget, self),
+                "오류 텔레메트리 리포트 저장",
+                default_name,
+                "Markdown 파일 (*.md)",
+            )
+            if not fname:
+                return
+            if not fname.lower().endswith(".md"):
+                fname += ".md"
+            try:
+                content = error_telemetry.render_markdown_report(top_n=30, recent_limit=200)
+                with open(fname, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self._show_toast(f"오류 리포트 저장 완료: {fname}", "success")
+            except Exception as e:
+                logger.error(f"오류 리포트 저장 실패: {e}")
+                self._show_toast(f"리포트 저장 실패: {e}", "error")
+
+        btn_save.clicked.connect(save_report)
+        btn_layout.addWidget(btn_save)
+
+        btn_clear = QPushButton("🧹 텔레메트리 초기화")
+
+        def clear_telemetry():
+            choice = QMessageBox.question(
+                dialog,
+                "오류 텔레메트리 초기화",
+                "수집된 오류 텔레메트리 데이터를 초기화하시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return
+            error_telemetry.clear()
+            refresh_view()
+            self._show_toast("오류 텔레메트리가 초기화되었습니다.", "success")
+
+        btn_clear.clicked.connect(clear_telemetry)
+        btn_layout.addWidget(btn_clear)
+
+        btn_refresh = QPushButton("↻ 새로고침")
+        btn_refresh.clicked.connect(refresh_view)
+        btn_layout.addWidget(btn_refresh)
+
+        btn_close = QPushButton("닫기")
+        btn_close.clicked.connect(dialog.reject)
+        btn_layout.addWidget(btn_close)
+
+        layout.addLayout(btn_layout)
+        dialog.exec()
+
     def _toggle_playwright(self):
         """Playwright 브라우저 토글"""
         try:
@@ -532,6 +1163,42 @@ class ExplorerToolsMixin:
         except Exception as e:
             self.table_scan_results.setUpdatesEnabled(True)
             self._show_toast(f"스캔 실패: {e}", "error")
+
+    def _export_dom_playwright_htm(self):
+        """현재 Playwright 브라우저의 전체 DOM을 단일 HTM으로 저장."""
+        if not self.pw_manager or not self.pw_manager.is_alive():
+            self._show_toast("Playwright 브라우저를 먼저 실행하세요.", "warning")
+            return
+
+        default_name = f"playwright_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        fname, _ = QFileDialog.getSaveFileName(
+            cast(QWidget, self),
+            "Playwright DOM 저장",
+            default_name,
+            "HTM 파일 (*.htm *.html)",
+        )
+        if not fname:
+            return
+
+        if not fname.lower().endswith((".htm", ".html")):
+            fname += ".htm"
+
+        self._show_toast("Playwright DOM 추출 중...", "info", 2000)
+        try:
+            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=True)
+            report = render_dom_report_htm(snapshots, source_label="Playwright")
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(report)
+
+            fail_count = sum(1 for s in snapshots if s.error)
+            self._show_toast(
+                f"DOM 저장 완료: {fname} (문서 {len(snapshots)}개, 실패 {fail_count}개)",
+                "success",
+                5000,
+            )
+        except Exception as e:
+            logger.error(f"Playwright DOM 저장 실패: {e}")
+            self._show_toast(f"DOM 저장 실패: {e}", "error")
 
     def _use_scanned_element(self, element):
         """스캔된 요소를 편집기로 로드"""
@@ -1116,6 +1783,10 @@ class ExplorerToolsMixin:
         if self.batch_worker and self.batch_worker.isRunning():
             self.batch_worker.cancel()
             self.batch_worker.wait(WORKER_WAIT_TIMEOUT)
+
+        if getattr(self, "scenario_worker", None) and self.scenario_worker.isRunning():
+            self.scenario_worker.cancel()
+            self.scenario_worker.wait(WORKER_WAIT_TIMEOUT)
         
         # v3.4: Playwright 종료
         if self.pw_manager:

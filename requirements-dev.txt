@@ -1,3 +1,4 @@
 -r requirements-full.txt
 pytest
+pytest-cov
 ruff

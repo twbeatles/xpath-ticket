@@ -15,7 +15,9 @@ hiddenimports = [
     # 프로젝트 모듈
     'xpath_ai', 'xpath_diff', 'xpath_history', 'xpath_optimizer',
     'xpath_constants', 'xpath_styles', 'xpath_config', 'xpath_widgets',
-    'xpath_browser', 'xpath_workers', 'xpath_codegen', 'xpath_statistics',
+    # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
+    'xpath_browser', 'xpath_playwright', 'xpath_dom_export',
+    'xpath_workers', 'xpath_codegen', 'xpath_statistics',
     'xpath_table_model', 'xpath_filter_proxy',
 
     # OpenAI

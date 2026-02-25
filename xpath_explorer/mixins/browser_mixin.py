@@ -45,6 +45,7 @@ from xpath_ai import XPathAIAssistant
 from xpath_diff import XPathDiffAnalyzer
 from xpath_table_model import XPathItemTableModel
 from xpath_filter_proxy import XPathFilterProxyModel
+from xpath_dom_export import render_dom_report_htm
 
 from xpath_explorer.runtime import logger
 
@@ -660,4 +661,40 @@ class ExplorerBrowserMixin:
                 item.screenshot_path = fname
         else:
             self._show_toast("스크린샷 저장 실패", "error")
+
+    def _export_dom_selenium_htm(self):
+        """현재 Selenium 브라우저의 전체 DOM을 단일 HTM으로 저장."""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            return
+
+        default_name = f"selenium_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        fname, _ = QFileDialog.getSaveFileName(
+            cast(QWidget, self),
+            "DOM 저장",
+            default_name,
+            "HTM 파일 (*.htm *.html)",
+        )
+        if not fname:
+            return
+
+        if not fname.lower().endswith((".htm", ".html")):
+            fname += ".htm"
+
+        self._show_toast("DOM 추출 중...", "info", 2000)
+        try:
+            snapshots = self.browser.collect_dom_snapshots(include_frames=True)
+            report = render_dom_report_htm(snapshots, source_label="Selenium")
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(report)
+
+            fail_count = sum(1 for s in snapshots if s.error)
+            self._show_toast(
+                f"DOM 저장 완료: {fname} (문서 {len(snapshots)}개, 실패 {fail_count}개)",
+                "success",
+                5000,
+            )
+        except Exception as e:
+            logger.error(f"Selenium DOM 저장 실패: {e}")
+            self._show_toast(f"DOM 저장 실패: {e}", "error")
 

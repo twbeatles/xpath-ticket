@@ -209,11 +209,19 @@ class ExplorerUIMixin:
         batch_cat_action = QAction('카테고리 선택 테스트...', self)
         batch_cat_action.triggered.connect(self._batch_test_dialog)
         batch_menu.addAction(batch_cat_action)
+
+        batch_scenario_action = QAction('시나리오 실행기...', self)
+        batch_scenario_action.triggered.connect(self._show_batch_scenario_runner)
+        batch_menu.addAction(batch_scenario_action)
         
         # v3.3 매크로 생성
         macro_action = QAction('🔧 매크로 생성...', self)
         macro_action.triggered.connect(self._show_macro_generator)
         tools_menu.addAction(macro_action)
+
+        template_action = QAction('📚 XPath 템플릿 라이브러리...', self)
+        template_action.triggered.connect(self._show_xpath_template_library)
+        tools_menu.addAction(template_action)
         
         # v3.3 네트워크 분석
         network_action = QAction('🌐 네트워크 분석...', self)
@@ -230,7 +238,11 @@ class ExplorerUIMixin:
         diff_action = QAction('🔍 Diff 분석 (변경 감지)...', self)
         diff_action.triggered.connect(self._show_diff_analyzer)
         tools_menu.addAction(diff_action)
-        
+
+        dom_diff_action = QAction('🧾 DOM 비교 리포트', self)
+        dom_diff_action.triggered.connect(self._export_dom_diff_report)
+        tools_menu.addAction(dom_diff_action)
+
         screenshot_action = QAction('📸 요소 스크린샷...', self)
         screenshot_action.triggered.connect(self._screenshot_current_element)
         tools_menu.addAction(screenshot_action)
@@ -241,6 +253,14 @@ class ExplorerUIMixin:
         stats_action = QAction('📈 통계 보기', self)
         stats_action.triggered.connect(self._show_statistics)
         tools_menu.addAction(stats_action)
+
+        validation_history_action = QAction('🕒 검증 히스토리 패널', self)
+        validation_history_action.triggered.connect(self._show_validation_history_panel)
+        tools_menu.addAction(validation_history_action)
+
+        telemetry_action = QAction('🚨 오류 텔레메트리', self)
+        telemetry_action.triggered.connect(self._show_error_telemetry)
+        tools_menu.addAction(telemetry_action)
         
         # 보기 메뉴
         view_menu = cast(QMenu, menubar.addMenu('보기(&V)'))
@@ -372,6 +392,13 @@ class ExplorerUIMixin:
         self.btn_refresh_page.setFixedSize(26, 26)
         self.btn_refresh_page.clicked.connect(self._browser_refresh)
         self.browser_layout.addWidget(self.btn_refresh_page)
+
+        self.btn_export_dom = QPushButton("DOM")
+        self.btn_export_dom.setObjectName("icon_btn")
+        self.btn_export_dom.setToolTip("창/팝업/iframe 전체 DOM 저장 (.htm)")
+        self.btn_export_dom.setFixedSize(48, 26)
+        self.btn_export_dom.clicked.connect(self._export_dom_selenium_htm)
+        self.browser_layout.addWidget(self.btn_export_dom)
         
         # URL 입력창 (구버전 제거, 하단 Collapsible 영역으로 이동)
         self.browser_layout.addStretch()
@@ -809,6 +836,14 @@ class ExplorerUIMixin:
         self.btn_scan.setMinimumHeight(40)
         self.btn_scan.clicked.connect(self._scan_page_elements)
         scan_settings_layout.addWidget(self.btn_scan)
+
+        self.btn_scan_export_dom = QPushButton("🧾 DOM 추출 (.htm)")
+        self.btn_scan_export_dom.setObjectName("primary")
+        self.btn_scan_export_dom.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_scan_export_dom.setToolTip("창/팝업/iframe 전체 DOM 저장")
+        self.btn_scan_export_dom.setMinimumHeight(36)
+        self.btn_scan_export_dom.clicked.connect(self._export_dom_playwright_htm)
+        scan_settings_layout.addWidget(self.btn_scan_export_dom)
         
         scan_settings_group.setLayout(scan_settings_layout)
         scan_inner_layout.addWidget(scan_settings_group)

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 
+from xpath_constants import XPATH_TEMPLATE_LIBRARY
+
 
 class CodeTemplate(Enum):
     """코드 템플릿 종류"""
@@ -31,11 +33,57 @@ class ActionStep:
     description: str = ""
 
 
+@dataclass(frozen=True)
+class XPathTemplate:
+    """Reusable XPath template entry."""
+
+    name: str
+    category: str
+    xpath: str
+    description: str = ""
+
+
 class CodeGenerator:
     """XPath 기반 자동화 코드 생성기"""
 
     def __init__(self):
         self.indent = "    "
+
+    @staticmethod
+    def list_xpath_templates(category: str = "", keyword: str = "") -> List[XPathTemplate]:
+        """Return XPath templates with optional category/keyword filtering."""
+        category = (category or "").strip().lower()
+        keyword = (keyword or "").strip().lower()
+        templates: List[XPathTemplate] = []
+
+        for raw in XPATH_TEMPLATE_LIBRARY:
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("name") or "").strip()
+            item_category = str(raw.get("category") or "").strip()
+            xpath = str(raw.get("xpath") or "").strip()
+            description = str(raw.get("description") or "").strip()
+            if not name or not item_category or not xpath:
+                continue
+
+            if category and item_category.lower() != category:
+                continue
+            if keyword:
+                haystack = f"{name} {item_category} {xpath} {description}".lower()
+                if keyword not in haystack:
+                    continue
+
+            templates.append(
+                XPathTemplate(
+                    name=name,
+                    category=item_category,
+                    xpath=xpath,
+                    description=description,
+                )
+            )
+
+        templates.sort(key=lambda t: (t.category, t.name))
+        return templates
 
     def generate(self, items: List, template: CodeTemplate, actions: Optional[List[ActionStep]] = None) -> str:
         """

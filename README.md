@@ -20,6 +20,12 @@
 - **Network Analyzer Recovery**: `NetworkAnalyzer` 어댑터 복구 및 응답 크기(`response_size`) 표시 지원
 - **History Integrity**: preset/new/open 직후 Undo 기준점 재설정으로 히스토리 오염 방지
 - **Validation Data Flow**: 단일/전체/배치 검증 결과를 통합 기록(통계 + Diff 스냅샷)
+- **Error Telemetry Dashboard**: 오류 집계/최근 이벤트/Markdown 리포트 저장 기능 추가
+- **DOM Export (Selenium/Playwright)**: 창/팝업/iframe 전체 DOM을 단일 `.htm`으로 저장
+- **DOM Diff Report**: 기준선 대비 변경 DOM 섹션 강조 리포트 저장 지원
+- **XPath Template Library**: 자주 쓰는 XPath 패턴을 카테고리 기반으로 검색/적용
+- **Batch Scenario Runner**: JSON 시나리오(검증/대기) 기반 일괄 실행
+- **Validation History Panel**: 최근 검증 이력 500건 조회/필터 UI 제공
 
 ### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
@@ -34,13 +40,16 @@
 - **멀티 모델 지원**: GPT-5.2, Gemini Flash Latest 등 최신 경량 모델
 
 ## 🔄 히스토리 & 안전 장치
-- **Undo/Redo**: 무제한 히스토리
+- **Undo/Redo**: 기본 50개 히스토리(`HISTORY_MAX_SIZE`, 조정 가능)
 - **Diff 분석**: 페이지 변경 감지
 
 ## ⚡ 생산성 도구
 - 실시간 미리보기
 - XPath 최적화
 - 요소 스크린샷
+- XPath 템플릿 라이브러리
+- 배치 시나리오 실행기
+- DOM 추출/DOM 비교 리포트
 
 ---
 
@@ -73,10 +82,10 @@ python "xpath 조사기(모든 티켓 사이트).py"
 
 ```bash
 # UPX 설치 시 경량화 적용 (권장)
-    pyinstaller xpath_explorer.spec
-    ```
+pyinstaller xpath_explorer.spec
+```
 
-    빌드 결과: `dist/XPathExplorer_v4.2.exe` (약 50-80MB)
+빌드 결과: `dist/XPathExplorer_v4.2.exe` (약 50-80MB)
 
 ---
 
@@ -84,7 +93,12 @@ python "xpath 조사기(모든 티켓 사이트).py"
 
 | 파일 | 설명 |
 |------|------|
-| `xpath 조사기(모든 티켓 사이트).py` | 메인 애플리케이션 |
+| `xpath 조사기(모든 티켓 사이트).py` | 레거시 진입점 래퍼 |
+| `xpath_explorer/main_window.py` | 메인 윈도우 조합 |
+| `xpath_explorer/mixins/ui_mixin.py` | UI 조립 |
+| `xpath_explorer/mixins/browser_mixin.py` | 브라우저 액션 |
+| `xpath_explorer/mixins/data_mixin.py` | 데이터/설정/내보내기 |
+| `xpath_explorer/mixins/tools_mixin.py` | AI/통계/도구 액션 |
 | `xpath_ai.py` | AI 어시스턴트 |
 | `xpath_browser.py` | 브라우저 제어 (Selenium) |
 | `xpath_playwright.py` | Playwright 통합 |
@@ -93,6 +107,9 @@ python "xpath 조사기(모든 티켓 사이트).py"
 | `xpath_diff.py` | 변경사항 분석 |
 | `xpath_codegen.py` | 코드 생성기 |
 | `xpath_statistics.py` | 테스트 통계 |
+| `xpath_table_model.py` | 목록 테이블 모델 |
+| `xpath_filter_proxy.py` | 검색/필터 프록시 |
+| `xpath_dom_export.py` | DOM 리포트 렌더링 |
 | `xpath_styles.py` | UI 스타일 |
 
 ---
@@ -151,3 +168,23 @@ MIT License
 호환 정책:
 - 기존 실행 명령은 변경하지 않습니다.
 - 기존 JSON 스키마와 사용자 UI 라벨 호환성을 유지합니다.
+
+## 문서-코드 정합성 체크
+
+```bash
+python scripts/check_docs_sync.py
+```
+
+## 테스트 맵 (핵심 회귀 축)
+
+- 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`
+- DOM Export: `tests/test_browser_dom_export.py`, `tests/test_playwright_dom_export.py`, `tests/test_dom_report_renderer.py`
+- 배치/워커: `tests/test_batch_worker_cancel.py`, `tests/test_batch_scenario_worker.py`
+- Playwright 어댑터: `tests/test_network_analyzer_adapter.py`
+- 문서 정합성: `tests/test_docs_sync_check.py`
+
+## 개발 품질 체크 (정합성 + 커버리지)
+
+```bash
+python scripts/run_quality_checks.py
+```

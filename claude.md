@@ -12,29 +12,30 @@
 - **🤖 AI 지원**: 자연어 기반 XPath 생성 (OpenAI/Google GenAI)
 - **⚡ 최적화**: 안정성 기반 XPath 대안 제안
 - **📊 분석**: 요소 변경 감지 (Diff), 테스트 통계
-- **🔄 히스토리**: 무제한 Undo/Redo
+- **🔄 히스토리**: 기본 50개 Undo/Redo (`HISTORY_MAX_SIZE`)
 - **🖼️ 스크린샷**: 요소별 스크린샷 저장
+- **🧾 DOM 리포트**: 창/팝업/iframe 전체 DOM 저장 + DOM 비교 리포트
+- **📚 템플릿/시나리오**: XPath 템플릿 라이브러리 + JSON 시나리오 실행기
+- **🚨 관찰성**: 오류 텔레메트리 대시보드/리포트 저장
 
 ---
 
 ## 📂 파일별 책임 및 의존성
 
-| 파일 | 책임 | LOC | 의존 |
-|------|------|-----|------|
-| `xpath 조사기(모든 티켓 사이트).py` | 메인 GUI, 이벤트 핸들링 | ~2900 | 모든 모듈 |
-| `xpath_browser.py` | Selenium WebDriver 관리 | ~813 | xpath_constants |
-| `xpath_playwright.py` | Playwright 브라우저 제어 | ~700 | xpath_constants |
-| `xpath_ai.py` | AI API 통합 (OpenAI/Google GenAI) | ~481 | - |
-| `xpath_optimizer.py` | XPath 최적화 엔진 | ~363 | - |
-| `xpath_diff.py` | 요소 변경 감지 | ~423 | - |
-| `xpath_history.py` | Undo/Redo 관리 | ~275 | xpath_constants |
-| `xpath_config.py` | 데이터 모델 | ~187 | xpath_constants |
-| `xpath_constants.py` | 상수, 프리셋, 스크립트 | ~553 | - |
-| `xpath_widgets.py` | 커스텀 PyQt6 위젯 | ~736 | - |
-| `xpath_styles.py` | CSS 스타일시트 | ~869 | - |
-| `xpath_workers.py` | 백그라운드 스레드 | ~160 | - |
-| `xpath_codegen.py` | 코드 생성 (Python/JS) | ~260 | - |
-| `xpath_statistics.py` | 테스트 통계 관리 | ~250 | - |
+| 계층 | 파일 | 책임 | 비고 |
+|------|------|------|------|
+| 진입점 | `xpath 조사기(모든 티켓 사이트).py` | 레거시 실행 호환 래퍼 | 실제 앱 조합은 패키지로 이동 |
+| 앱 조합 | `xpath_explorer/main_window.py` | `XPathExplorer` 조합, 서비스 초기화 | `main_window + mixins` 구조의 중심 |
+| UI 조립 | `xpath_explorer/mixins/ui_mixin.py` | 메뉴/툴바/패널 위젯 구성 | 핸들러 연결만 담당 |
+| Selenium UI 액션 | `xpath_explorer/mixins/browser_mixin.py` | 브라우저 연결/검증/피커/DOM 저장 | `BrowserManager` 오케스트레이션 |
+| 도구 UI 액션 | `xpath_explorer/mixins/tools_mixin.py` | AI/배치/템플릿/Playwright/DOM diff/텔레메트리 | 동적 Playwright import 경로 포함 |
+| 데이터 UI 액션 | `xpath_explorer/mixins/data_mixin.py` | CRUD/설정/내보내기/히스토리 연동 | JSON 호환성 핵심 |
+| Selenium 코어 | `xpath_browser.py` | 창/팝업/iframe/검증/DOM 스냅샷 | 메인 자동화 경로 |
+| Playwright 코어 | `xpath_playwright.py` | 스캔/네트워크/DOM 스냅샷 | 보조 자동화 경로 |
+| 공통 DOM 리포트 | `xpath_dom_export.py` | HTM 렌더링 + DOM diff 렌더링 | Selenium/Playwright 공용 |
+| 워커 | `xpath_workers.py` | 배치/시나리오/AI/Diff 비동기 작업 | QThread 기반 |
+| 모델/프록시 | `xpath_table_model.py`, `xpath_filter_proxy.py` | 리스트 렌더링/검색 필터 성능 경로 | `QTableView` 기반 |
+| 관찰성 | `xpath_explorer/runtime.py`, `xpath_statistics.py` | 로그/오류 텔레메트리/검증 통계 | 리포트 내보내기 지원 |
 
 ---
 
@@ -635,6 +636,7 @@ logger.debug(f"발견 프레임: {frame_path}")
   - `xpath_explorer/mixins/browser_mixin.py`
   - `xpath_explorer/mixins/data_mixin.py`
   - `xpath_explorer/mixins/tools_mixin.py`
+  - `xpath_dom_export.py` (DOM 리포트 렌더링 공통 모듈)
 
 구현 원칙:
 - 새 `XPathExplorer` 메서드는 책임에 맞는 mixin에 추가합니다.

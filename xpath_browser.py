@@ -10,6 +10,7 @@ from threading import RLock
 from typing import List, Dict, Optional, Any, Tuple, Set
 
 from xpath_constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
+from xpath_dom_export import DomSnapshot
 from xpath_perf import perf_span
 
 # 濡쒓굅 ?ㅼ젙
@@ -225,28 +226,86 @@ class BrowserManager:
                 logger.error(f"釉뚮씪?곗? ?곌껐 ?뺤씤 ?ㅽ뙣: {e}")
                 return False
             
-    def _recover_to_available_window(self) -> bool:
-        """?ъ슜 媛?ν븳 ?ㅻⅨ ?덈룄?곕줈 ?먮룞 蹂듦뎄"""
+    def _safe_window_handles(self) -> List[str]:
+        """Return currently available window handles without raising."""
+        if not self.driver:
+            return []
+        try:
+            handles = list(self.driver.window_handles)
+        except WebDriverException as e:
+            if self._is_invalid_session_error(e):
+                self._mark_driver_dead()
+                return []
+            logger.debug("window_handles query failed: %s", self._short_webdriver_error(e))
+            return []
+        except Exception as e:
+            logger.debug("window_handles query failed: %s", e)
+            return []
+        return [h for h in handles if h]
+
+    def _ordered_popup_first_handles(self, handles: Optional[List[str]] = None) -> List[str]:
+        """Return handles ordered as popup-first, root window last."""
+        if handles is None:
+            handles = self._safe_window_handles()
+        if not handles:
+            return []
+
+        if not self._root_window_handle or self._root_window_handle not in handles:
+            self._root_window_handle = handles[0]
+
+        root = self._root_window_handle
+        ordered = [h for h in handles if h != root]
+        if root in handles:
+            ordered.append(root)
+        return ordered
+
+    def _recover_to_available_window(self, preferred_handle: str = "", max_attempts: int = 3) -> bool:
+        """Recover to an available window handle with bounded retries."""
         with self._lock:
-            try:
-                handles = self.driver.window_handles
-                if handles:
-                    self.driver.switch_to.window(handles[-1])  # 留덉?留?蹂댄넻 理쒖떊) ?덈룄?곕줈 ?꾪솚
-                    self._invalidate_frame_cache()
-                    logger.info(f"?덈룄??蹂듦뎄 ?깃났: {self.driver.title}")
-                    return True
-                else:
+            if not self.driver:
+                return False
+
+            attempts = max(1, int(max_attempts))
+            for attempt in range(1, attempts + 1):
+                handles = self._safe_window_handles()
+                if not handles:
                     logger.error("?ъ슜 媛?ν븳 ?덈룄?곌? ?놁뒿?덈떎.")
                     return False
-            except WebDriverException as e:
-                if self._is_invalid_session_error(e):
-                    self._mark_driver_dead()
-                    return False
-                logger.debug(f"?덈룄??蹂듦뎄 以?WebDriver ?ㅻ쪟: {self._short_webdriver_error(e)}")
-                return False
-            except Exception as e:
-                logger.debug(f"?덈룄??蹂듦뎄 以??ㅻ쪟: {e}")
-                return False
+
+                candidates: List[str] = []
+                if preferred_handle and preferred_handle in handles:
+                    candidates.append(preferred_handle)
+                for handle in self._ordered_popup_first_handles(handles):
+                    if handle not in candidates:
+                        candidates.append(handle)
+
+                for handle in candidates:
+                    try:
+                        self.driver.switch_to.window(handle)
+                        self._invalidate_frame_cache()
+                        try:
+                            title = self.driver.title
+                        except Exception:
+                            title = ""
+                        logger.info(
+                            "Window recovery succeeded (attempt=%s, handle=%s, title=%s)",
+                            attempt,
+                            handle,
+                            title,
+                        )
+                        return True
+                    except NoSuchWindowException:
+                        continue
+                    except WebDriverException as e:
+                        if self._is_invalid_session_error(e):
+                            self._mark_driver_dead()
+                            return False
+                        logger.debug("Window recovery switch failed: %s", self._short_webdriver_error(e))
+                    except Exception as e:
+                        logger.debug("Window recovery switch failed: %s", e)
+
+            logger.error("Window recovery failed after %s attempts.", attempts)
+            return False
 
     def ensure_valid_window(self):
         """?좏슚???덈룄???곹깭 蹂댁옣 (?몃??먯꽌 ?몄텧 媛??"""
@@ -605,26 +664,19 @@ class BrowserManager:
 
             windows = []
             current_handle = ""
-            handles: List[str] = []
             try:
                 current_handle = self.driver.current_window_handle
             except Exception as e:
                 logger.debug(f"?꾩옱 ?덈룄???몃뱾 ?뺤씤 ?ㅽ뙣 (臾댁떆): {e}")
                 pass
 
-            try:
-                handles = list(self.driver.window_handles)
-            except Exception as e:
-                logger.debug(f"?덈룄???몃뱾 議고쉶 ?ㅽ뙣: {e}")
-                return []
-
+            handles = self._safe_window_handles()
             if not handles:
                 return []
 
-            if not self._root_window_handle or self._root_window_handle not in handles:
-                self._root_window_handle = handles[0]
+            scan_handles = self._ordered_popup_first_handles(handles)
 
-            for order, handle in enumerate(handles):
+            for order, handle in enumerate(scan_handles):
                 try:
                     self.driver.switch_to.window(handle)
                     opener_exists = False
@@ -653,12 +705,7 @@ class BrowserManager:
                     self.driver.switch_to.window(current_handle)
                 except Exception as e:
                     logger.debug(f"?먮옒 ?덈룄??蹂듦? ?ㅽ뙣: {e}")
-                    try:
-                        fallback_handles = list(self.driver.window_handles)
-                    except Exception:
-                        fallback_handles = []
-                    if fallback_handles:
-                        self.driver.switch_to.window(fallback_handles[-1])
+                    self._recover_to_available_window(preferred_handle=current_handle)
 
             windows.sort(
                 key=lambda w: (
@@ -676,13 +723,33 @@ class BrowserManager:
     def switch_window(self, handle: str) -> bool:
         """?덈룄???꾪솚 - ?ㅽ뙣???泥??덈룄?곕줈 ?꾪솚"""
         with self._lock:
-            try:
-                self.driver.switch_to.window(handle)
-                self._invalidate_frame_cache()
-                return True
-            except Exception as e:
-                logger.error(f"?덈룄???꾪솚 ?ㅽ뙣: {e}")
+            if not self.driver:
+                return False
+            if not handle:
                 return self._recover_to_available_window()
+
+            for _ in range(3):
+                handles = self._safe_window_handles()
+                if not handles:
+                    return False
+                if handle not in handles:
+                    break
+                try:
+                    self.driver.switch_to.window(handle)
+                    self._invalidate_frame_cache()
+                    return True
+                except NoSuchWindowException:
+                    continue
+                except WebDriverException as e:
+                    if self._is_invalid_session_error(e):
+                        self._mark_driver_dead()
+                        return False
+                    logger.debug("?덈룄???꾪솚 ?ㅽ뙣: %s", self._short_webdriver_error(e))
+                except Exception as e:
+                    logger.debug("?덈룄???꾪솚 ?ㅽ뙣: %s", e)
+
+            logger.warning("?붿껌??덈룄濡??꾪솚?섏? 紐삵빐 蹂듦뎄濡?諛섏쟾: %s", handle)
+            return self._recover_to_available_window(preferred_handle=handle)
 
     # -------------------------------------------------------------------------
     # Picker Script Injection
@@ -698,18 +765,9 @@ class BrowserManager:
             except Exception:
                 current_handle = ""
 
-            try:
-                handles = list(self.driver.window_handles)
-            except Exception:
-                handles = []
-
-            if not handles:
+            scan_handles = self._picker_scan_handles()
+            if not scan_handles:
                 return
-
-            if self._root_window_handle and self._root_window_handle in handles:
-                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
-            else:
-                scan_handles = handles
 
             injected_count = 0
             for handle in scan_handles:
@@ -732,13 +790,7 @@ class BrowserManager:
             logger.info(f"Picker injected windows={injected_count}")
 
     def _picker_scan_handles(self) -> List[str]:
-        try:
-            handles = list(self.driver.window_handles)
-        except Exception:
-            handles = []
-        if self._root_window_handle and self._root_window_handle in handles:
-            return [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
-        return handles
+        return self._ordered_popup_first_handles()
 
     def _execute_picker_lock_script(self) -> bool:
         try:
@@ -959,15 +1011,7 @@ class BrowserManager:
             except Exception:
                 current_handle = ""
 
-            try:
-                handles = list(self.driver.window_handles)
-            except Exception:
-                handles = []
-
-            if self._root_window_handle and self._root_window_handle in handles:
-                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
-            else:
-                scan_handles = handles
+            scan_handles = self._picker_scan_handles()
 
             try:
                 for handle in scan_handles:
@@ -1065,15 +1109,7 @@ class BrowserManager:
             except Exception:
                 current_handle = ""
 
-            try:
-                handles = list(self.driver.window_handles)
-            except Exception:
-                handles = []
-
-            if self._root_window_handle and self._root_window_handle in handles:
-                scan_handles = [h for h in handles if h != self._root_window_handle] + [self._root_window_handle]
-            else:
-                scan_handles = handles
+            scan_handles = self._picker_scan_handles()
 
             try:
                 for handle in scan_handles:
@@ -1459,6 +1495,159 @@ class BrowserManager:
             except Exception as e:
                 logger.error(f"?ㅽ겕由곗꺑 ????ㅽ뙣: {e}")
                 return False
+
+    def collect_dom_snapshots(self, include_frames: bool = True) -> List[DomSnapshot]:
+        """Collect DOM snapshots from all windows/popups and iframe documents."""
+        with self._lock:
+            if not self.is_alive():
+                return []
+
+            snapshots: List[DomSnapshot] = []
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = self.driver.current_window_handle
+            except Exception:
+                current_handle = ""
+
+            windows = self.get_windows()
+            if not windows and current_handle:
+                windows = [{
+                    "handle": current_handle,
+                    "title": "",
+                    "url": "",
+                    "is_popup": False,
+                }]
+
+            for window in windows:
+                handle = str(window.get("handle") or "")
+                if not handle:
+                    continue
+
+                base_title = str(window.get("title") or "")
+                base_url = str(window.get("url") or "")
+                is_popup = bool(window.get("is_popup"))
+
+                try:
+                    self.driver.switch_to.window(handle)
+                    self.driver.switch_to.default_content()
+                    self.current_frame_path = ""
+                    # get_all_frames() 캐시가 다른 창 결과를 재사용하지 않도록 창 단위로 초기화
+                    self.frame_cache = []
+                    self.frame_cache_time = 0
+                except Exception as e:
+                    snapshots.append(
+                        DomSnapshot(
+                            engine="selenium",
+                            window_id=handle,
+                            window_title=base_title,
+                            window_url=base_url,
+                            is_popup=is_popup,
+                            frame_path="main",
+                            frame_label="main",
+                            document_url="",
+                            html="",
+                            error=self._short_webdriver_error(e),
+                        )
+                    )
+                    continue
+
+                try:
+                    current_title = str(self.driver.title or base_title)
+                except Exception:
+                    current_title = base_title
+                try:
+                    current_url = str(self.driver.current_url or base_url)
+                except Exception:
+                    current_url = base_url
+
+                frame_targets: List[Tuple[str, str]] = [("main", "main")]
+                if include_frames:
+                    try:
+                        frames = self.get_all_frames()
+                        for frame_path, frame_label in frames:
+                            frame_targets.append((str(frame_path), str(frame_label)))
+                    except Exception as e:
+                        snapshots.append(
+                            DomSnapshot(
+                                engine="selenium",
+                                window_id=handle,
+                                window_title=current_title,
+                                window_url=current_url,
+                                is_popup=is_popup,
+                                frame_path="frames_scan",
+                                frame_label="frames_scan",
+                                document_url="",
+                                html="",
+                                error=self._short_webdriver_error(e),
+                            )
+                        )
+
+                for frame_path, frame_label in frame_targets:
+                    normalized_path = "main" if frame_path in ("", "main") else frame_path
+                    normalized_label = frame_label or normalized_path
+                    document_url = ""
+                    html = ""
+                    error_text = ""
+
+                    try:
+                        self.driver.switch_to.window(handle)
+                        if normalized_path == "main":
+                            self.driver.switch_to.default_content()
+                            self.current_frame_path = ""
+                        elif not self.switch_to_frame_by_path(normalized_path):
+                            raise Exception(f"frame switch failed: {normalized_path}")
+
+                        try:
+                            document_url = str(
+                                self.driver.execute_script(
+                                    "return document.URL || window.location.href || '';"
+                                )
+                                or ""
+                            )
+                        except Exception:
+                            document_url = current_url
+
+                        html = str(
+                            self.driver.execute_script(
+                                "return document.documentElement ? document.documentElement.outerHTML : "
+                                "(document.body ? document.body.outerHTML : '');"
+                            )
+                            or ""
+                        )
+                    except Exception as e:
+                        error_text = self._short_webdriver_error(e)
+
+                    snapshots.append(
+                        DomSnapshot(
+                            engine="selenium",
+                            window_id=handle,
+                            window_title=current_title,
+                            window_url=current_url,
+                            is_popup=is_popup,
+                            frame_path=normalized_path,
+                            frame_label=normalized_label,
+                            document_url=document_url,
+                            html=html,
+                            error=error_text,
+                        )
+                    )
+
+            if current_handle:
+                try:
+                    self.driver.switch_to.window(current_handle)
+                except Exception:
+                    self._recover_to_available_window()
+
+            try:
+                self.switch_to_frame_by_path(original_frame_path or "main")
+            except Exception:
+                try:
+                    self.driver.switch_to.default_content()
+                    self.current_frame_path = ""
+                except Exception:
+                    pass
+
+            return snapshots
 
 
 
