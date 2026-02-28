@@ -1,4 +1,4 @@
-from xpath_dom_export import DomSnapshot, render_dom_report_htm
+from xpath_explorer.browser.dom_export import DomSnapshot, render_dom_report_htm
 
 
 def test_render_dom_report_htm_contains_summary_toc_and_escaped_dom():

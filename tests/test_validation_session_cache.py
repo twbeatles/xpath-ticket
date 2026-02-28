@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
 from selenium.webdriver.common.by import By
 
-from xpath_browser import BrowserManager
+from xpath_explorer.browser.browser import BrowserManager
 
 
 @dataclass

@@ -1,4 +1,4 @@
-from xpath_codegen import CodeGenerator
+from xpath_explorer.tools.codegen import CodeGenerator
 
 
 def test_xpath_template_library_has_minimum_templates():

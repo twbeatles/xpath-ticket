@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # 상수 임포트
-from xpath_constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
-from xpath_dom_export import DomSnapshot
-from xpath_perf import perf_span
+from xpath_explorer.core.constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
+from xpath_explorer.browser.dom_export import DomSnapshot
+from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
@@ -243,6 +243,10 @@ class PlaywrightManager:
         except Exception as e:
             self.last_error = str(e)
             logger.error(f"Playwright 브라우저 실행 실패: {e}")
+            try:
+                self.close()
+            except Exception as cleanup_error:
+                logger.debug(f"Playwright 초기화 실패 후 정리 중 예외(무시): {cleanup_error}")
             return False
     
     def _apply_stealth(self):
@@ -1053,4 +1057,3 @@ class NetworkAnalyzer:
 
     def close(self):
         self._manager.close()
-

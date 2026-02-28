@@ -1,8 +1,8 @@
 from PyQt6.QtCore import QCoreApplication
 
-from xpath_config import XPathItem
-from xpath_filter_proxy import XPathFilterProxyModel
-from xpath_table_model import XPathItemTableModel
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
+from xpath_explorer.ui.table_model import XPathItemTableModel
 
 
 def _ensure_qt_app():

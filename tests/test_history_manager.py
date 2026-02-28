@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from xpath_history import HistoryManager
+from xpath_explorer.state.history import HistoryManager
 
 
 @dataclass

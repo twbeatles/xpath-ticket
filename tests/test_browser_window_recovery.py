@@ -1,6 +1,6 @@
 from selenium.common.exceptions import NoSuchWindowException
 
-from xpath_browser import BrowserManager
+from xpath_explorer.browser.browser import BrowserManager
 
 
 class _FakeSwitchTo:

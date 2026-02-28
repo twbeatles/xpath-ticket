@@ -1,24 +1,43 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 """
 XPath Explorer v4.2 - PyInstaller spec (optimized).
-Build: pyinstaller xpath_explorer.spec
+Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
 """
 
 import os
 from PyInstaller.utils.hooks import collect_submodules
 os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+ENTRYPOINT_CANDIDATES = [
+    os.path.join(ROOT_DIR, 'xpath 조사기(모든 티켓 사이트).py'),
+    os.path.join(ROOT_DIR, 'xpath_explorer', 'main_window.py'),
+]
+ENTRYPOINT = next((path for path in ENTRYPOINT_CANDIDATES if os.path.exists(path)), None)
+if ENTRYPOINT is None:
+    raise FileNotFoundError("No valid entrypoint found for PyInstaller build")
 
 # ============================================================================
 # 히든 임포트 (필수만)
 # ============================================================================
 hiddenimports = [
     # 프로젝트 모듈
-    'xpath_ai', 'xpath_diff', 'xpath_history', 'xpath_optimizer',
-    'xpath_constants', 'xpath_styles', 'xpath_config', 'xpath_widgets',
+    'xpath_explorer.tools.ai',
+    'xpath_explorer.analysis.diff',
+    'xpath_explorer.state.history',
+    'xpath_explorer.tools.optimizer',
+    'xpath_explorer.core.constants',
+    'xpath_explorer.ui.styles',
+    'xpath_explorer.core.config',
+    'xpath_explorer.ui.widgets',
     # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
-    'xpath_browser', 'xpath_playwright', 'xpath_dom_export',
-    'xpath_workers', 'xpath_codegen', 'xpath_statistics',
-    'xpath_table_model', 'xpath_filter_proxy',
+    'xpath_explorer.browser.browser',
+    'xpath_explorer.browser.playwright',
+    'xpath_explorer.browser.dom_export',
+    'xpath_explorer.workers.background',
+    'xpath_explorer.tools.codegen',
+    'xpath_explorer.analysis.statistics',
+    'xpath_explorer.ui.table_model',
+    'xpath_explorer.ui.filter_proxy',
 
     # OpenAI
     'openai',
@@ -77,8 +96,8 @@ excludes = [
 # Analysis
 # ============================================================================
 a = Analysis(
-    ['xpath 조사기(모든 티켓 사이트).py'],
-    pathex=['.'],
+    [ENTRYPOINT],
+    pathex=[ROOT_DIR],
     binaries=[],
     datas=[],
     hiddenimports=hiddenimports,
@@ -136,3 +155,4 @@ exe = EXE(
 # - AI 기능: openai, google-genai 별도 설치
 # - Playwright: pip install playwright && playwright install chromium
 # ============================================================================
+

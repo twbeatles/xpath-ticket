@@ -5,7 +5,7 @@ XPath item filter proxy model.
 
 from PyQt6.QtCore import QSortFilterProxyModel, QModelIndex
 
-from xpath_table_model import XPathItemTableModel
+from xpath_explorer.ui.table_model import XPathItemTableModel
 
 
 class XPathFilterProxyModel(QSortFilterProxyModel):
@@ -97,4 +97,3 @@ class XPathFilterProxyModel(QSortFilterProxyModel):
         if not source_index.isValid():
             return None
         return model.get_item(source_index.row())
-

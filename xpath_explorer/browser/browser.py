@@ -9,9 +9,9 @@ from contextlib import contextmanager
 from threading import RLock
 from typing import List, Dict, Optional, Any, Tuple, Set
 
-from xpath_constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
-from xpath_dom_export import DomSnapshot
-from xpath_perf import perf_span
+from xpath_explorer.core.constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
+from xpath_explorer.browser.dom_export import DomSnapshot
+from xpath_explorer.core.perf import perf_span
 
 # 濡쒓굅 ?ㅼ젙
 logger = logging.getLogger('XPathExplorer')
@@ -1648,6 +1648,5 @@ class BrowserManager:
                     pass
 
             return snapshots
-
 
 

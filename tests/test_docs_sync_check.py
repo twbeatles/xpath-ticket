@@ -35,7 +35,15 @@ def test_docs_sync_check_detects_missing_required_tokens(tmp_path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
 
+    for rel in module.REQUIRED_TEST_FILES:
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# minimal\n", encoding="utf-8")
+
     findings = module.collect_findings(tmp_path)
     errors = [f for f in findings if f.level == "ERROR"]
     assert errors
     assert any(f.code == "MISSING_TOKEN" and f.target == "README.md" for f in errors)
+    assert any(f.code == "MISSING_DOC_TOKEN" and f.target == "docs/claude.md" for f in errors)
+    assert any(f.code == "MISSING_DOC_TOKEN" and f.target == "docs/gemini.md" for f in errors)
+    assert any(f.code == "MISSING_TEST_TOKEN" and f.target == "tests/test_batch_scenario_worker.py" for f in errors)

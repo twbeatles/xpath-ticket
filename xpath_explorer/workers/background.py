@@ -11,12 +11,12 @@ from typing import List, Optional, Any, Dict
 from threading import Event
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from xpath_browser import BrowserManager
-from xpath_config import XPathItem
-from xpath_constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
-from xpath_ai import XPathAIAssistant
-from xpath_diff import XPathDiffAnalyzer
-from xpath_perf import perf_span
+from xpath_explorer.browser.browser import BrowserManager
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
+from xpath_explorer.tools.ai import XPathAIAssistant
+from xpath_explorer.analysis.diff import XPathDiffAnalyzer
+from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
@@ -351,6 +351,7 @@ class BatchScenarioWorker(QThread):
     progress = pyqtSignal(int, str)
     step_completed = pyqtSignal(dict)
     completed = pyqtSignal(list, bool, str)  # results, cancelled, scenario_name
+    failed = pyqtSignal(str)
 
     def __init__(self, browser: BrowserManager, items: List[XPathItem], scenario: Dict[str, Any]):
         super().__init__()
@@ -367,6 +368,13 @@ class BatchScenarioWorker(QThread):
     def _to_float(value: Any, default: float = 0.0) -> float:
         try:
             return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
         except (TypeError, ValueError):
             return default
 
@@ -395,6 +403,7 @@ class BatchScenarioWorker(QThread):
                 "xpath": str(raw.get("xpath") or ""),
                 "frame_path": str(raw.get("frame_path") or ""),
                 "wait_seconds": max(0.0, wait_seconds),
+                "retries": max(0, cls._to_int(raw.get("retries", 0), default=0)),
             }
             steps.append(step)
         return steps
@@ -433,6 +442,49 @@ class BatchScenarioWorker(QThread):
             "count": int(result.get("count", 1 if success else 0) or 0),
         }
 
+    def _run_validate_with_retry(
+        self,
+        xpath: str,
+        preferred_frame: str,
+        session: Any,
+        retries: int,
+    ) -> Dict[str, Any]:
+        max_attempts = max(1, int(retries) + 1)
+        current_frame = preferred_frame or ""
+        last_outcome = {
+            "success": False,
+            "msg": "validation not executed",
+            "frame_path": current_frame,
+            "count": 0,
+        }
+        attempt = 1
+
+        for attempt in range(1, max_attempts + 1):
+            if self._stop_event.is_set():
+                last_outcome = {
+                    "success": False,
+                    "msg": "cancelled",
+                    "frame_path": current_frame,
+                    "count": 0,
+                }
+                break
+
+            outcome = self._run_validate(xpath, current_frame, session)
+            current_frame = str(outcome.get("frame_path", "") or current_frame)
+            last_outcome = {
+                "success": bool(outcome.get("success")),
+                "msg": str(outcome.get("msg", "")),
+                "frame_path": current_frame,
+                "count": int(outcome.get("count", 0) or 0),
+            }
+            if last_outcome["success"]:
+                break
+
+        last_outcome["attempt"] = attempt
+        last_outcome["max_attempts"] = max_attempts
+        last_outcome["retry_count"] = max(0, attempt - 1)
+        return last_outcome
+
     def run(self):
         scenario_name = str(self.scenario.get("name") or "시나리오")
         steps = self._normalize_steps(self.scenario.get("steps"))
@@ -448,10 +500,10 @@ class BatchScenarioWorker(QThread):
 
         begin_session = getattr(self.browser, "begin_validation_session", None)
         end_session = getattr(self.browser, "end_validation_session", None)
-        session = begin_session() if callable(begin_session) else None
-
+        session = None
         total = len(steps)
         try:
+            session = begin_session() if callable(begin_session) else None
             for idx, step in enumerate(steps, start=1):
                 if self._stop_event.is_set():
                     cancelled = True
@@ -471,6 +523,10 @@ class BatchScenarioWorker(QThread):
                 success = False
                 msg = ""
                 count = 0
+                retries = max(0, self._to_int(step.get("retries", 0), default=0))
+                attempt = 1
+                max_attempts = 1
+                retry_count = 0
 
                 if action in ("wait", "sleep"):
                     wait_seconds = float(step.get("wait_seconds", 0.0))
@@ -489,22 +545,28 @@ class BatchScenarioWorker(QThread):
                         if not frame_path:
                             frame_path = item.found_frame or ""
                         target = xpath
-                        outcome = self._run_validate(xpath, frame_path, session)
+                        outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
                         success = bool(outcome["success"])
                         msg = str(outcome["msg"])
                         frame_path = str(outcome["frame_path"])
                         count = int(outcome["count"])
+                        attempt = int(outcome["attempt"])
+                        max_attempts = int(outcome["max_attempts"])
+                        retry_count = int(outcome["retry_count"])
                 elif action in ("validate_xpath", "xpath", "validate"):
                     if not xpath:
                         success = False
                         msg = "xpath is empty"
                     else:
                         target = xpath
-                        outcome = self._run_validate(xpath, frame_path, session)
+                        outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
                         success = bool(outcome["success"])
                         msg = str(outcome["msg"])
                         frame_path = str(outcome["frame_path"])
                         count = int(outcome["count"])
+                        attempt = int(outcome["attempt"])
+                        max_attempts = int(outcome["max_attempts"])
+                        retry_count = int(outcome["retry_count"])
                 else:
                     success = False
                     msg = f"unsupported action: {action}"
@@ -522,6 +584,9 @@ class BatchScenarioWorker(QThread):
                     "success": success,
                     "msg": msg,
                     "duration_ms": duration_ms,
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                    "retry_count": retry_count,
                 }
                 results.append(row)
                 self.step_completed.emit(row)
@@ -532,6 +597,9 @@ class BatchScenarioWorker(QThread):
 
             self.progress.emit(100, "시나리오 실행 완료")
             self.completed.emit(results, cancelled, scenario_name)
+        except Exception as e:
+            logger.error(f"시나리오 워커 실행 실패: {e}")
+            self.failed.emit(str(e))
         finally:
             if callable(end_session):
                 try:

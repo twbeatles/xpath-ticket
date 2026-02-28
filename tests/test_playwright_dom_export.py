@@ -1,4 +1,4 @@
-from xpath_playwright import PlaywrightManager
+from xpath_explorer.browser.playwright import PlaywrightManager
 
 
 class _FakeFrame:

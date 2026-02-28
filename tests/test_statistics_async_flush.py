@@ -1,7 +1,7 @@
 import json
 import time
 
-from xpath_statistics import StatisticsManager
+from xpath_explorer.analysis.statistics import StatisticsManager
 
 
 def test_statistics_record_is_batched_and_shutdown_flushes(tmp_path):

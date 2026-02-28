@@ -11,7 +11,7 @@ from copy import deepcopy
 from threading import RLock  # RLock으로 변경하여 재진입 가능하도록 함
 import json
 
-from xpath_constants import HISTORY_MAX_SIZE
+from xpath_explorer.core.constants import HISTORY_MAX_SIZE
 
 
 @dataclass

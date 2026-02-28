@@ -8,8 +8,8 @@ from typing import Dict, List, Optional
 from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PyQt6.QtGui import QColor
 
-from xpath_config import XPathItem
-from xpath_constants import category_to_label
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.core.constants import category_to_label
 
 
 class XPathItemTableModel(QAbstractTableModel):

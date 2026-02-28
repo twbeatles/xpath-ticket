@@ -1,7 +1,7 @@
 import ast
 
-from xpath_codegen import ActionStep, CodeGenerator, CodeTemplate
-from xpath_config import SiteConfig
+from xpath_explorer.tools.codegen import ActionStep, CodeGenerator, CodeTemplate
+from xpath_explorer.core.config import SiteConfig
 
 
 def test_codegen_all_templates_generate_without_error():

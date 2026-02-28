@@ -1,7 +1,7 @@
 ﻿from PyQt6.QtCore import QCoreApplication
 
-from xpath_config import XPathItem
-from xpath_workers import BatchScenarioWorker
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.workers.background import BatchScenarioWorker
 
 
 class _FakeBrowser:
@@ -9,6 +9,7 @@ class _FakeBrowser:
         self.begin_calls = 0
         self.end_calls = 0
         self.validate_calls = []
+        self._flaky_calls = 0
 
     def is_alive(self):
         return True
@@ -24,7 +25,17 @@ class _FakeBrowser:
         self.validate_calls.append((xpath, preferred_frame, session))
         if xpath == "//ok":
             return {"found": True, "msg": "", "frame_path": preferred_frame or "main", "count": 1}
+        if xpath == "//flaky":
+            self._flaky_calls += 1
+            if self._flaky_calls >= 2:
+                return {"found": True, "msg": "recovered", "frame_path": preferred_frame or "main", "count": 1}
+            return {"found": False, "msg": "temporary failure", "frame_path": preferred_frame or "main", "count": 0}
         return {"found": False, "msg": "not found", "frame_path": preferred_frame or "main", "count": 0}
+
+
+class _BrokenSessionBrowser(_FakeBrowser):
+    def begin_validation_session(self):
+        raise RuntimeError("session exploded")
 
 
 def _ensure_qt_app():
@@ -111,3 +122,59 @@ def test_batch_scenario_worker_cancel_before_run_marks_cancelled():
     assert browser.begin_calls == 1
     assert browser.end_calls == 1
     assert browser.validate_calls == []
+
+
+def test_batch_scenario_worker_retries_and_reports_attempt_metadata():
+    _ensure_qt_app()
+    browser = _FakeBrowser()
+    scenario = {
+        "name": "retry",
+        "steps": [
+            {"name": "flaky xpath", "action": "validate_xpath", "xpath": "//flaky", "retries": 2},
+        ],
+    }
+
+    completed = {}
+    worker = BatchScenarioWorker(browser, [], scenario)
+    worker.completed.connect(
+        lambda results, cancelled, scenario_name: completed.update(
+            results=results,
+            cancelled=cancelled,
+            scenario_name=scenario_name,
+        )
+    )
+
+    worker.run()
+
+    assert completed["cancelled"] is False
+    assert completed["scenario_name"] == "retry"
+    assert len(completed["results"]) == 1
+    row = completed["results"][0]
+    assert row["success"] is True
+    assert row["attempt"] == 2
+    assert row["retry_count"] == 1
+    assert row["max_attempts"] == 3
+    assert len(browser.validate_calls) == 2
+
+
+def test_batch_scenario_worker_emits_failed_signal_for_unhandled_error():
+    _ensure_qt_app()
+    browser = _BrokenSessionBrowser()
+    scenario = {
+        "name": "failed",
+        "steps": [
+            {"name": "item check", "action": "validate_xpath", "xpath": "//ok"},
+        ],
+    }
+
+    failed_messages = []
+    completed = []
+    worker = BatchScenarioWorker(browser, [], scenario)
+    worker.failed.connect(lambda message: failed_messages.append(message))
+    worker.completed.connect(lambda *_args: completed.append(True))
+
+    worker.run()
+
+    assert completed == []
+    assert failed_messages
+    assert "session exploded" in failed_messages[0]

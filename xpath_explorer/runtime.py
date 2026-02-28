@@ -37,6 +37,15 @@ class ErrorTelemetryStore:
     def _event_key(event: ErrorTelemetryEvent) -> str:
         return f"{event.module}|{event.function}|{event.message}"
 
+    @staticmethod
+    def _escape_markdown_table_cell(value: str) -> str:
+        text = str(value or "")
+        text = text.replace("\\", "\\\\")
+        text = text.replace("`", "\\`")
+        text = text.replace("|", "\\|")
+        text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
+        return text
+
     def record(self, record: logging.LogRecord):
         if record.levelno < logging.ERROR:
             return
@@ -122,8 +131,11 @@ class ErrorTelemetryStore:
             "|---:|---|---|---|",
         ]
         for row in summary["top_errors"]:
+            module = self._escape_markdown_table_cell(row["module"])
+            function = self._escape_markdown_table_cell(row["function"])
+            message = self._escape_markdown_table_cell(row["message"])
             lines.append(
-                f"| {row['count']} | `{row['module']}` | `{row['function']}` | {row['message']} |"
+                f"| {row['count']} | `{module}` | `{function}` | {message} |"
             )
         if not summary["top_errors"]:
             lines.append("| 0 | - | - | No errors captured |")
@@ -138,9 +150,11 @@ class ErrorTelemetryStore:
             ]
         )
         for event in recent:
-            location = f"{event.module}.{event.function}:{event.line}"
+            location = self._escape_markdown_table_cell(f"{event.module}.{event.function}:{event.line}")
+            level = self._escape_markdown_table_cell(event.level)
+            message = self._escape_markdown_table_cell(event.message)
             lines.append(
-                f"| {event.timestamp_iso} | {event.level} | `{location}` | {event.message} |"
+                f"| {event.timestamp_iso} | {level} | `{location}` | {message} |"
             )
         if not recent:
             lines.append("| - | - | - | No recent events |")
@@ -172,16 +186,18 @@ def setup_logger():
         console_handler.setLevel(logging.INFO)
         console_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%H:%M:%S')
         console_handler.setFormatter(console_format)
-
-        log_dir = Path.home() / '.xpath_explorer'
-        log_dir.mkdir(exist_ok=True)
-        file_handler = logging.FileHandler(log_dir / 'debug.log', encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-        file_format = logging.Formatter('%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s')
-        file_handler.setFormatter(file_format)
-
         logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
+
+        try:
+            log_dir = Path.home() / '.xpath_explorer'
+            log_dir.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_dir / 'debug.log', encoding='utf-8')
+            file_handler.setLevel(logging.DEBUG)
+            file_format = logging.Formatter('%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s')
+            file_handler.setFormatter(file_format)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            logger.warning(f"File logging disabled (console only): {e}")
 
     has_telemetry_handler = any(isinstance(h, ErrorTelemetryHandler) for h in logger.handlers)
     if not has_telemetry_handler:

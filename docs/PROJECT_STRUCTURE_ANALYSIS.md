@@ -323,3 +323,34 @@ UI 액션 (버튼/단축키/메뉴)
 ### 다음 1개 작업 추천
 - P0 첫 작업으로 **문서-코드 정합성 체크리스트 자동 생성**을 착수하는 것이 가장 효과적입니다.
   - 이유: 이후 모든 기능 확장의 품질 하한선을 고정할 수 있음.
+
+---
+
+## 2026-02-28 정합성 업데이트
+
+### 현재 기준 경로
+- 실행 진입점: `xpath 조사기(모든 티켓 사이트).py`
+- 메인 윈도우: `xpath_explorer/main_window.py`
+- 브라우저 계층: `xpath_explorer/browser/browser.py`, `xpath_explorer/browser/playwright.py`
+- 워커 계층: `xpath_explorer/workers/background.py`
+- 도구 계층: `xpath_explorer/tools/ai.py`, `xpath_explorer/tools/codegen.py`, `xpath_explorer/tools/optimizer.py`
+- 분석 계층: `xpath_explorer/analysis/diff.py`, `xpath_explorer/analysis/statistics.py`
+- 상태 계층: `xpath_explorer/state/history.py`
+- UI 계층: `xpath_explorer/ui/widgets.py`, `xpath_explorer/ui/table_model.py`, `xpath_explorer/ui/filter_proxy.py`, `xpath_explorer/ui/styles.py`
+
+### 빌드 스펙
+- 위치: `packaging/pyinstaller/xpath_explorer.spec`
+- 명령: `pyinstaller packaging/pyinstaller/xpath_explorer.spec`
+
+### 품질 점검 명령
+- `python scripts/check_docs_sync.py --strict-warnings`
+- `python scripts/run_quality_checks.py --strict-doc-warnings`
+- `pytest -q`
+
+### 구현 점검 반영 항목 (요약)
+- Playwright launch 실패 시 자원 정리 강화
+- BatchScenarioWorker 실패 시그널/재시도 메타데이터 추가
+- 시나리오 성공률 기준 토스트/요약 판정 보정
+- 설정 저장/복원 4개 키 반영
+- 로거 파일 핸들러 폴백 + Markdown 테이블 escape 보강
+- 종료 시 워커 정리 helper 일관화

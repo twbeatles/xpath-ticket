@@ -9,17 +9,17 @@ from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtCore import QTimer, QSettings
 from PyQt6.QtGui import QAction
 
-from xpath_constants import SEARCH_DEBOUNCE_MS, LIVE_PREVIEW_DEBOUNCE_MS
-from xpath_config import SiteConfig
-from xpath_browser import BrowserManager
-from xpath_codegen import CodeGenerator
-from xpath_statistics import StatisticsManager
-from xpath_optimizer import XPathOptimizer
-from xpath_history import HistoryManager
-from xpath_ai import XPathAIAssistant
-from xpath_diff import XPathDiffAnalyzer
-from xpath_table_model import XPathItemTableModel
-from xpath_filter_proxy import XPathFilterProxyModel
+from xpath_explorer.core.constants import SEARCH_DEBOUNCE_MS, LIVE_PREVIEW_DEBOUNCE_MS
+from xpath_explorer.core.config import SiteConfig
+from xpath_explorer.browser.browser import BrowserManager
+from xpath_explorer.tools.codegen import CodeGenerator
+from xpath_explorer.analysis.statistics import StatisticsManager
+from xpath_explorer.tools.optimizer import XPathOptimizer
+from xpath_explorer.state.history import HistoryManager
+from xpath_explorer.tools.ai import XPathAIAssistant
+from xpath_explorer.analysis.diff import XPathDiffAnalyzer
+from xpath_explorer.ui.table_model import XPathItemTableModel
+from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
 
 from xpath_explorer.runtime import logger
 from xpath_explorer.mixins.ui_mixin import ExplorerUIMixin

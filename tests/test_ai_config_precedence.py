@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from xpath_ai import XPathAIAssistant
+from xpath_explorer.tools.ai import XPathAIAssistant
 
 
 def _patch_home(monkeypatch, tmp_path: Path):
-    # Path.home() is used inside xpath_ai.py
+    # Path.home() is used inside xpath_explorer/tools/ai.py
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
 

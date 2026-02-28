@@ -1,4 +1,4 @@
-from xpath_config import SiteConfig, XPathItem
+from xpath_explorer.core.config import SiteConfig, XPathItem
 
 
 def test_get_item_uses_index_after_add_update_remove():

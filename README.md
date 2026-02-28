@@ -57,10 +57,10 @@
 
 ```bash
 # (권장) requirements 사용
-pip install -r requirements-full.txt
+pip install -r requirements/requirements-full.txt
 
 # 최소 설치만 원하면
-# pip install -r requirements.txt
+# pip install -r requirements/requirements.txt
 
 # Playwright Chromium 설치 (선택 기능이지만 EXE에서도 동일 기능 사용 시 필요)
 python -m playwright install chromium
@@ -82,7 +82,7 @@ python "xpath 조사기(모든 티켓 사이트).py"
 
 ```bash
 # UPX 설치 시 경량화 적용 (권장)
-pyinstaller xpath_explorer.spec
+pyinstaller packaging/pyinstaller/xpath_explorer.spec
 ```
 
 빌드 결과: `dist/XPathExplorer_v4.2.exe` (약 50-80MB)
@@ -91,26 +91,23 @@ pyinstaller xpath_explorer.spec
 
 ## 📁 프로젝트 구조
 
-| 파일 | 설명 |
+| 경로 | 설명 |
 |------|------|
 | `xpath 조사기(모든 티켓 사이트).py` | 레거시 진입점 래퍼 |
 | `xpath_explorer/main_window.py` | 메인 윈도우 조합 |
-| `xpath_explorer/mixins/ui_mixin.py` | UI 조립 |
-| `xpath_explorer/mixins/browser_mixin.py` | 브라우저 액션 |
-| `xpath_explorer/mixins/data_mixin.py` | 데이터/설정/내보내기 |
-| `xpath_explorer/mixins/tools_mixin.py` | AI/통계/도구 액션 |
-| `xpath_ai.py` | AI 어시스턴트 |
-| `xpath_browser.py` | 브라우저 제어 (Selenium) |
-| `xpath_playwright.py` | Playwright 통합 |
-| `xpath_optimizer.py` | XPath 최적화 |
-| `xpath_history.py` | Undo/Redo |
-| `xpath_diff.py` | 변경사항 분석 |
-| `xpath_codegen.py` | 코드 생성기 |
-| `xpath_statistics.py` | 테스트 통계 |
-| `xpath_table_model.py` | 목록 테이블 모델 |
-| `xpath_filter_proxy.py` | 검색/필터 프록시 |
-| `xpath_dom_export.py` | DOM 리포트 렌더링 |
-| `xpath_styles.py` | UI 스타일 |
+| `xpath_explorer/mixins/` | UI 조립/브라우저 액션/데이터/도구 Mixin |
+| `xpath_explorer/core/` | 상수, 설정 모델, 성능 로깅 |
+| `xpath_explorer/browser/` | Selenium/Playwright, DOM Export |
+| `xpath_explorer/workers/` | 백그라운드 QThread 워커 |
+| `xpath_explorer/tools/` | AI, 코드 생성, XPath 최적화 |
+| `xpath_explorer/analysis/` | Diff 분석, 검증 통계 |
+| `xpath_explorer/state/` | Undo/Redo 히스토리 상태 |
+| `xpath_explorer/ui/` | 스타일, 위젯, 테이블 모델/프록시 |
+| `docs/` | 운영/분석 문서 (`claude.md`, `gemini.md`, 구조 분석) |
+| `requirements/` | 환경별 의존성 목록 |
+| `packaging/pyinstaller/` | 배포 스펙 파일 |
+| `config/` | 샘플/백업 설정 JSON |
+| `archive/` | 과거 스냅샷/레거시 스크립트 보관 |
 
 ---
 
@@ -159,6 +156,15 @@ MIT License
   - `xpath_explorer/main_window.py`
 - 런타임 로거 초기화:
   - `xpath_explorer/runtime.py`
+- 기능별 패키지:
+  - `xpath_explorer/core/`
+  - `xpath_explorer/browser/`
+  - `xpath_explorer/workers/`
+  - `xpath_explorer/workers/background.py`
+  - `xpath_explorer/tools/`
+  - `xpath_explorer/analysis/`
+  - `xpath_explorer/state/`
+  - `xpath_explorer/ui/`
 - 기존 단일 클래스 `XPathExplorer` 메서드는 책임별로 분리되었습니다.
   - `xpath_explorer/mixins/ui_mixin.py`
   - `xpath_explorer/mixins/browser_mixin.py`
@@ -188,3 +194,27 @@ python scripts/check_docs_sync.py
 ```bash
 python scripts/run_quality_checks.py
 ```
+
+## 구현 점검 반영 (2026-02-28)
+
+- `IMPLEMENTATION_REVIEW.md`의 실행 계획 항목을 코드에 반영했습니다.
+- 핵심 반영:
+  - Playwright 초기화 실패 시 부분 생성 리소스 정리
+  - 배치 시나리오 워커 실패 시그널/재시도 메타데이터(`attempt`, `retry_count`, `max_attempts`)
+  - 시나리오 결과 판정 임계치(100%/80~99%/<80%, cancelled, total=0)
+  - 설정 저장/복원(`ui/font_size`, `ui/right_tab_index`, `ui/url_panel_expanded`, `ui/last_preset`)
+  - 오류 텔레메트리 Markdown escape 및 로거 파일 핸들러 폴백
+  - 종료 시 워커 정리 helper 일원화
+- 문서 정합성 체크는 계층형(README/docs/tests)으로 검증합니다.
+
+```bash
+python scripts/check_docs_sync.py --strict-warnings
+python scripts/run_quality_checks.py --strict-doc-warnings
+```
+
+## 배포 스펙 점검 메모
+
+- 현재 배포 스펙 파일은 `packaging/pyinstaller/xpath_explorer.spec`입니다.
+- 엔트리포인트는 레거시 래퍼(`xpath 조사기(모든 티켓 사이트).py`)를 사용하고,
+  실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
+- `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.

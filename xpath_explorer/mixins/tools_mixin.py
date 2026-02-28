@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 import csv
@@ -6,6 +6,7 @@ import json
 import os
 import random
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -23,30 +24,49 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve, QMimeData
 from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySequence, QDrag
 
-from xpath_constants import (
-    APP_TITLE, APP_VERSION, SITE_PRESETS,
-    BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
-    LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
+from xpath_explorer.core.constants import (
+    APP_TITLE,
+    APP_VERSION,
+    SITE_PRESETS,
+    BROWSER_CHECK_INTERVAL,
+    SEARCH_DEBOUNCE_MS,
+    LIVE_PREVIEW_DEBOUNCE_MS,
+    WORKER_WAIT_TIMEOUT,
     category_to_label,
 )
-from xpath_styles import STYLE
-from xpath_config import XPathItem, SiteConfig
-from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton, CollapsibleBox
-from xpath_browser import BrowserManager
-from xpath_workers import (
-    PickerWatcher, ValidateWorker, LivePreviewWorker,
-    AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker, BatchScenarioWorker,
+from xpath_explorer.ui.styles import STYLE
+from xpath_explorer.core.config import XPathItem, SiteConfig
+from xpath_explorer.ui.widgets import (
+    ToastWidget,
+    NoWheelComboBox,
+    AnimatedStatusIndicator,
+    IconButton,
+    CollapsibleBox,
 )
-from xpath_perf import perf_span, log_perf_summary
-from xpath_codegen import CodeGenerator, CodeTemplate, XPathTemplate
-from xpath_statistics import StatisticsManager
-from xpath_optimizer import XPathOptimizer, XPathAlternative
-from xpath_history import HistoryManager
-from xpath_ai import XPathAIAssistant
-from xpath_diff import XPathDiffAnalyzer
-from xpath_table_model import XPathItemTableModel
-from xpath_filter_proxy import XPathFilterProxyModel
-from xpath_dom_export import render_dom_report_htm, render_dom_diff_report_htm, diff_dom_snapshots
+from xpath_explorer.browser.browser import BrowserManager
+from xpath_explorer.workers.background import (
+    PickerWatcher,
+    ValidateWorker,
+    LivePreviewWorker,
+    AIGenerateWorker,
+    DiffAnalyzeWorker,
+    BatchTestWorker,
+    BatchScenarioWorker,
+)
+from xpath_explorer.core.perf import perf_span, log_perf_summary
+from xpath_explorer.tools.codegen import CodeGenerator, CodeTemplate, XPathTemplate
+from xpath_explorer.analysis.statistics import StatisticsManager
+from xpath_explorer.tools.optimizer import XPathOptimizer, XPathAlternative
+from xpath_explorer.state.history import HistoryManager
+from xpath_explorer.tools.ai import XPathAIAssistant
+from xpath_explorer.analysis.diff import XPathDiffAnalyzer
+from xpath_explorer.ui.table_model import XPathItemTableModel
+from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
+from xpath_explorer.browser.dom_export import (
+    render_dom_report_htm,
+    render_dom_diff_report_htm,
+    diff_dom_snapshots,
+)
 
 from xpath_explorer.runtime import logger, error_telemetry
 
@@ -175,8 +195,10 @@ class ExplorerToolsMixin:
         layout.addWidget(lbl_summary)
 
         table = QTableWidget()
-        table.setColumnCount(7)
-        table.setHorizontalHeaderLabels(["#", "이름", "액션", "대상", "결과", "메시지", "ms"])
+        table.setColumnCount(10)
+        table.setHorizontalHeaderLabels(
+            ["#", "이름", "액션", "대상", "결과", "메시지", "ms", "시도", "재시도", "최대시도"]
+        )
         table_hh = table.horizontalHeader()
         if table_hh is not None:
             table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -186,6 +208,9 @@ class ExplorerToolsMixin:
             table_hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
             table_hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
             table_hh.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
+            table_hh.setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
         table_vh = table.verticalHeader()
         if table_vh is not None:
             table_vh.setVisible(False)
@@ -213,6 +238,9 @@ class ExplorerToolsMixin:
             table.setItem(r, 4, status_item)
             table.setItem(r, 5, QTableWidgetItem(str(row.get("msg", ""))))
             table.setItem(r, 6, QTableWidgetItem(str(row.get("duration_ms", 0))))
+            table.setItem(r, 7, QTableWidgetItem(str(row.get("attempt", 1))))
+            table.setItem(r, 8, QTableWidgetItem(str(row.get("retry_count", 0))))
+            table.setItem(r, 9, QTableWidgetItem(str(row.get("max_attempts", 1))))
 
             if row.get("action") in ("validate_item", "item"):
                 item_name = str(row.get("item_name", "") or "")
@@ -234,6 +262,15 @@ class ExplorerToolsMixin:
             progress.setValue(value)
             lbl_summary.setText(message)
 
+        def on_failed(message: str):
+            nonlocal worker
+            worker = None
+            self.scenario_worker = None
+            set_run_state(False)
+            reason = str(message or "알 수 없는 오류")
+            lbl_summary.setText(f"실패: {reason}")
+            self._show_toast(f"시나리오 실행 실패: {reason}", "error")
+
         def on_completed(results: list, cancelled: bool, scenario_name: str):
             nonlocal worker
             worker = None
@@ -243,15 +280,21 @@ class ExplorerToolsMixin:
 
             success_count = sum(1 for row in results if row.get("success"))
             total = len(results)
-            status_text = "취소됨" if cancelled else "완료"
-            lbl_summary.setText(
-                f"{scenario_name} {status_text}: 성공 {success_count}/{total}"
+            success_rate = (success_count / total * 100.0) if total > 0 else 0.0
+            total_retries = sum(max(0, int(row.get("retry_count", 0) or 0)) for row in results)
+            toast_type, status_text = self._classify_scenario_result(success_count, total, cancelled)
+            summary_text = (
+                f"성공 {success_count}/{total} | 성공률 {success_rate:.1f}% | 총 재시도 {total_retries}"
             )
-            toast_type = "warning" if cancelled else "success"
-            self._show_toast(
-                f"시나리오 {status_text}: 성공 {success_count}/{total}",
-                toast_type,
-            )
+            lbl_summary.setText(f"{scenario_name} {status_text}: {summary_text}")
+            self._show_toast(f"시나리오 {status_text}: {summary_text}", toast_type)
+            if results:
+                self._show_batch_report(
+                    results,
+                    cancelled=cancelled,
+                    title=f"시나리오 결과 - {scenario_name}",
+                    retry_total=total_retries,
+                )
 
         def start_run():
             nonlocal worker
@@ -281,6 +324,7 @@ class ExplorerToolsMixin:
             worker.progress.connect(on_progress)
             worker.step_completed.connect(append_step_row)
             worker.completed.connect(on_completed)
+            worker.failed.connect(on_failed)
             set_run_state(True)
             worker.start()
 
@@ -333,50 +377,116 @@ class ExplorerToolsMixin:
         dialog.finished.connect(lambda _=None: on_dialog_close())
         dialog.exec()
 
-    def _show_batch_report(self, results: list, cancelled: bool = False):
-        """배치 테스트 결과 리포트"""
+    def _classify_scenario_result(self, success_count: int, total: int, cancelled: bool) -> Tuple[str, str]:
+        if cancelled:
+            return ("warning", "취소됨")
+        if total <= 0:
+            return ("warning", "완료(실행 결과 없음)")
+
+        success_rate = (float(success_count) / float(total)) * 100.0
+        if success_rate >= 100.0:
+            return ("success", "완료")
+        if success_rate >= 80.0:
+            return ("warning", "완료(일부 경고)")
+        return ("error", "완료(실패 다수)")
+
+    @staticmethod
+    def _top_failure_reasons(results: List[Dict[str, Any]], top_n: int = 5) -> List[Tuple[str, int]]:
+        counter: Counter[str] = Counter()
+        for row in results:
+            if bool(row.get("success")):
+                continue
+            reason = str(row.get("msg", "") or "Unknown error").strip() or "Unknown error"
+            counter[reason] += 1
+        return list(counter.most_common(max(1, int(top_n))))
+
+    def _show_batch_report(
+        self,
+        results: list,
+        cancelled: bool = False,
+        title: str = "배치 테스트 결과",
+        retry_total: Optional[int] = None,
+    ):
+        """배치/시나리오 결과 리포트."""
         dialog = QDialog(self)
-        title = "배치 테스트 결과" + (" (취소됨)" if cancelled else "")
-        dialog.setWindowTitle(title)
-        dialog.resize(700, 500)
-        
+        window_title = title + (" (취소됨)" if cancelled else "")
+        dialog.setWindowTitle(window_title)
+        dialog.resize(760, 620)
+
         layout = QVBoxLayout(dialog)
-        
-        # 요약
+
         total = len(results)
-        success_count = sum(1 for r in results if r['success'])
-        success_rate = (success_count / total * 100) if total > 0 else 0
-        
-        cancelled_text = " ⚠️ (중도 취소됨)" if cancelled else ""
-        summary = QLabel(f"총 {total}개 테스트 | ✅ 성공: {success_count} | ❌ 실패: {total - success_count} | 성공률: {success_rate:.1f}%{cancelled_text}")
-        summary.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
+        success_count = sum(1 for r in results if bool(r.get("success")))
+        success_rate = (success_count / total * 100.0) if total > 0 else 0.0
+        if retry_total is None:
+            retry_total = sum(max(0, int(r.get("retry_count", 0) or 0)) for r in results)
+
+        cancelled_text = " | 상태: 취소됨" if cancelled else ""
+        summary = QLabel(
+            f"총 {total}개 | 성공 {success_count} | 실패 {total - success_count} | "
+            f"성공률 {success_rate:.1f}% | 총 재시도 {retry_total}{cancelled_text}"
+        )
+        summary.setStyleSheet("font-size: 15px; font-weight: bold; padding: 8px;")
         layout.addWidget(summary)
-        
-        # 결과 테이블
+
         table = QTableWidget()
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(["상태", "이름", "결과"])
         batch_hh = table.horizontalHeader()
         if batch_hh is not None:
+            batch_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            batch_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
             batch_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        
+
         for r in results:
             row = table.rowCount()
             table.insertRow(row)
-            
-            status = QTableWidgetItem("✅" if r['success'] else "❌")
+            success = bool(r.get("success"))
+            status = QTableWidgetItem("✅" if success else "❌")
             status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             table.setItem(row, 0, status)
-            table.setItem(row, 1, QTableWidgetItem(r['name']))
-            table.setItem(row, 2, QTableWidgetItem(r['msg'] if not r['success'] else "Found"))
-        
+            table.setItem(row, 1, QTableWidgetItem(str(r.get("name", r.get("item_name", "-")))))
+            table.setItem(row, 2, QTableWidgetItem(str(r.get("msg", "Found" if success else "Not found"))))
+
         layout.addWidget(table)
-        
-        # 닫기 버튼
+
+        top_failures = self._top_failure_reasons(results, top_n=5)
+        if top_failures:
+            layout.addWidget(QLabel("Top 실패 원인"))
+            txt_failures = QPlainTextEdit()
+            txt_failures.setReadOnly(True)
+            txt_failures.setMaximumHeight(120)
+            txt_failures.setPlainText(
+                "\n".join(f"{idx}. {reason} ({count}회)" for idx, (reason, count) in enumerate(top_failures, start=1))
+            )
+            layout.addWidget(txt_failures)
+
+        telemetry_summary = error_telemetry.get_summary(top_n=5)
+        layout.addWidget(QLabel("에러 텔레메트리 요약"))
+        txt_telemetry = QPlainTextEdit()
+        txt_telemetry.setReadOnly(True)
+        txt_telemetry.setMaximumHeight(140)
+        top_errors = telemetry_summary.get("top_errors", [])
+        telemetry_lines = [
+            f"총 에러: {telemetry_summary.get('total_errors', 0)}",
+            f"치명적 에러: {telemetry_summary.get('critical_count', 0)}",
+            f"최근 버퍼 이벤트: {telemetry_summary.get('buffered_events', 0)}",
+        ]
+        if top_errors:
+            telemetry_lines.append("")
+            telemetry_lines.append("Top Error Types:")
+            for idx, row in enumerate(top_errors, start=1):
+                telemetry_lines.append(
+                    f"{idx}. {row.get('module', '?')}.{row.get('function', '?')} - "
+                    f"{row.get('message', '')} ({row.get('count', 0)}회)"
+                )
+        txt_telemetry.setPlainText("\n".join(telemetry_lines))
+        layout.addWidget(txt_telemetry)
+
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btn_box.rejected.connect(dialog.reject)
         layout.addWidget(btn_box)
-        
+
         dialog.exec()
 
     def _show_macro_generator(self):
@@ -574,7 +684,7 @@ class ExplorerToolsMixin:
     def _show_network_analyzer(self):
         """네트워크 분석 다이얼로그"""
         try:
-            from xpath_playwright import NetworkAnalyzer
+            from xpath_explorer.browser.playwright import NetworkAnalyzer
         except ImportError:
             self._show_toast("Playwright 모듈을 찾을 수 없습니다.", "error")
             return
@@ -1071,7 +1181,7 @@ class ExplorerToolsMixin:
     def _toggle_playwright(self):
         """Playwright 브라우저 토글"""
         try:
-            from xpath_playwright import PlaywrightManager
+            from xpath_explorer.browser.playwright import PlaywrightManager
             
             if self.pw_manager is None:
                 self.pw_manager = PlaywrightManager()
@@ -1739,71 +1849,113 @@ class ExplorerToolsMixin:
         super().keyPressEvent(a0)
 
     def _save_settings(self):
-        """설정 저장 (추가 설정용 확장 포인트)"""
-        # 현재는 geometry만 별도 저장, 필요시 확장
-        pass
+        """UI 설정 저장."""
+        if not hasattr(self, "settings") or self.settings is None:
+            return
+
+        self.settings.setValue("ui/font_size", int(getattr(self, "_font_size", 14)))
+
+        right_tab_index = 0
+        right_tabs = getattr(self, "right_tabs", None)
+        if right_tabs is not None and hasattr(right_tabs, "currentIndex"):
+            try:
+                right_tab_index = int(right_tabs.currentIndex())
+            except Exception:
+                right_tab_index = 0
+        self.settings.setValue("ui/right_tab_index", right_tab_index)
+
+        url_panel_expanded = True
+        url_collapsible = getattr(self, "url_collapsible", None)
+        if url_collapsible is not None:
+            url_panel_expanded = bool(getattr(url_collapsible, "_expanded", True))
+        self.settings.setValue("ui/url_panel_expanded", url_panel_expanded)
+
+        preset_name = ""
+        combo_preset = getattr(self, "combo_preset", None)
+        if combo_preset is not None and hasattr(combo_preset, "currentText"):
+            try:
+                preset_name = str(combo_preset.currentText() or "").strip()
+            except Exception:
+                preset_name = ""
+        if not preset_name and hasattr(self, "config") and getattr(self, "config", None) is not None:
+            preset_name = str(getattr(self.config, "name", "") or "").strip()
+        if preset_name:
+            self.settings.setValue("ui/last_preset", preset_name)
+
+    def _stop_worker_thread(self, worker: Any, worker_name: str, timeout: int = WORKER_WAIT_TIMEOUT):
+        if worker is None:
+            return
+        try:
+            if not worker.isRunning():
+                return
+        except Exception:
+            return
+
+        try:
+            cancel_fn = getattr(worker, "cancel", None)
+            stop_fn = getattr(worker, "stop", None)
+            if callable(cancel_fn):
+                cancel_fn()
+            elif callable(stop_fn):
+                stop_fn()
+
+            wait_fn = getattr(worker, "wait", None)
+            if callable(wait_fn):
+                waited = wait_fn(timeout)
+                if waited is False:
+                    logger.warning(f"{worker_name} 종료 대기 타임아웃")
+        except Exception as e:
+            logger.warning(f"{worker_name} 종료 중 예외: {e}")
 
     def closeEvent(self, a0):
         """종료 처리"""
         logger.info("앱 종료 시작...")
 
-        # 종료 중 상태 체크 타이머가 추가 로그를 만들지 않도록 선제 정지
-        if hasattr(self, "check_timer") and self.check_timer is not None:
-            self.check_timer.stop()
-        
-        # 설정 저장
-        self.settings.setValue("geometry", self.saveGeometry())
-        self._save_settings()  # 추가 설정 저장
-        
-        # 워커 스레드 정리
-        if self.picker_watcher and self.picker_watcher.isRunning():
-            logger.debug("PickerWatcher 종료 대기 중...")
-            self.picker_watcher.stop()
-            if not self.picker_watcher.wait(WORKER_WAIT_TIMEOUT):
-                logger.warning("PickerWatcher 강제 종료")
-            
-        if self.validate_worker and self.validate_worker.isRunning():
-            logger.debug("ValidateWorker 종료 대기 중...")
-            self.validate_worker.cancel()
-            if not self.validate_worker.wait(WORKER_WAIT_TIMEOUT):
-                logger.warning("ValidateWorker 강제 종료")
+        try:
+            check_timer = getattr(self, "check_timer", None)
+            if check_timer is not None:
+                check_timer.stop()
 
-        if self.live_preview_worker and self.live_preview_worker.isRunning():
-            self.live_preview_worker.cancel()
-            self.live_preview_worker.wait(WORKER_WAIT_TIMEOUT)
+            if hasattr(self, "settings") and self.settings is not None:
+                self.settings.setValue("geometry", self.saveGeometry())
+            self._save_settings()
 
-        if self.ai_worker and self.ai_worker.isRunning():
-            self.ai_worker.cancel()
-            self.ai_worker.wait(WORKER_WAIT_TIMEOUT)
+            self._stop_worker_thread(getattr(self, "picker_watcher", None), "PickerWatcher")
+            self._stop_worker_thread(getattr(self, "validate_worker", None), "ValidateWorker")
+            self._stop_worker_thread(getattr(self, "live_preview_worker", None), "LivePreviewWorker")
+            self._stop_worker_thread(getattr(self, "ai_worker", None), "AIWorker")
+            self._stop_worker_thread(getattr(self, "diff_worker", None), "DiffWorker")
+            self._stop_worker_thread(getattr(self, "batch_worker", None), "BatchWorker")
+            self._stop_worker_thread(getattr(self, "scenario_worker", None), "BatchScenarioWorker")
 
-        if self.diff_worker and self.diff_worker.isRunning():
-            self.diff_worker.cancel()
-            self.diff_worker.wait(WORKER_WAIT_TIMEOUT)
+            pw_manager = getattr(self, "pw_manager", None)
+            if pw_manager is not None:
+                try:
+                    pw_manager.close()
+                except Exception as e:
+                    logger.warning(f"Playwright 종료 실패(무시): {e}")
 
-        if self.batch_worker and self.batch_worker.isRunning():
-            self.batch_worker.cancel()
-            self.batch_worker.wait(WORKER_WAIT_TIMEOUT)
+            stats_manager = getattr(self, "stats_manager", None)
+            if stats_manager is not None:
+                try:
+                    stats_manager.shutdown(timeout=5.0)
+                except Exception:
+                    try:
+                        stats_manager.save()
+                    except Exception:
+                        pass
 
-        if getattr(self, "scenario_worker", None) and self.scenario_worker.isRunning():
-            self.scenario_worker.cancel()
-            self.scenario_worker.wait(WORKER_WAIT_TIMEOUT)
-        
-        # v3.4: Playwright 종료
-        if self.pw_manager:
             try:
-                self.pw_manager.close()
+                log_perf_summary()
             except Exception:
-                pass  # Playwright 종료 실패 시 무시
-            
-        # 통계 저장
-        if hasattr(self, 'stats_manager'):
-            try:
-                self.stats_manager.shutdown(timeout=5.0)
-            except Exception:
-                self.stats_manager.save()
-        
-        log_perf_summary()
-             
-        self.browser.close()
-        logger.info("앱 종료 완료")
-        a0.accept()
+                pass
+
+            browser = getattr(self, "browser", None)
+            if browser is not None:
+                try:
+                    browser.close()
+                except Exception as e:
+                    logger.warning(f"브라우저 종료 실패(무시): {e}")
+        finally:
+            logger.info("앱 종료 완료")
+            a0.accept()

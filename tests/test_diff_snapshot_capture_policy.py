@@ -1,7 +1,7 @@
 import importlib.util
 from pathlib import Path
 
-from xpath_config import SiteConfig, XPathItem
+from xpath_explorer.core.config import SiteConfig, XPathItem
 
 
 def _load_main_module():

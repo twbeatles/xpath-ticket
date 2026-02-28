@@ -1,7 +1,7 @@
 from PyQt6.QtCore import QCoreApplication
 
-from xpath_config import XPathItem
-from xpath_workers import BatchTestWorker
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.workers.background import BatchTestWorker
 
 
 class FakeBrowser:

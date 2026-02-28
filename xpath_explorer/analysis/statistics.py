@@ -11,8 +11,8 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Dict, List, Optional
 
-from xpath_constants import STATISTICS_SAVE_INTERVAL
-from xpath_perf import perf_span
+from xpath_explorer.core.constants import STATISTICS_SAVE_INTERVAL
+from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger("XPathExplorer")
 
@@ -250,4 +250,3 @@ class StatisticsManager:
             self._history = [r for r in self._history if r.item_name != item_name]
             self._dirty = True
         self.save()
-

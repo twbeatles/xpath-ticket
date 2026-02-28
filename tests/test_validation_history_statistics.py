@@ -1,4 +1,4 @@
-﻿from xpath_statistics import StatisticsManager
+﻿from xpath_explorer.analysis.statistics import StatisticsManager
 
 
 def test_statistics_recent_history_returns_latest_first(tmp_path):
@@ -15,3 +15,4 @@ def test_statistics_recent_history_returns_latest_first(tmp_path):
     assert len(recent) == 2
     assert recent[0].item_name == "c"
     assert recent[1].item_name == "b"
+

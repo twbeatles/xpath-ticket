@@ -1,4 +1,4 @@
-﻿from xpath_dom_export import (
+﻿from xpath_explorer.browser.dom_export import (
     DomSnapshot,
     diff_dom_snapshots,
     render_dom_diff_report_htm,
@@ -53,3 +53,4 @@ def test_render_dom_diff_report_htm_contains_summary_counts():
     assert "삭제 0" in report
     assert "변경 1" in report
     assert "2026-02-25T18:00:00" in report
+

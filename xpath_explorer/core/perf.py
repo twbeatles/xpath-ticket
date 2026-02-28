@@ -10,7 +10,7 @@ from typing import Optional
 from collections import defaultdict
 from threading import Lock
 
-from xpath_constants import PERF_LOG_SLOW_MS
+from xpath_explorer.core.constants import PERF_LOG_SLOW_MS
 
 logger = logging.getLogger("XPathExplorer")
 _PERF_LOCK = Lock()

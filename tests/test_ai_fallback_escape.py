@@ -1,4 +1,4 @@
-from xpath_ai import XPathAIAssistant
+from xpath_explorer.tools.ai import XPathAIAssistant
 
 
 def test_xpath_text_expr_handles_mixed_quotes():

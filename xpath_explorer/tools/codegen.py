@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
 
-from xpath_constants import XPATH_TEMPLATE_LIBRARY
+from xpath_explorer.core.constants import XPATH_TEMPLATE_LIBRARY
 
 
 class CodeTemplate(Enum):

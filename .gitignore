@@ -13,6 +13,9 @@ ENV/
 
 # Pytest
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 
 # Build artifacts (PyInstaller)
 build/

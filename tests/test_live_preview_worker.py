@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QCoreApplication
 
-from xpath_workers import LivePreviewWorker
+from xpath_explorer.workers.background import LivePreviewWorker
 
 
 class FakeBrowser:

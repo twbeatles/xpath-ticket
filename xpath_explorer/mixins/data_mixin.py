@@ -23,29 +23,29 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve, QMimeData
 from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySequence, QDrag
 
-from xpath_constants import (
+from xpath_explorer.core.constants import (
     APP_TITLE, APP_VERSION, SITE_PRESETS,
     BROWSER_CHECK_INTERVAL, SEARCH_DEBOUNCE_MS,
     LIVE_PREVIEW_DEBOUNCE_MS, WORKER_WAIT_TIMEOUT,
     category_to_label, category_to_value,
 )
-from xpath_styles import STYLE
-from xpath_config import XPathItem, SiteConfig
-from xpath_widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton, CollapsibleBox
-from xpath_browser import BrowserManager
-from xpath_workers import (
+from xpath_explorer.ui.styles import STYLE
+from xpath_explorer.core.config import XPathItem, SiteConfig
+from xpath_explorer.ui.widgets import ToastWidget, NoWheelComboBox, AnimatedStatusIndicator, IconButton, CollapsibleBox
+from xpath_explorer.browser.browser import BrowserManager
+from xpath_explorer.workers.background import (
     PickerWatcher, ValidateWorker, LivePreviewWorker,
     AIGenerateWorker, DiffAnalyzeWorker, BatchTestWorker,
 )
-from xpath_perf import perf_span, log_perf_summary
-from xpath_codegen import CodeGenerator, CodeTemplate
-from xpath_statistics import StatisticsManager
-from xpath_optimizer import XPathOptimizer, XPathAlternative
-from xpath_history import HistoryManager
-from xpath_ai import XPathAIAssistant
-from xpath_diff import XPathDiffAnalyzer
-from xpath_table_model import XPathItemTableModel
-from xpath_filter_proxy import XPathFilterProxyModel
+from xpath_explorer.core.perf import perf_span, log_perf_summary
+from xpath_explorer.tools.codegen import CodeGenerator, CodeTemplate
+from xpath_explorer.analysis.statistics import StatisticsManager
+from xpath_explorer.tools.optimizer import XPathOptimizer, XPathAlternative
+from xpath_explorer.state.history import HistoryManager
+from xpath_explorer.tools.ai import XPathAIAssistant
+from xpath_explorer.analysis.diff import XPathDiffAnalyzer
+from xpath_explorer.ui.table_model import XPathItemTableModel
+from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
 
 from xpath_explorer.runtime import logger
 
@@ -508,14 +508,15 @@ class ExplorerDataMixin:
     def _reset_font(self):
         self._apply_font_size(14)
 
-    def _apply_font_size(self, size):
+    def _apply_font_size(self, size, notify: bool = True):
         self._font_size = max(8, min(size, 24))
         font = self.font()
         font.setPointSize(self._font_size)
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setFont(font)
-        self._show_toast(f"폰트 크기: {self._font_size}", "info", 1000)
+        if notify:
+            self._show_toast(f"폰트 크기: {self._font_size}", "info", 1000)
 
     def _show_context_menu(self, pos):
         index = self.table.indexAt(pos)
@@ -672,7 +673,49 @@ class ExplorerDataMixin:
     def _load_settings(self):
         """설정 로드"""
         geo = self.settings.value("geometry")
-        if geo: self.restoreGeometry(geo)
+        if geo:
+            self.restoreGeometry(geo)
+
+        try:
+            font_size = int(self.settings.value("ui/font_size", self._font_size))
+        except (TypeError, ValueError):
+            font_size = int(getattr(self, "_font_size", 14))
+        self._apply_font_size(font_size, notify=False)
+
+        preset_name = str(self.settings.value("ui/last_preset", "") or "").strip()
+        if preset_name and preset_name in SITE_PRESETS:
+            if hasattr(self, "combo_preset") and self.combo_preset is not None:
+                self.combo_preset.blockSignals(True)
+                self.combo_preset.setCurrentText(preset_name)
+                self.combo_preset.blockSignals(False)
+            if preset_name != self.config.name:
+                self.config = SiteConfig.from_preset(preset_name)
+                if self.config.login_url:
+                    self.input_url.setText(self.config.login_url)
+                elif self.config.url:
+                    self.input_url.setText(self.config.url)
+                self._table_data_dirty = True
+                self._filter_options_dirty = True
+
+        right_tab_raw = self.settings.value("ui/right_tab_index", 0)
+        try:
+            right_tab_index = int(right_tab_raw)
+        except (TypeError, ValueError):
+            right_tab_index = 0
+        if hasattr(self, "right_tabs") and self.right_tabs is not None:
+            if 0 <= right_tab_index < self.right_tabs.count():
+                self.right_tabs.setCurrentIndex(right_tab_index)
+
+        expanded_raw = self.settings.value("ui/url_panel_expanded", True)
+        if isinstance(expanded_raw, str):
+            expanded = expanded_raw.strip().lower() not in ("0", "false", "no", "off")
+        else:
+            expanded = bool(expanded_raw)
+        if hasattr(self, "url_collapsible") and self.url_collapsible is not None:
+            current_expanded = bool(getattr(self.url_collapsible, "_expanded", True))
+            if current_expanded != expanded:
+                self.url_collapsible.toggle_button.setChecked(expanded)
+                self.url_collapsible.toggle(expanded)
 
     def _save_cookies(self):
         """쿠키 저장"""

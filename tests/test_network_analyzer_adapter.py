@@ -1,8 +1,8 @@
-import xpath_playwright as xp
+import xpath_explorer.browser.playwright as xp
 
 
 def test_network_analyzer_importable():
-    from xpath_playwright import NetworkAnalyzer  # noqa: F401
+    from xpath_explorer.browser.playwright import NetworkAnalyzer  # noqa: F401
 
 
 def test_network_analyzer_flow(monkeypatch):

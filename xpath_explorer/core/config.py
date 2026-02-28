@@ -6,7 +6,7 @@ XPath Explorer Configuration
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional
 from datetime import datetime
-from xpath_constants import SITE_PRESETS
+from xpath_explorer.core.constants import SITE_PRESETS
 
 @dataclass
 class XPathItem:

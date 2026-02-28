@@ -82,3 +82,44 @@ def test_setup_logger_registers_single_telemetry_handler():
     logger = setup_logger()
     handlers = [h for h in logger.handlers if isinstance(h, ErrorTelemetryHandler)]
     assert len(handlers) == 1
+
+
+def test_render_markdown_report_escapes_table_breaking_characters():
+    store = ErrorTelemetryStore(max_events=10)
+    row = logging.LogRecord(
+        name="XPathExplorer",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=123,
+        msg="broken | table\nline with `code`",
+        args=(),
+        exc_info=None,
+    )
+    store.record(row)
+
+    report = store.render_markdown_report(top_n=5, recent_limit=5)
+    assert "broken \\| table<br>line with \\`code\\`" in report
+
+
+def test_setup_logger_falls_back_to_console_when_file_handler_fails(monkeypatch):
+    logger = logging.getLogger("XPathExplorer")
+    file_handler_cls = logging.FileHandler
+    original_handlers = list(logger.handlers)
+    logger.handlers = []
+
+    def _raise_file_handler(*_args, **_kwargs):
+        raise OSError("readonly home")
+
+    monkeypatch.setattr("xpath_explorer.runtime.logging.FileHandler", _raise_file_handler)
+
+    try:
+        configured = setup_logger()
+        assert any(isinstance(h, logging.StreamHandler) for h in configured.handlers)
+        assert not any(isinstance(h, file_handler_cls) for h in configured.handlers)
+    finally:
+        for handler in list(logger.handlers):
+            try:
+                handler.close()
+            except Exception:
+                pass
+        logger.handlers = original_handlers
