@@ -39,3 +39,21 @@ def test_statistics_record_is_batched_and_shutdown_flushes(tmp_path):
     assert "item_a" in data["stats"]
     assert data["stats"]["item_a"]["total_tests"] == 50
 
+
+def test_statistics_falls_back_to_in_memory_when_storage_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "xpath_explorer.analysis.statistics.resolve_storage_file",
+        lambda _name: (None, "memory"),
+    )
+
+    manager = StatisticsManager(storage_path=None)
+    assert manager.storage_path is None
+
+    manager.record_test("item_x", "//x", True, frame_path="main")
+    manager.save()
+    summary = manager.get_summary()
+    manager.shutdown(timeout=2.0)
+
+    assert summary["total_tests"] == 1
+    assert summary["total_success"] == 1
+

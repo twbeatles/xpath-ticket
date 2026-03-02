@@ -4,6 +4,7 @@ from selenium.common.exceptions import NoSuchElementException, NoSuchFrameExcept
 from selenium.webdriver.common.by import By
 
 from xpath_explorer.browser.browser import BrowserManager
+from xpath_explorer.core.constants import VALIDATION_MISS_TTL_SECONDS
 
 
 @dataclass
@@ -111,13 +112,70 @@ def test_validation_session_reuses_frame_hint():
 
     bm.find_element_in_all_frames = wrapped
 
-    session = {"frames": ["main"], "hints": {}, "misses": set()}
+    session = bm.begin_validation_session()
 
     first = bm.validate_xpath("//ok", session=session)
     second = bm.validate_xpath("//ok", session=session)
 
     assert first["found"] is True
     assert second["found"] is True
-    assert call_count["n"] == 1
+    # Session frame list already includes f1, so full recursive fallback is not needed.
+    assert call_count["n"] == 0
     assert session["hints"]["//ok"] == "f1"
+
+
+def test_validation_session_miss_ttl_expiry_triggers_rescan():
+    bm = BrowserManager()
+    bm.driver = _FakeDriver()
+
+    call_count = {"n": 0}
+    orig = bm.find_element_in_all_frames
+
+    def wrapped(xpath, max_depth=5):
+        call_count["n"] += 1
+        return orig(xpath, max_depth=max_depth)
+
+    bm.find_element_in_all_frames = wrapped
+    session = bm.begin_validation_session()
+
+    miss1 = bm.validate_xpath("//missing", session=session)
+    miss2 = bm.validate_xpath("//missing", session=session)
+
+    assert miss1["found"] is False
+    assert miss2["found"] is False
+    assert call_count["n"] == 1
+    assert "//missing" in session["misses"]
+
+    # Force TTL expiry without sleeping.
+    session["misses"]["//missing"]["ts"] -= (VALIDATION_MISS_TTL_SECONDS + 0.1)
+    miss3 = bm.validate_xpath("//missing", session=session)
+    assert miss3["found"] is False
+    assert call_count["n"] == 2
+
+
+def test_validation_session_frame_signature_change_invalidates_miss_cache():
+    bm = BrowserManager()
+    bm.driver = _FakeDriver()
+
+    call_count = {"n": 0}
+    orig = bm.find_element_in_all_frames
+
+    def wrapped(xpath, max_depth=5):
+        call_count["n"] += 1
+        return orig(xpath, max_depth=max_depth)
+
+    bm.find_element_in_all_frames = wrapped
+    session = bm.begin_validation_session()
+
+    miss1 = bm.validate_xpath("//missing", session=session)
+    assert miss1["found"] is False
+    assert call_count["n"] == 1
+    assert "//missing" in session["misses"]
+
+    # Simulate stale frame signature -> validate_xpath refresh should clear cached misses.
+    session["frame_signature"] = "stale-signature"
+
+    miss2 = bm.validate_xpath("//missing", session=session)
+    assert miss2["found"] is False
+    assert call_count["n"] == 2
 

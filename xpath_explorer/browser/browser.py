@@ -9,7 +9,12 @@ from contextlib import contextmanager
 from threading import RLock
 from typing import List, Dict, Optional, Any, Tuple, Set
 
-from xpath_explorer.core.constants import PICKER_SCRIPT, MAX_FRAME_DEPTH, FRAME_CACHE_DURATION
+from xpath_explorer.core.constants import (
+    PICKER_SCRIPT,
+    MAX_FRAME_DEPTH,
+    FRAME_CACHE_DURATION,
+    VALIDATION_MISS_TTL_SECONDS,
+)
 from xpath_explorer.browser.dom_export import DomSnapshot
 from xpath_explorer.core.perf import perf_span
 
@@ -588,20 +593,70 @@ class BrowserManager:
         session: Dict[str, Any] = {
             "frames": ["main"],
             "hints": {},
-            "misses": set(),
+            "misses": {},
+            "frame_signature": "main",
         }
-        try:
-            for frame_path, _identifier in self.get_all_frames():
-                if frame_path not in session["frames"]:
-                    session["frames"].append(frame_path)
-        except Exception:
-            # ?몄뀡? 理쒖꽑??罹먯떆?대?濡??ㅽ뙣?대룄 寃利??먯껜??怨꾩냽 ?숈옉?댁빞 ??
-            pass
+        self._session_refresh_frame_signature(session)
         return session
 
     def end_validation_session(self, session: Optional[Dict[str, Any]]):
         """寃利??몄뀡 醫낅즺 ???섏쐞 ?명솚???꾪빐 no-op ?좎?)."""
         _ = session
+
+    @staticmethod
+    def _build_frame_signature(frames: List[str]) -> str:
+        normalized: List[str] = []
+        for frame_path in frames:
+            if isinstance(frame_path, str) and frame_path and frame_path not in normalized:
+                normalized.append(frame_path)
+        if "main" not in normalized:
+            normalized.insert(0, "main")
+        return "|".join(normalized)
+
+    @staticmethod
+    def _session_normalize_frames(session: Dict[str, Any]) -> List[str]:
+        raw_frames = session.get("frames")
+        normalized: List[str] = []
+        if isinstance(raw_frames, list):
+            for frame_path in raw_frames:
+                if isinstance(frame_path, str) and frame_path and frame_path not in normalized:
+                    normalized.append(frame_path)
+        if "main" not in normalized:
+            normalized.insert(0, "main")
+        session["frames"] = normalized
+        return normalized
+
+    def _session_refresh_frame_signature(self, session: Optional[Dict[str, Any]]):
+        if not isinstance(session, dict):
+            return
+
+        if not isinstance(session.get("hints"), dict):
+            session["hints"] = {}
+
+        previous_signature = str(session.get("frame_signature", "") or "")
+        frames = self._session_normalize_frames(session)
+        try:
+            for frame_path, _identifier in self.get_all_frames():
+                if frame_path not in frames:
+                    frames.append(frame_path)
+        except Exception:
+            # Session refresh is best-effort.
+            pass
+
+        current_signature = self._build_frame_signature(frames)
+        session["frame_signature"] = current_signature
+
+        misses = session.get("misses")
+        if isinstance(misses, set):
+            # Legacy session schema migration.
+            misses = {}
+            session["misses"] = misses
+        elif not isinstance(misses, dict):
+            misses = {}
+            session["misses"] = misses
+
+        if previous_signature and current_signature != previous_signature:
+            misses.clear()
 
     def _session_get_hint(self, session: Optional[Dict[str, Any]], xpath: str) -> Optional[str]:
         if not session:
@@ -618,24 +673,54 @@ class BrowserManager:
         hints = session.get("hints")
         if isinstance(hints, dict):
             hints[xpath] = frame_path
+        misses = session.get("misses")
+        if isinstance(misses, dict):
+            misses.pop(xpath, None)
         frames = session.get("frames")
-        if isinstance(frames, list) and frame_path not in frames:
-            frames.append(frame_path)
+        if isinstance(frames, list):
+            if frame_path not in frames:
+                frames.append(frame_path)
+            session["frame_signature"] = self._build_frame_signature(frames)
 
     def _session_add_miss(self, session: Optional[Dict[str, Any]], xpath: str):
         if not session or not xpath:
             return
         misses = session.get("misses")
-        if isinstance(misses, set):
-            misses.add(xpath)
+        if not isinstance(misses, dict):
+            misses = {}
+            session["misses"] = misses
+        misses[xpath] = {
+            "ts": time.time(),
+            "frame_signature": str(session.get("frame_signature", "") or ""),
+        }
 
     def _session_has_miss(self, session: Optional[Dict[str, Any]], xpath: str) -> bool:
         if not session:
             return False
         misses = session.get("misses")
-        if not isinstance(misses, set):
+        if isinstance(misses, set):
+            return xpath in misses
+        if not isinstance(misses, dict):
             return False
-        return xpath in misses
+
+        miss_info = misses.get(xpath)
+        if not isinstance(miss_info, dict):
+            misses.pop(xpath, None)
+            return False
+
+        ts = miss_info.get("ts")
+        miss_signature = str(miss_info.get("frame_signature", "") or "")
+        current_signature = str(session.get("frame_signature", "") or "")
+        if not isinstance(ts, (int, float)):
+            misses.pop(xpath, None)
+            return False
+        if time.time() - float(ts) > VALIDATION_MISS_TTL_SECONDS:
+            misses.pop(xpath, None)
+            return False
+        if miss_signature != current_signature:
+            misses.pop(xpath, None)
+            return False
+        return True
 
     def _try_find_in_frame(self, xpath: str, frame_path: str) -> Optional[Dict[str, Any]]:
         """?뱀젙 ?꾨젅?꾩뿉??XPath瑜?議고쉶?섍퀬 ?깃났 ??湲곕낯 寃곌낵瑜?諛섑솚."""
@@ -1230,6 +1315,8 @@ class BrowserManager:
                 if not self.is_alive():
                     return {"found": False, "msg": "釉뚮씪?곗? ?곌껐 ?덈맖"}
 
+                self._session_refresh_frame_signature(session)
+
                 tried: Set[str] = set()
                 candidate_frames: List[str] = []
 
@@ -1648,5 +1735,3 @@ class BrowserManager:
                     pass
 
             return snapshots
-
-

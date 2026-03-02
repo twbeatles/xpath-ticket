@@ -27,6 +27,14 @@
 - **Batch Scenario Runner**: JSON 시나리오(검증/대기) 기반 일괄 실행
 - **Validation History Panel**: 최근 검증 이력 500건 조회/필터 UI 제공
 
+### 🔒 안정성/배포 강화 (2026.03)
+- **Validation Miss Cache 개선**: TTL + 프레임 시그니처 무효화로 오탐 고착 방지
+- **Undo/Redo 메타데이터 보존**: `alternatives`, `screenshot_path` 보존 + `element_attributes` 64개 제한
+- **저장 경로 폴백**: `Path.home()/.xpath_explorer` 실패 시 TEMP 폴백, 최종 in-memory 동작 보장
+- **DOM Diff Source Guard**: Selenium/Playwright 소스 불일치 시 baseline 재설정
+- **HiDPI 적용 순서 보정**: `configure_qt_env()`를 `QApplication` 생성 전에 적용
+- **Release Smoke 자동화**: spec TLS 회귀, HTTPS smoke, DOM 렌더 smoke, optional import 점검
+
 ### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
 - 테이블 선택/hover 효과 강화
@@ -193,6 +201,18 @@ python scripts/check_docs_sync.py
 
 ```bash
 python scripts/run_quality_checks.py
+```
+
+릴리즈 스모크까지 포함:
+
+```bash
+python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
+```
+
+단독 스모크 실행:
+
+```bash
+python scripts/run_release_smoke_checks.py
 ```
 
 ## 구현 점검 반영 (2026-02-28)

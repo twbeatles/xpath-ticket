@@ -1013,6 +1013,17 @@ class ExplorerToolsMixin:
             self._show_toast("DOM 기준선을 저장했습니다. 변경 후 다시 실행하면 diff 리포트를 생성합니다.", "success", 3500)
             return
 
+        baseline_source = str(getattr(self, "_dom_diff_source", "") or "")
+        if baseline_source and baseline_source != source:
+            self._dom_diff_baseline = list(snapshots)
+            self._dom_diff_source = source
+            self._show_toast(
+                f"DOM 기준선 소스가 변경되었습니다 ({baseline_source} -> {source}). 기준선을 재설정했습니다.",
+                "warning",
+                4500,
+            )
+            return
+
         default_name = f"dom_diff_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
         fname, _ = QFileDialog.getSaveFileName(
             cast(QWidget, self),

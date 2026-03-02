@@ -27,6 +27,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Treat docs-sync warnings as failures",
     )
+    parser.add_argument(
+        "--smoke-release",
+        action="store_true",
+        help="Run release smoke checks after docs/tests",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -39,17 +44,28 @@ def main(argv: list[str] | None = None) -> int:
         return code
 
     if args.skip_tests:
-        return 0
+        if not args.smoke_release:
+            return 0
+    else:
+        test_cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--cov=.",
+            "--cov-report=term-missing",
+            "--cov-report=html",
+        ]
+        code = _run(test_cmd, repo_root)
+        if code != 0:
+            return code
 
-    test_cmd = [
-        sys.executable,
-        "-m",
-        "pytest",
-        "--cov=.",
-        "--cov-report=term-missing",
-        "--cov-report=html",
-    ]
-    return _run(test_cmd, repo_root)
+    if args.smoke_release:
+        smoke_cmd = [sys.executable, "scripts/run_release_smoke_checks.py"]
+        code = _run(smoke_cmd, repo_root)
+        if code != 0:
+            return code
+
+    return 0
 
 
 if __name__ == "__main__":

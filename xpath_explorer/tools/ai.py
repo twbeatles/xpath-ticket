@@ -10,7 +10,8 @@ import logging
 import json
 import re
 import os
-from pathlib import Path
+
+from xpath_explorer.core.paths import resolve_storage_file
 
 logger = logging.getLogger('XPathExplorer')
 
@@ -60,8 +61,8 @@ class XPathAIAssistant:
         if gemini_key: config['gemini_api_key'] = gemini_key
         
         # 2. 파일 확인
-        config_path = Path.home() / '.xpath_explorer' / 'ai_config.json'
-        if config_path.exists():
+        config_path, _source = resolve_storage_file("ai_config.json")
+        if config_path is not None and config_path.exists():
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     file_config = json.load(f)
@@ -114,7 +115,10 @@ class XPathAIAssistant:
         return True
 
     def _save_config(self):
-        config_path = Path.home() / '.xpath_explorer' / 'ai_config.json'
+        config_path, _source = resolve_storage_file("ai_config.json")
+        if config_path is None:
+            logger.warning("AI config save skipped: no writable storage path.")
+            return
         config_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with open(config_path, 'w', encoding='utf-8') as f:

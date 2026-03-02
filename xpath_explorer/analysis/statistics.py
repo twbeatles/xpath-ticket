@@ -12,6 +12,7 @@ from threading import Event, Lock, Thread
 from typing import Dict, List, Optional
 
 from xpath_explorer.core.constants import STATISTICS_SAVE_INTERVAL
+from xpath_explorer.core.paths import resolve_storage_file
 from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger("XPathExplorer")
@@ -47,12 +48,26 @@ class ItemStatistics:
 class StatisticsManager:
     """Thread-safe statistics manager with async batched persistence."""
 
-    def __init__(self, storage_path: Path = None):
+    def __init__(self, storage_path: Optional[Path] = None):
+        self._storage_source = "explicit"
         if storage_path is None:
-            storage_path = Path.home() / ".xpath_explorer" / "statistics.json"
+            storage_path, self._storage_source = resolve_storage_file("statistics.json")
 
-        self.storage_path = storage_path
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self.storage_path: Optional[Path] = storage_path
+        self._persistence_enabled = self.storage_path is not None
+        self._save_disabled_warned = False
+
+        if self.storage_path is not None:
+            try:
+                self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.warning("Statistics persistence disabled (path init failed): %s", e)
+                self.storage_path = None
+                self._persistence_enabled = False
+                self._storage_source = "memory"
+
+        if not self._persistence_enabled:
+            logger.warning("Statistics persistence disabled: in-memory mode only.")
 
         self._stats: Dict[str, ItemStatistics] = {}
         self._history: List[TestRecord] = []
@@ -75,6 +90,8 @@ class StatisticsManager:
         self._writer_thread.start()
 
     def _load(self):
+        if not self._persistence_enabled or self.storage_path is None:
+            return
         if not self.storage_path.exists():
             return
         try:
@@ -122,6 +139,13 @@ class StatisticsManager:
             }
 
     def _save_internal(self):
+        if not self._persistence_enabled or self.storage_path is None:
+            if not self._save_disabled_warned:
+                logger.warning("Statistics save skipped: persistence unavailable (in-memory only).")
+                self._save_disabled_warned = True
+            with self._lock:
+                self._dirty = False
+            return
         try:
             data = self._serialize()
             with open(self.storage_path, "w", encoding="utf-8") as f:
@@ -130,6 +154,10 @@ class StatisticsManager:
                 self._dirty = False
         except Exception as e:
             logger.error("Failed to save statistics: %s", e)
+            self._persistence_enabled = False
+            self.storage_path = None
+            self._storage_source = "memory"
+            self._save_disabled_warned = False
 
     def save(self):
         """

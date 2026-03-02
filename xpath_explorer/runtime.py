@@ -5,9 +5,10 @@ import logging
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from threading import Lock
 from typing import Dict, List
+
+from xpath_explorer.core.paths import resolve_storage_file
 
 
 @dataclass(frozen=True)
@@ -188,16 +189,20 @@ def setup_logger():
         console_handler.setFormatter(console_format)
         logger.addHandler(console_handler)
 
-        try:
-            log_dir = Path.home() / '.xpath_explorer'
-            log_dir.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(log_dir / 'debug.log', encoding='utf-8')
-            file_handler.setLevel(logging.DEBUG)
-            file_format = logging.Formatter('%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s')
-            file_handler.setFormatter(file_format)
-            logger.addHandler(file_handler)
-        except Exception as e:
-            logger.warning(f"File logging disabled (console only): {e}")
+        log_path, source = resolve_storage_file("debug.log")
+        if log_path is None:
+            logger.warning("File logging disabled (in-memory mode: no writable storage path).")
+        else:
+            try:
+                file_handler = logging.FileHandler(log_path, encoding='utf-8')
+                file_handler.setLevel(logging.DEBUG)
+                file_format = logging.Formatter('%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s')
+                file_handler.setFormatter(file_format)
+                logger.addHandler(file_handler)
+                if source != "home":
+                    logger.warning("File logging fallback path in use: %s", source)
+            except Exception as e:
+                logger.warning(f"File logging disabled (console only): {e}")
 
     has_telemetry_handler = any(isinstance(h, ErrorTelemetryHandler) for h in logger.handlers)
     if not has_telemetry_handler:

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """XPath Explorer main window composition."""
 
 import os
@@ -28,6 +28,10 @@ from xpath_explorer.mixins.data_mixin import ExplorerDataMixin
 from xpath_explorer.mixins.tools_mixin import ExplorerToolsMixin
 
 
+def configure_qt_env():
+    """Configure Qt environment before QApplication initialization."""
+    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+
 class XPathExplorer(
     ExplorerToolsMixin,
     ExplorerDataMixin,
@@ -41,22 +45,22 @@ class XPathExplorer(
         super().__init__()
         
         self.browser = BrowserManager()
-        self.config = SiteConfig.from_preset("인터파크")
+        self.config = SiteConfig.from_preset("?명꽣?뚰겕")
         
-        # v3.3 신규: 통계 관리자 및 코드 생성기
+        # v3.3 ?좉퇋: ?듦퀎 愿由ъ옄 諛?肄붾뱶 ?앹꽦湲?
         self.stats_manager = StatisticsManager()
         self.code_generator = CodeGenerator()
         
-        # v3.4 신규: Playwright 매니저 (자동 요소 탐색용)
-        self.pw_manager = None  # 지연 초기화
+        # v3.4 ?좉퇋: Playwright 留ㅻ땲? (?먮룞 ?붿냼 ?먯깋??
+        self.pw_manager = None  # 吏??珥덇린??
         
-        # v4.0 신규 모듈
+        # v4.0 ?좉퇋 紐⑤뱢
         self.optimizer = XPathOptimizer()
         self.history_manager = HistoryManager()
         self.ai_assistant = XPathAIAssistant()
         self.diff_analyzer = XPathDiffAnalyzer()
         
-        # 워커 스레드 관리
+        # ?뚯빱 ?ㅻ젅??愿由?
         self.picker_watcher = None
         self.validate_worker = None
         self.live_preview_worker = None
@@ -72,11 +76,11 @@ class XPathExplorer(
         self.undo_action: Optional[QAction] = None
         self.redo_action: Optional[QAction] = None
         
-        # 상태 변수
+        # ?곹깭 蹂??
         self._font_size = 14
         self._search_text = ""
-        self._filter_favorites_only = False  # v3.3: 즐겨찾기 필터
-        self._filter_tag = ""  # v3.3: 태그 필터
+        self._filter_favorites_only = False  # v3.3: 利먭꺼李얘린 ?꾪꽣
+        self._filter_tag = ""  # v3.3: ?쒓렇 ?꾪꽣
         self._filter_options_dirty = True
         self._table_data_dirty = True
         self.table_model = XPathItemTableModel([])
@@ -87,7 +91,7 @@ class XPathExplorer(
         self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
         self._search_timer.timeout.connect(self._perform_search)
         
-        # v4.0: 실시간 미리보기 타이머
+        # v4.0: ?ㅼ떆媛?誘몃━蹂닿린 ??대㉧
         self._live_preview_timer = QTimer()
         self._live_preview_timer.setSingleShot(True)
         self._live_preview_timer.setInterval(LIVE_PREVIEW_DEBOUNCE_MS)
@@ -99,19 +103,17 @@ class XPathExplorer(
         self._setup_timers()
         self._refresh_table(refresh_filters=True)
         
-        # v4.0: 히스토리 초기화
+        # v4.0: ?덉뒪?좊━ 珥덇린??
         self._reset_history_baseline()
 
     def init_settings(self):
         self.settings = QSettings("MyCompany", "XPathExplorer")
 
 def main():
+    configure_qt_env()
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
-    
-    # 고해상도 지원
-    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-    
+
     window = XPathExplorer()
     window.show()
     

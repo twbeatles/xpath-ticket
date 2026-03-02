@@ -28,6 +28,7 @@ hiddenimports = [
     'xpath_explorer.core.constants',
     'xpath_explorer.ui.styles',
     'xpath_explorer.core.config',
+    'xpath_explorer.core.paths',
     'xpath_explorer.ui.widgets',
     # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
     'xpath_explorer.browser.browser',
@@ -117,8 +118,11 @@ qt_excludes = [
     'qt6multimedia', 'qt6dbus', 'qt6test', 'qt6xml',
     'qt6positioning', 'qt6sensors', 'qt6serialport',
     'qt6bluetooth', 'qt6nfc', 'qt6webchannel',
-    'opengl32sw', 'd3dcompiler', 'libcrypto', 'libssl',
+    'opengl32sw', 'd3dcompiler',
 ]
+# NOTE:
+# Do not add TLS runtime libraries ('libcrypto', 'libssl') to qt_excludes.
+# HTTPS smoke checks rely on them in packaged runtime.
 a.binaries = [b for b in a.binaries if not any(x in b[0].lower() for x in qt_excludes)]
 
 # 불필요 데이터 제거

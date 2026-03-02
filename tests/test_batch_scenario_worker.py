@@ -16,7 +16,12 @@ class _FakeBrowser:
 
     def begin_validation_session(self):
         self.begin_calls += 1
-        return {"frames": ["main"], "hints": {}, "misses": set()}
+        return {
+            "frames": ["main"],
+            "hints": {},
+            "misses": {},
+            "frame_signature": "main",
+        }
 
     def end_validation_session(self, _session):
         self.end_calls += 1
