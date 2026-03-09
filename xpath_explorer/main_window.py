@@ -1,4 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
+# pyright: reportIncompatibleMethodOverride=false
 """XPath Explorer main window composition."""
 
 import os
@@ -39,28 +40,28 @@ class XPathExplorer(
     ExplorerUIMixin,
     QMainWindow,
 ):
-    """XPath ??? ??"""
+    """XPath Explorer 메인 윈도우."""
 
     def __init__(self):
         super().__init__()
         
         self.browser = BrowserManager()
-        self.config = SiteConfig.from_preset("?명꽣?뚰겕")
-        
-        # v3.3 ?좉퇋: ?듦퀎 愿由ъ옄 諛?肄붾뱶 ?앹꽦湲?
+        self.config = SiteConfig.from_preset("인터파크")
+
+        # v3.3: 통계 관리자 및 코드 생성기
         self.stats_manager = StatisticsManager()
         self.code_generator = CodeGenerator()
-        
-        # v3.4 ?좉퇋: Playwright 留ㅻ땲? (?먮룞 ?붿냼 ?먯깋??
-        self.pw_manager = None  # 吏??珥덇린??
-        
-        # v4.0 ?좉퇋 紐⑤뱢
+
+        # v3.4: Playwright 매니저 (지연 초기화)
+        self.pw_manager = None
+
+        # v4.0 도구 모듈
         self.optimizer = XPathOptimizer()
         self.history_manager = HistoryManager()
         self.ai_assistant = XPathAIAssistant()
         self.diff_analyzer = XPathDiffAnalyzer()
-        
-        # ?뚯빱 ?ㅻ젅??愿由?
+
+        # 워커 스레드 관리
         self.picker_watcher = None
         self.validate_worker = None
         self.live_preview_worker = None
@@ -76,11 +77,11 @@ class XPathExplorer(
         self.undo_action: Optional[QAction] = None
         self.redo_action: Optional[QAction] = None
         
-        # ?곹깭 蹂??
+        # UI 상태
         self._font_size = 14
         self._search_text = ""
-        self._filter_favorites_only = False  # v3.3: 利먭꺼李얘린 ?꾪꽣
-        self._filter_tag = ""  # v3.3: ?쒓렇 ?꾪꽣
+        self._filter_favorites_only = False  # v3.3: 즐겨찾기 필터
+        self._filter_tag = ""  # v3.3: 태그 필터
         self._filter_options_dirty = True
         self._table_data_dirty = True
         self.table_model = XPathItemTableModel([])
@@ -91,7 +92,7 @@ class XPathExplorer(
         self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
         self._search_timer.timeout.connect(self._perform_search)
         
-        # v4.0: ?ㅼ떆媛?誘몃━蹂닿린 ??대㉧
+        # v4.0: 실시간 미리보기 타이머
         self._live_preview_timer = QTimer()
         self._live_preview_timer.setSingleShot(True)
         self._live_preview_timer.setInterval(LIVE_PREVIEW_DEBOUNCE_MS)
@@ -103,7 +104,7 @@ class XPathExplorer(
         self._setup_timers()
         self._refresh_table(refresh_filters=True)
         
-        # v4.0: ?덉뒪?좊━ 珥덇린??
+        # v4.0: 히스토리 기준점 초기화
         self._reset_history_baseline()
 
     def init_settings(self):

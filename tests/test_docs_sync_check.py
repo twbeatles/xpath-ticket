@@ -7,6 +7,7 @@ def _load_docs_sync_module():
     root = Path(__file__).resolve().parent.parent
     script_path = root / "scripts" / "check_docs_sync.py"
     spec = importlib.util.spec_from_file_location("docs_sync_check", script_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules[spec.name] = module

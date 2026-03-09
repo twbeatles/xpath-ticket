@@ -8,6 +8,7 @@ def _load_main_module():
     root = Path(__file__).resolve().parent.parent
     path = root / "xpath 조사기(모든 티켓 사이트).py"
     spec = importlib.util.spec_from_file_location("xpath_main_module", path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)

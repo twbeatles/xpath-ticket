@@ -7,11 +7,10 @@ XPath Explorer Workers
 
 import time
 import logging
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, cast
 from threading import Event
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from xpath_explorer.browser.browser import BrowserManager
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
 from xpath_explorer.tools.ai import XPathAIAssistant
@@ -21,23 +20,22 @@ from xpath_explorer.core.perf import perf_span
 logger = logging.getLogger('XPathExplorer')
 
 class PickerWatcher(QThread):
-    """?붿냼 ?좏깮 媛먯떆 (?ㅻ젅???덉쟾)"""
+    """요소 선택 감시 워커 (스레드 안전)."""
     picked = pyqtSignal(dict)
     cancelled = pyqtSignal()
     
-    def __init__(self, browser: BrowserManager):
+    def __init__(self, browser: Any):
         super().__init__()
         self.browser = browser
-        self._stop_event = Event()  # ?ㅻ젅???덉쟾???대깽??
+        self._stop_event = Event()
         self._reinject_count = 0
         
     def stop(self):
-        """?ㅻ젅??以묒? ?붿껌 (?ㅻ젅???덉쟾)"""
+        """워커 종료 요청."""
         self._stop_event.set()
         
     def run(self):
-        """?쇱빱 媛먯떆 ?ㅻ젅???ㅽ뻾"""
-        # ?쒖옉 ???뺤씤
+        """요소 선택 결과를 주기적으로 확인한다."""
         if not self.browser.is_alive():
             self.cancelled.emit()
             return
@@ -51,7 +49,7 @@ class PickerWatcher(QThread):
         try:
             while not self._stop_event.is_set():
                 try:
-                    # ?좏깮 寃곌낵 ?뺤씤
+                    # 선택 결과 확인
                     result = self.browser.get_picker_result()
                     
                     if result:
@@ -62,33 +60,40 @@ class PickerWatcher(QThread):
                             self.picked.emit(result)
                             break
                     
-                    # ?쒖꽦 ?곹깭 泥댄겕 (二쇨린??
+                    # 주기적으로 picker 활성 상태 확인
                     if retry_count >= active_check_ticks:
                         if not self.browser.is_picker_active():
                             self._reinject_count += 1
                             if self._reinject_count > MAX_REINJECT:
-                                logger.warning(f"?쇱빱 ?ъ＜???잛닔 珥덇낵 ({MAX_REINJECT}??, ?묒뾽 痍⑥냼")
+                                logger.warning(
+                                    "Picker 재주입 최대 횟수 초과 (%s회), 작업 취소",
+                                    MAX_REINJECT,
+                                )
                                 self.cancelled.emit()
                                 break
                             
-                            logger.debug(f"?쇱빱 ?ъ＜???쒕룄 ({self._reinject_count}/{MAX_REINJECT})")
+                            logger.debug(
+                                "Picker 재주입 시도 (%s/%s)",
+                                self._reinject_count,
+                                MAX_REINJECT,
+                            )
                             self.browser.start_picker()
                         retry_count = 0
                         
                     retry_count += 1
                     
-                    # Event 湲곕컲 ?湲?(?명꽣?쏀듃 媛??
+                    # Event 기반 대기 (중단 신호 즉시 반영)
                     if self._stop_event.wait(timeout=poll_seconds):
                         break
                     
                 except Exception as e:
-                    logger.error(f"PickerWatcher ?ㅻ쪟: {e}")
+                    logger.error(f"PickerWatcher 오류: {e}")
                     self.cancelled.emit()
                     break
         finally:
             self._stop_event.clear()
             self._reinject_count = 0
-            logger.debug("PickerWatcher ?ㅻ젅??醫낅즺")
+            logger.debug("PickerWatcher 스레드 종료")
 
 
 class ValidateWorker(QThread):
@@ -97,7 +102,7 @@ class ValidateWorker(QThread):
     validated = pyqtSignal(str, dict)
     finished = pyqtSignal(int, int)
 
-    def __init__(self, browser: BrowserManager, items: List[XPathItem], handles: List[str]):
+    def __init__(self, browser: Any, items: List[XPathItem], handles: List[str]):
         super().__init__()
         self.browser = browser
         self.items = items
@@ -114,7 +119,10 @@ class ValidateWorker(QThread):
 
         original_window: Optional[str] = None
         try:
-            original_window = self.browser.driver.current_window_handle
+            driver = getattr(self.browser, "driver", None)
+            handle = getattr(driver, "current_window_handle", None)
+            if isinstance(handle, str):
+                original_window = handle
         except Exception as e:
             logger.warning(f"현재 윈도우 핸들 조회 실패 (계속 진행): {e}")
 
@@ -122,7 +130,11 @@ class ValidateWorker(QThread):
         found_total = 0
         begin_session = getattr(self.browser, "begin_validation_session", None)
         end_session = getattr(self.browser, "end_validation_session", None)
-        session = begin_session() if callable(begin_session) else None
+        session: Optional[Dict[str, Any]] = None
+        if callable(begin_session):
+            maybe_session = begin_session()
+            if isinstance(maybe_session, dict):
+                session = maybe_session
 
         try:
             for i, item in enumerate(self.items):
@@ -133,10 +145,13 @@ class ValidateWorker(QThread):
 
                 try:
                     try:
-                        result = self.browser.validate_xpath(item.xpath, session=session)
+                        result = cast(
+                            Dict[str, Any],
+                            self.browser.validate_xpath(item.xpath, session=session),
+                        )
                     except TypeError:
                         # 구 시그니처(validate_xpath(xpath)) 호환
-                        result = self.browser.validate_xpath(item.xpath)
+                        result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
                     if result.get('found', False):
                         found_total += 1
                     self.validated.emit(item.name, result)
@@ -165,11 +180,11 @@ class ValidateWorker(QThread):
 
 
 class LivePreviewWorker(QThread):
-    """?ㅼ떆媛??꾨━酉곗슜 ?붿냼 移댁슫???뚯빱"""
+    """실시간 미리보기용 요소 카운트 워커."""
     counted = pyqtSignal(int, int)  # request_id, count
     failed = pyqtSignal(int, str)   # request_id, error
 
-    def __init__(self, browser: BrowserManager, xpath: str, request_id: int, frame_path: Optional[str] = None):
+    def __init__(self, browser: Any, xpath: str, request_id: int, frame_path: Optional[str] = None):
         super().__init__()
         self.browser = browser
         self.xpath = xpath
@@ -198,7 +213,7 @@ class LivePreviewWorker(QThread):
 
 
 class AIGenerateWorker(QThread):
-    """AI XPath ?앹꽦 ?뚯빱"""
+    """AI XPath 생성 워커."""
     generated = pyqtSignal(int, object)  # request_id, XPathSuggestion
     failed = pyqtSignal(int, str)        # request_id, error
 
@@ -227,12 +242,12 @@ class AIGenerateWorker(QThread):
 
 
 class DiffAnalyzeWorker(QThread):
-    """Diff 遺꾩꽍 ?뚯빱"""
+    """DOM diff 분석 워커."""
     progress = pyqtSignal(int, str)
     completed = pyqtSignal(list)
     failed = pyqtSignal(str)
 
-    def __init__(self, items: List[XPathItem], browser: BrowserManager, analyzer: XPathDiffAnalyzer):
+    def __init__(self, items: List[XPathItem], browser: Any, analyzer: XPathDiffAnalyzer):
         super().__init__()
         self.items = items
         self.browser = browser
@@ -253,16 +268,16 @@ class DiffAnalyzeWorker(QThread):
             for i, item in enumerate(self.items):
                 if self._stop_event.is_set():
                     break
-                self.progress.emit(int((i / total) * 100), f"遺꾩꽍 以? {item.name}")
+                self.progress.emit(int((i / total) * 100), f"분석 중: {item.name}")
                 try:
                     current_info = self.browser.get_element_info(item.xpath)
                     if current_info is None:
-                        current_info = {'found': False, 'msg': '?붿냼 ?놁쓬'}
+                        current_info = {'found': False, 'msg': '요소 없음'}
                 except Exception as e:
                     current_info = {'found': False, 'msg': str(e)}
                 results.append(self.analyzer.compare_element(item, current_info))
 
-            self.progress.emit(100, "?꾨즺")
+            self.progress.emit(100, "완료")
             self.completed.emit(results)
         except Exception as e:
             self.failed.emit(str(e))
@@ -276,7 +291,7 @@ class BatchTestWorker(QThread):
     item_tested = pyqtSignal(str, bool, str, str)  # name, success, xpath, msg
     completed = pyqtSignal(list, bool)  # results, cancelled
 
-    def __init__(self, browser: BrowserManager, items: List[XPathItem]):
+    def __init__(self, browser: Any, items: List[XPathItem]):
         super().__init__()
         self.browser = browser
         self.items = items
@@ -291,7 +306,11 @@ class BatchTestWorker(QThread):
         cancelled = False
         begin_session = getattr(self.browser, "begin_validation_session", None)
         end_session = getattr(self.browser, "end_validation_session", None)
-        session = begin_session() if callable(begin_session) else None
+        session: Optional[Dict[str, Any]] = None
+        if callable(begin_session):
+            maybe_session = begin_session()
+            if isinstance(maybe_session, dict):
+                session = maybe_session
 
         if total == 0:
             if callable(end_session):
@@ -313,10 +332,13 @@ class BatchTestWorker(QThread):
                 try:
                     with perf_span("worker.batch_validate_loop"):
                         try:
-                            result = self.browser.validate_xpath(item.xpath, session=session)
+                            result = cast(
+                                Dict[str, Any],
+                                self.browser.validate_xpath(item.xpath, session=session),
+                            )
                         except TypeError:
                             # 구 시그니처(validate_xpath(xpath)) 호환
-                            result = self.browser.validate_xpath(item.xpath)
+                            result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
                     success = result.get('found', False)
                     msg = result.get('msg', '')
                 except Exception as e:
@@ -353,7 +375,7 @@ class BatchScenarioWorker(QThread):
     completed = pyqtSignal(list, bool, str)  # results, cancelled, scenario_name
     failed = pyqtSignal(str)
 
-    def __init__(self, browser: BrowserManager, items: List[XPathItem], scenario: Dict[str, Any]):
+    def __init__(self, browser: Any, items: List[XPathItem], scenario: Dict[str, Any]):
         super().__init__()
         self.browser = browser
         self.items = list(items or [])
@@ -500,10 +522,13 @@ class BatchScenarioWorker(QThread):
 
         begin_session = getattr(self.browser, "begin_validation_session", None)
         end_session = getattr(self.browser, "end_validation_session", None)
-        session = None
+        session: Optional[Dict[str, Any]] = None
         total = len(steps)
         try:
-            session = begin_session() if callable(begin_session) else None
+            if callable(begin_session):
+                maybe_session = begin_session()
+                if isinstance(maybe_session, dict):
+                    session = maybe_session
             for idx, step in enumerate(steps, start=1):
                 if self._stop_event.is_set():
                     cancelled = True

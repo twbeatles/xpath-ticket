@@ -12,7 +12,7 @@ import json
 import re
 import subprocess
 import sys
-from typing import List, Dict, Optional, Any, Callable, Union
+from typing import List, Dict, Optional, Any, Callable, Union, TYPE_CHECKING, TypeAlias, Literal, Sequence, cast
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,15 +23,23 @@ from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
+if TYPE_CHECKING:
+    from playwright.sync_api import Browser as PlaywrightBrowserType
+    from playwright.sync_api import BrowserContext as PlaywrightBrowserContextType
+    from playwright.sync_api import Page as PlaywrightPageType
+else:
+    PlaywrightBrowserType: TypeAlias = Any
+    PlaywrightBrowserContextType: TypeAlias = Any
+    PlaywrightPageType: TypeAlias = Any
+
 # Playwright 가용성 확인
 try:
-    from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
+    from playwright.sync_api import sync_playwright
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
-    Page = Browser = BrowserContext = Any  # type: ignore[misc,assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
     logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
 
@@ -67,9 +75,9 @@ class PlaywrightManager:
     
     def __init__(self):
         self._playwright = None
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
+        self._browser: Optional[PlaywrightBrowserType] = None
+        self._context: Optional[PlaywrightBrowserContextType] = None
+        self._page: Optional[PlaywrightPageType] = None
         self._current_frame = None  # 현재 활성 프레임 컨텍스트
         self._is_initialized = False
         self._stealth_enabled = False
@@ -87,7 +95,7 @@ class PlaywrightManager:
         return PLAYWRIGHT_AVAILABLE
     
     @property
-    def page(self) -> Optional[Page]:
+    def page(self) -> Optional[PlaywrightPageType]:
         """현재 페이지 객체"""
         return self._page
 
@@ -120,13 +128,6 @@ class PlaywrightManager:
         가능한 경우 playwright.__main__ 엔트리포인트를 호출하고,
         실패하면 subprocess로 폴백합니다.
         """
-        try:
-            from playwright.__main__ import main as pw_main  # type: ignore
-            pw_main(["install", "chromium"])
-            return True
-        except Exception as e:
-            logger.warning(f"playwright.__main__ 설치 호출 실패, subprocess로 재시도: {e}")
-
         try:
             completed = subprocess.run(
                 [sys.executable, "-m", "playwright", "install", "chromium"],
@@ -174,7 +175,9 @@ class PlaywrightManager:
         try:
             # 랜덤 User-Agent 선택 (stealth 모드에서는 Chrome 계열 우선)
             user_agent = self._pick_user_agent(stealth)
-            
+            if sync_playwright is None:
+                self.last_error = "sync_playwright is unavailable"
+                return False
             self._playwright = sync_playwright().start()
             
             # 브라우저 시작 옵션
@@ -212,6 +215,9 @@ class PlaywrightManager:
             if self._browser is None:
                 self._browser = self._playwright.chromium.launch(**launch_kwargs)
             self._headless = headless
+            if self._browser is None:
+                self.last_error = "browser launch failed"
+                return False
             
             # 컨텍스트 생성 (fingerprint 설정)
             self._context = self._browser.new_context(
@@ -228,8 +234,14 @@ class PlaywrightManager:
                     "Upgrade-Insecure-Requests": "1",
                 },
             )
+            if self._context is None:
+                self.last_error = "browser context creation failed"
+                return False
             
             self._page = self._context.new_page()
+            if self._page is None:
+                self.last_error = "page creation failed"
+                return False
             
             # 탐지 우회 스크립트 주입
             if stealth:
@@ -312,8 +324,12 @@ class PlaywrightManager:
         except Exception:
             return False
     
-    def navigate(self, url: str, timeout: int = 30000, 
-                 wait_until: str = 'domcontentloaded') -> Union[bool, None]:
+    def navigate(
+        self,
+        url: str,
+        timeout: int = 30000,
+        wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "domcontentloaded",
+    ) -> Union[bool, None]:
         """
         URL 이동
         
@@ -325,7 +341,10 @@ class PlaywrightManager:
         if not self.is_alive():
             return False
         try:
-            self._page.goto(url, timeout=timeout, wait_until=wait_until)
+            page = self._page
+            if page is None:
+                return False
+            page.goto(url, timeout=timeout, wait_until=wait_until)
             return True
         except PlaywrightTimeout:
             logger.warning(f"페이지 로딩 타임아웃: {url}")
@@ -350,7 +369,7 @@ class PlaywrightManager:
     # 네트워크 모니터링
     # =========================================================================
     
-    def start_network_monitoring(self, filter_types: List[str] = None):
+    def start_network_monitoring(self, filter_types: Optional[List[str]] = None):
         """네트워크 요청 모니터링 시작"""
         if not self.is_alive():
             return
@@ -388,9 +407,11 @@ class PlaywrightManager:
         # 핸들러 참조 저장 (나중에 제거용)
         self._request_handler = on_request
         self._response_handler = on_response
-        
-        self._page.on('request', self._request_handler)
-        self._page.on('response', self._response_handler)
+        page = self._page
+        if page is None:
+            return
+        page.on('request', self._request_handler)
+        page.on('response', self._response_handler)
         logger.info("네트워크 모니터링 시작")
     
     def stop_network_monitoring(self) -> List[NetworkRequest]:
@@ -401,14 +422,15 @@ class PlaywrightManager:
     
     def _cleanup_network_listeners(self):
         """네트워크 이벤트 리스너 정리"""
-        if self._page and self._request_handler:
+        page = self._page
+        if page and self._request_handler:
             try:
-                self._page.remove_listener('request', self._request_handler)
+                page.remove_listener('request', self._request_handler)
             except Exception:
                 pass
-        if self._page and self._response_handler:
+        if page and self._response_handler:
             try:
-                self._page.remove_listener('response', self._response_handler)
+                page.remove_listener('response', self._response_handler)
             except Exception:
                 pass
         self._request_handler = None
@@ -422,16 +444,16 @@ class PlaywrightManager:
     # 쿠키 관리
     # =========================================================================
     
-    def get_cookies(self) -> List[Dict]:
+    def get_cookies(self) -> List[Dict[str, Any]]:
         """모든 쿠키 가져오기"""
         if not self._context:
             return []
-        return self._context.cookies()
+        return list(cast(Any, self._context).cookies())
     
-    def set_cookies(self, cookies: List[Dict]):
+    def set_cookies(self, cookies: Sequence[Dict[str, Any]]):
         """쿠키 설정"""
         if self._context:
-            self._context.add_cookies(cookies)
+            cast(Any, self._context).add_cookies(list(cookies))
     
     def save_cookies(self, filepath: str):
         """쿠키를 파일로 저장"""
@@ -461,21 +483,28 @@ class PlaywrightManager:
     # 로컬 스토리지
     # =========================================================================
     
-    def get_local_storage(self) -> Dict:
+    def get_local_storage(self) -> Dict[str, Any]:
         """로컬 스토리지 가져오기"""
         if not self.is_alive():
             return {}
         try:
-            return self._page.evaluate("() => Object.assign({}, localStorage)")
+            page = self._page
+            if page is None:
+                return {}
+            result = page.evaluate("() => Object.assign({}, localStorage)")
+            return dict(result) if isinstance(result, dict) else {}
         except Exception:
             return {}
     
-    def set_local_storage(self, data: Dict):
+    def set_local_storage(self, data: Dict[str, Any]):
         """로컬 스토리지 설정 (안전한 방식)"""
         if not self.is_alive():
             return
+        page = self._page
+        if page is None:
+            return
         # XSS 취약점 방지: 파라미터로 데이터 전달
-        self._page.evaluate(
+        page.evaluate(
             "(data) => { for (const [k, v] of Object.entries(data)) localStorage.setItem(k, v); }",
             data
         )
@@ -738,8 +767,12 @@ class PlaywrightManager:
             logger.error(f"입력 실패: {e}")
             return False
     
-    def wait_for_element(self, xpath: str, timeout: int = 10000, 
-                         state: str = 'visible') -> bool:
+    def wait_for_element(
+        self,
+        xpath: str,
+        timeout: int = 10000,
+        state: Literal["attached", "detached", "hidden", "visible"] = "visible",
+    ) -> bool:
         """요소 대기"""
         if not self.is_alive():
             return False
@@ -759,7 +792,10 @@ class PlaywrightManager:
         if not self.is_alive():
             return False
         try:
-            self._page.wait_for_load_state('domcontentloaded', timeout=timeout)
+            page = self._page
+            if page is None:
+                return False
+            page.wait_for_load_state('domcontentloaded', timeout=timeout)
             return True
         except Exception:
             return False
@@ -768,19 +804,22 @@ class PlaywrightManager:
     # 스크린샷 및 캡처
     # =========================================================================
     
-    def screenshot(self, path: str = None, full_page: bool = False) -> Optional[bytes]:
+    def screenshot(self, path: Optional[str] = None, full_page: bool = False) -> Optional[bytes]:
         """스크린샷 캡처"""
         if not self.is_alive():
             return None
         try:
+            page = self._page
+            if page is None:
+                return None
             if path:
-                return self._page.screenshot(path=path, full_page=full_page)
-            return self._page.screenshot(full_page=full_page)
+                return page.screenshot(path=path, full_page=full_page)
+            return page.screenshot(full_page=full_page)
         except Exception as e:
             logger.error(f"스크린샷 실패: {e}")
             return None
     
-    def capture_element(self, xpath: str, path: str = None) -> Optional[bytes]:
+    def capture_element(self, xpath: str, path: Optional[str] = None) -> Optional[bytes]:
         """특정 요소 캡처"""
         if not self.is_alive():
             return None
@@ -810,7 +849,10 @@ class PlaywrightManager:
             return False
         
         try:
-            self._page.pdf(path=path)
+            page = self._page
+            if page is None:
+                return False
+            page.pdf(path=path)
             return True
         except Exception as e:
             logger.error(f"PDF 저장 실패: {e}")
@@ -946,17 +988,19 @@ class PlaywrightManager:
     # iframe 처리
     # =========================================================================
     
-    def get_frames(self) -> List[Dict]:
+    def get_frames(self) -> List[Dict[str, Any]]:
         """모든 프레임 목록"""
         if not self.is_alive():
             return []
-            
-        frames = []
-        for frame in self._page.frames:
+        page = self._page
+        if page is None:
+            return []
+        frames: List[Dict[str, Any]] = []
+        for frame in page.frames:
             frames.append({
                 "name": frame.name or "(unnamed)",
                 "url": frame.url,
-                "is_main": frame == self._page.main_frame
+                "is_main": frame == page.main_frame
             })
         return frames
     
@@ -966,13 +1010,16 @@ class PlaywrightManager:
             return False
         
         try:
+            page = self._page
+            if page is None:
+                return False
             if not frame_name or frame_name == 'main':
                 # 메인 프레임으로 복귀
-                self._current_frame = self._page.main_frame
+                self._current_frame = page.main_frame
                 return True
             
             # 프레임 찾기
-            for frame in self._page.frames:
+            for frame in page.frames:
                 if frame.name == frame_name or frame.url.endswith(frame_name):
                     self._current_frame = frame
                     logger.debug(f"프레임 전환 성공: {frame_name}")

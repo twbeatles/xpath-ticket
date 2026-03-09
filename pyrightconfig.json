@@ -1,0 +1,19 @@
+{
+  "include": [
+    "xpath_explorer",
+    "tests",
+    "scripts",
+    "xpath 조사기(모든 티켓 사이트).py"
+  ],
+  "exclude": [
+    "archive",
+    "**/__pycache__",
+    ".pytest_cache",
+    "build",
+    "dist"
+  ],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.10",
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none"
+}

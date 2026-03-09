@@ -49,10 +49,14 @@
 1. 문서 동기화
 - `python scripts/check_docs_sync.py --strict-warnings`
 
-2. 회귀 테스트
+2. 인코딩/타입 점검
+- `python scripts/check_encoding_health.py`
+- `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"`
+
+3. 회귀 테스트
 - `pytest -q`
 
-3. 릴리즈 사전 점검
+4. 릴리즈 사전 점검
 - `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 - 내부적으로 `scripts/run_release_smoke_checks.py`를 호출
 
@@ -70,5 +74,10 @@
 
 ## Git 정리 규칙
 1. `.gitignore`에 로컬 런타임 산출물(`.xpath_explorer/`, `htmlcov/`, PyInstaller 산출물) 누락 여부 점검
-2. 품질 체크 통과 후 커밋
+2. `python scripts/check_encoding_health.py` + `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 점검 통과 후 커밋
 3. 기본 브랜치(`main`) 푸시 전 테스트/문서 정합성 재확인
+
+## Pylance/인코딩 고정 설정
+- `.editorconfig`: 저장 인코딩 `utf-8` 강제
+- `.vscode/settings.json`: `files.encoding=utf8`, `files.autoGuessEncoding=false`
+- `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, 캐시/빌드) 고정

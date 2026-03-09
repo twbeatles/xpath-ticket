@@ -189,6 +189,13 @@ MIT License
 python scripts/check_docs_sync.py
 ```
 
+## Pylance/인코딩 로컬 점검
+
+```bash
+python scripts/check_encoding_health.py
+pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+```
+
 ## 테스트 맵 (핵심 회귀 축)
 
 - 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`

@@ -8,11 +8,17 @@ def test_get_item_uses_index_after_add_update_remove():
 
     cfg.add_or_update(a)
     cfg.add_or_update(b)
-    assert cfg.get_item("a").xpath == "//a"
-    assert cfg.get_item("b").xpath == "//b"
+    item_a = cfg.get_item("a")
+    item_b = cfg.get_item("b")
+    assert item_a is not None
+    assert item_b is not None
+    assert item_a.xpath == "//a"
+    assert item_b.xpath == "//b"
 
     cfg.add_or_update(XPathItem(name="a", xpath="//a2", category="common"))
-    assert cfg.get_item("a").xpath == "//a2"
+    item_a2 = cfg.get_item("a")
+    assert item_a2 is not None
+    assert item_a2.xpath == "//a2"
 
     cfg.remove_item("b")
     assert cfg.get_item("b") is None
@@ -39,5 +45,9 @@ def test_replace_items_and_from_dict_rebuild_index():
             ],
         }
     )
-    assert loaded.get_item("k1").xpath == "//k1"
-    assert loaded.get_item("k2").xpath == "//k2"
+    item_k1 = loaded.get_item("k1")
+    item_k2 = loaded.get_item("k2")
+    assert item_k1 is not None
+    assert item_k2 is not None
+    assert item_k1.xpath == "//k1"
+    assert item_k2.xpath == "//k2"

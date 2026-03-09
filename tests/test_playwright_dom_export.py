@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from xpath_explorer.browser.playwright import PlaywrightManager
 
 
@@ -70,8 +72,8 @@ def test_collect_dom_snapshots_collects_pages_popups_frames_and_errors():
 
     manager = PlaywrightManager()
     manager._is_initialized = True
-    manager._page = root_page
-    manager._context = _FakeContext([root_page, popup_page, closed_page])
+    cast(Any, manager)._page = root_page
+    cast(Any, manager)._context = _FakeContext([root_page, popup_page, closed_page])
 
     snapshots = manager.collect_dom_snapshots(include_frames=True)
 

@@ -4,11 +4,11 @@ XPath Explorer AI Assistant v4.0
 AI 기반 XPath 추천 모듈 (Google GenAI 통합)
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any, cast
 from dataclasses import dataclass
 import logging
 import json
-import re
+import importlib
 import os
 
 from xpath_explorer.core.paths import resolve_storage_file
@@ -28,7 +28,7 @@ class XPathSuggestion:
 class XPathAIAssistant:
     """AI 기반 XPath 추천 어시스턴트"""
     
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: Optional[str] = None):
         """
         Args:
             api_key: OpenAI API 키 (없으면 환경변수 또는 설정 파일에서 로드)
@@ -49,7 +49,7 @@ class XPathAIAssistant:
         self._api_key = api_key or self._config.get(f'{self._provider}_api_key')
 
         
-    def _load_config(self) -> Dict:
+    def _load_config(self) -> Dict[str, Any]:
         """설정 로드"""
         config = {}
         
@@ -78,7 +78,12 @@ class XPathAIAssistant:
             return None
         return self._config.get(f'{self._provider}_api_key')
     
-    def configure(self, api_key: str, model: str = None, provider: str = "openai") -> bool:
+    def configure(
+        self,
+        api_key: str,
+        model: Optional[str] = None,
+        provider: str = "openai",
+    ) -> bool:
         """
         AI 설정
         
@@ -130,7 +135,24 @@ class XPathAIAssistant:
         """AI 기능 사용 가능 여부"""
         return bool(self._api_key)
     
-    def _get_client(self):
+    @staticmethod
+    def _safe_json_loads(payload: Any) -> Dict[str, Any]:
+        if isinstance(payload, (bytes, bytearray)):
+            payload = payload.decode("utf-8", errors="ignore")
+        if not isinstance(payload, str):
+            return {}
+        payload = payload.strip()
+        if not payload:
+            return {}
+        try:
+            data = json.loads(payload)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+        return {}
+
+    def _get_client(self) -> Optional[Any]:
         """클라이언트 초기화 (Provider 분기)"""
         if self._client is not None:
             return self._client
@@ -140,15 +162,21 @@ class XPathAIAssistant:
 
         if self._provider == "openai":
             try:
-                from openai import OpenAI
-                self._client = OpenAI(api_key=self._api_key)
+                openai_module = importlib.import_module("openai")
+                openai_cls = getattr(openai_module, "OpenAI", None)
+                if openai_cls is None:
+                    raise ImportError("openai.OpenAI not found")
+                self._client = openai_cls(api_key=self._api_key)
             except ImportError:
                 raise ImportError("OpenAI 라이브러리가 필요합니다. pip install openai")
                 
         elif self._provider == "gemini":
             try:
-                from google import genai
-                self._client = genai.Client(api_key=self._api_key)
+                genai_module = importlib.import_module("google.genai")
+                client_cls = getattr(genai_module, "Client", None)
+                if client_cls is None:
+                    raise ImportError("google.genai.Client not found")
+                self._client = client_cls(api_key=self._api_key)
             except ImportError:
                 raise ImportError("Google GenAI 라이브러리가 필요합니다. pip install google-genai")
                 
@@ -179,8 +207,8 @@ class XPathAIAssistant:
     def generate_xpath_from_description(
         self, 
         description: str, 
-        page_context: str = None,
-        existing_xpaths: List[str] = None
+        page_context: Optional[str] = None,
+        existing_xpaths: Optional[List[str]] = None
     ) -> XPathSuggestion:
         """
         자연어 설명으로 XPath 생성
@@ -237,7 +265,9 @@ XPath 생성 시 고려사항:
     def _generate_with_gemini(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
         """Gemini API 사용하여 생성 (google-genai)"""
         client = self._get_client()
-        from google import genai
+        if client is None:
+            return self._fallback_suggestion(user_prompt)
+        client = cast(Any, client)
         from google.genai import types
         
         try:
@@ -249,13 +279,13 @@ XPath 생성 시 고려사항:
                     response_mime_type="application/json"
                 )
             )
-            result = json.loads(response.text)
+            result = self._safe_json_loads(getattr(response, "text", None))
             
             return XPathSuggestion(
                 xpath=result.get("xpath", ""),
                 confidence=float(result.get("confidence", 0.0)),
                 explanation=result.get("explanation", ""),
-                alternative_xpaths=result.get("alternatives", [])
+                alternative_xpaths=list(result.get("alternatives") or [])
             )
         except Exception as e:
             # Fallback
@@ -270,6 +300,9 @@ XPath 생성 시 고려사항:
     def _generate_with_openai(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
         """OpenAI API 사용하여 생성"""
         client = self._get_client()
+        if client is None:
+            return self._fallback_suggestion(user_prompt)
+        client = cast(Any, client)
         response = client.chat.completions.create(
             model=self._model,
             messages=[
@@ -280,14 +313,18 @@ XPath 생성 시 고려사항:
             max_tokens=500,
             response_format={"type": "json_object"}
         )
-        
-        result = json.loads(response.choices[0].message.content)
+        content = None
+        try:
+            content = response.choices[0].message.content
+        except Exception:
+            content = None
+        result = self._safe_json_loads(content)
         
         return XPathSuggestion(
             xpath=result.get("xpath", ""),
             confidence=float(result.get("confidence", 0.0)),
             explanation=result.get("explanation", ""),
-            alternative_xpaths=result.get("alternatives", [])
+            alternative_xpaths=list(result.get("alternatives") or [])
         )
     
     def _fallback_suggestion(self, description: str) -> XPathSuggestion:
@@ -354,7 +391,11 @@ XPath 생성 시 고려사항:
             alternative_xpaths=[]
         )
     
-    def analyze_page_elements(self, page_html: str, target_types: List[str] = None) -> List[Dict]:
+    def analyze_page_elements(
+        self,
+        page_html: str,
+        target_types: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         """
         페이지 분석 후 주요 요소 자동 인식
         
@@ -403,9 +444,12 @@ HTML:
             logger.warning(f"페이지 분석 실패: {e}")
             return []
     
-    def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict]:
+    def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
         """Gemini API로 페이지 분석 (google-genai)"""
         client = self._get_client()
+        if client is None:
+            return []
+        client = cast(Any, client)
         from google.genai import types
 
         try:
@@ -417,15 +461,19 @@ HTML:
                     response_mime_type="application/json"
                 )
             )
-            result = json.loads(response.text)
-            return result.get("elements", [])
+            result = self._safe_json_loads(getattr(response, "text", None))
+            elements = result.get("elements")
+            return list(elements) if isinstance(elements, list) else []
         except Exception as e:
             logger.warning(f"Gemini Analyze Error: {e}")
             return []
     
-    def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict]:
+    def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
         """OpenAI API로 페이지 분석"""
         client = self._get_client()
+        if client is None:
+            return []
+        client = cast(Any, client)
         response = client.chat.completions.create(
             model=self._model,
             messages=[
@@ -436,11 +484,16 @@ HTML:
             max_tokens=1500,
             response_format={"type": "json_object"}
         )
-        
-        result = json.loads(response.choices[0].message.content)
-        return result.get("elements", [])
+        content = None
+        try:
+            content = response.choices[0].message.content
+        except Exception:
+            content = None
+        result = self._safe_json_loads(content)
+        elements = result.get("elements")
+        return list(elements) if isinstance(elements, list) else []
     
-    def improve_xpath(self, xpath: str, issue_description: str = None) -> XPathSuggestion:
+    def improve_xpath(self, xpath: str, issue_description: Optional[str] = None) -> XPathSuggestion:
         """
         기존 XPath 개선 제안
         
@@ -488,6 +541,14 @@ HTML:
 
     def _improve_with_openai(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
         client = self._get_client()
+        if client is None:
+            return XPathSuggestion(
+                xpath=original_xpath,
+                confidence=0.0,
+                explanation="OpenAI client unavailable",
+                alternative_xpaths=[],
+            )
+        client = cast(Any, client)
         response = client.chat.completions.create(
             model=self._model,
             messages=[
@@ -498,19 +559,31 @@ HTML:
             max_tokens=400,
             response_format={"type": "json_object"}
         )
-        
-        result = json.loads(response.choices[0].message.content)
+        content = None
+        try:
+            content = response.choices[0].message.content
+        except Exception:
+            content = None
+        result = self._safe_json_loads(content)
         
         return XPathSuggestion(
             xpath=result.get("improved_xpath", original_xpath),
             confidence=float(result.get("confidence", 0.5)),
             explanation=result.get("explanation", ""),
-            alternative_xpaths=result.get("alternatives", [])
+            alternative_xpaths=list(result.get("alternatives") or [])
         )
         
     def _improve_with_gemini(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
         """Gemini를 사용한 XPath 개선"""
         client = self._get_client()
+        if client is None:
+            return XPathSuggestion(
+                xpath=original_xpath,
+                confidence=0.0,
+                explanation="Gemini client unavailable",
+                alternative_xpaths=[],
+            )
+        client = cast(Any, client)
         from google.genai import types
         
         try:
@@ -522,13 +595,13 @@ HTML:
                     response_mime_type="application/json"
                 )
             )
-            result = json.loads(response.text)
+            result = self._safe_json_loads(getattr(response, "text", None))
              
             return XPathSuggestion(
                 xpath=result.get("improved_xpath", original_xpath),
                 confidence=float(result.get("confidence", 0.5)),
                 explanation=result.get("explanation", ""),
-                alternative_xpaths=result.get("alternatives", [])
+                alternative_xpaths=list(result.get("alternatives") or [])
             )
         except Exception as e:
              return XPathSuggestion(

@@ -11,32 +11,37 @@ XPath Explorer Widgets v3.6
 from PyQt6.QtWidgets import (
     QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, 
     QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
-    QWidget, QSizePolicy, QScrollArea, QToolButton
+    QWidget, QSizePolicy, QToolButton
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QSize, pyqtProperty, pyqtSignal, QParallelAnimationGroup, QAbstractAnimation
-from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter, QAction
+from typing import Optional
+
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QObject, pyqtSignal
+from PyQt6.QtGui import QColor, QWheelEvent
 
 
 class NoWheelComboBox(QComboBox):
     """휠 스크롤로 값이 변경되지 않는 ComboBox"""
     
-    def wheelEvent(self, event):
+    def wheelEvent(self, e: Optional[QWheelEvent]):
         # 휠 이벤트 무시 (부모에게 전달)
-        event.ignore()
+        if e is not None:
+            e.ignore()
 
 
 class NoWheelSpinBox(QSpinBox):
     """휠 스크롤로 값이 변경되지 않는 SpinBox"""
     
-    def wheelEvent(self, event):
-        event.ignore()
+    def wheelEvent(self, e: Optional[QWheelEvent]):
+        if e is not None:
+            e.ignore()
 
 
 class NoWheelDoubleSpinBox(QDoubleSpinBox):
     """휠 스크롤로 값이 변경되지 않는 DoubleSpinBox"""
     
-    def wheelEvent(self, event):
-        event.ignore()
+    def wheelEvent(self, e: Optional[QWheelEvent]):
+        if e is not None:
+            e.ignore()
 
 
 
@@ -237,12 +242,14 @@ class ToastWidget(QFrame):
     
     def _update_position(self):
         """Toast 위치 업데이트 (부모 중앙 상단)"""
-        if self.parent():
-            parent_rect = self.parent().rect()
-            x = (parent_rect.width() - self.width()) // 2
-            self._target_y = 40  # 최종 위치
-            self._start_y = -self.height() - 20  # 시작 위치 (화면 밖)
-            self.move(x, self._start_y)
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        parent_rect = parent.rect()
+        x = (parent_rect.width() - self.width()) // 2
+        self._target_y = 40  # 최종 위치
+        self._start_y = -self.height() - 20  # 시작 위치 (화면 밖)
+        self.move(x, self._start_y)
     
     def _start_slide_in(self):
         """슬라이드 인 + 페이드 인 애니메이션"""
@@ -563,7 +570,11 @@ class ModernSearchInput(QFrame):
             }
         """)
     
-    def eventFilter(self, obj, event):
+    def eventFilter(self, a0: QObject | None, a1: QEvent | None):
+        obj = a0
+        event = a1
+        if event is None:
+            return False
         if obj == self.input:
             if event.type() == QEvent.Type.FocusIn:
                 self.setStyleSheet("""
@@ -599,8 +610,13 @@ class EmptyStateWidget(QFrame):
     - 아이콘 + 메시지 + 액션 버튼
     """
     
-    def __init__(self, icon: str = "📭", message: str = "데이터가 없습니다.", 
-                 action_text: str = None, parent=None):
+    def __init__(
+        self,
+        icon: str = "📭",
+        message: str = "데이터가 없습니다.",
+        action_text: str | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("empty_state_widget")
         
@@ -699,7 +715,8 @@ class CollapsibleBox(QWidget):
         self.main_layout.setSpacing(0)
         
         # 헤더/토글 버튼
-        self.toggle_button = QToolButton(text=title)
+        self.toggle_button = QToolButton()
+        self.toggle_button.setText(title)
         self.toggle_button.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -752,8 +769,12 @@ class CollapsibleBox(QWidget):
         
         # 애니메이션 시작
         # 현재 컨텐츠의 높이 계산
-        self.content_area.layout().activate()
-        content_height = self.content_area.layout().sizeHint().height()
+        content_layout = self.content_area.layout()
+        if content_layout is None:
+            self.toggled.emit(expanded)
+            return
+        content_layout.activate()
+        content_height = content_layout.sizeHint().height()
         
         self.animation.stop()
         if expanded:

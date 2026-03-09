@@ -7,6 +7,7 @@ def _load_release_smoke_module():
     root = Path(__file__).resolve().parent.parent
     script_path = root / "scripts" / "run_release_smoke_checks.py"
     spec = importlib.util.spec_from_file_location("release_smoke_checks", script_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules[spec.name] = module

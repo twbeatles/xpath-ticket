@@ -5,6 +5,10 @@ __pycache__/
 *.pyo
 *.so
 .Python
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.pyrightcache/
 
 # Virtualenv
 .venv/
@@ -21,6 +25,8 @@ htmlcov/
 build/
 dist/
 *.spec.bak
+pyright-report*.json
+pyright-scope-report*.json
 
 # Logs / local app data
 *.log
@@ -29,4 +35,9 @@ dist/
 # Project-specific local folders
 backup/
 backups/
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+.idea/
 

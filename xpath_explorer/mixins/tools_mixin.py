@@ -1,4 +1,5 @@
 ﻿# -*- coding: utf-8 -*-
+# pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 import csv

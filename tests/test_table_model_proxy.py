@@ -38,16 +38,24 @@ def test_proxy_filters_and_item_mapping():
 
     proxy.set_category_filter("login", "전체")
     assert proxy.rowCount() == 2
-    assert {proxy.get_item(0).name, proxy.get_item(1).name} == {"login_btn", "login_input"}
+    first_item = proxy.get_item(0)
+    second_item = proxy.get_item(1)
+    assert first_item is not None
+    assert second_item is not None
+    assert {first_item.name, second_item.name} == {"login_btn", "login_input"}
 
     proxy.set_search_text("아이디")
     assert proxy.rowCount() == 1
-    assert proxy.get_item(0).name == "login_input"
+    search_item = proxy.get_item(0)
+    assert search_item is not None
+    assert search_item.name == "login_input"
 
     proxy.set_search_text("")
     proxy.set_favorites_only(True)
     assert proxy.rowCount() == 1
-    assert proxy.get_item(0).name == "login_btn"
+    favorite_item = proxy.get_item(0)
+    assert favorite_item is not None
+    assert favorite_item.name == "login_btn"
 
     proxy.set_favorites_only(False)
     proxy.set_tag_filter("seat", "모든 태그")
@@ -55,5 +63,7 @@ def test_proxy_filters_and_item_mapping():
 
     proxy.set_category_filter("전체", "전체")
     assert proxy.rowCount() == 1
-    assert proxy.get_item(0).name == "seat_map"
+    final_item = proxy.get_item(0)
+    assert final_item is not None
+    assert final_item.name == "seat_map"
 

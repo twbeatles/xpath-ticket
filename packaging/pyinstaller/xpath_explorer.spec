@@ -144,7 +144,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,      # UPX 압축 (upx.exe 필요)
+    upx=False,      # 기본 비활성(필요 시 True로 변경, upx.exe 필요)
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,  # GUI 앱
@@ -154,6 +154,9 @@ exe = EXE(
 
 # ============================================================================
 # 빌드 팁:
+# - 빌드 전 정합성 점검:
+#   python scripts/check_encoding_health.py
+#   pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
 # - AI 기능: openai, google-genai 별도 설치

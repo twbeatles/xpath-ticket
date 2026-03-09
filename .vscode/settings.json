@@ -1,0 +1,15 @@
+{
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.extraPaths": [
+    "."
+  ],
+  "python.analysis.exclude": [
+    "archive",
+    "**/__pycache__",
+    ".pytest_cache",
+    "build",
+    "dist"
+  ]
+}

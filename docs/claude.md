@@ -55,8 +55,10 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 ## 8. 배포/품질 절차
 ### 로컬 필수 체크
 1. `python scripts/check_docs_sync.py --strict-warnings`
-2. `pytest -q`
-3. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
+2. `python scripts/check_encoding_health.py`
+3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"`
+4. `pytest -q`
+5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 
 ### 릴리즈 스모크
 `python scripts/run_release_smoke_checks.py`
@@ -78,6 +80,14 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 
 ## 11. Git 운영 체크
 1. 코드 변경 후 `python scripts/check_docs_sync.py --strict-warnings` 실행
-2. `pytest -q` 실행
-3. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
-4. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
+2. `python scripts/check_encoding_health.py` 실행
+3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 실행
+4. `pytest -q` 실행
+5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
+6. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
+
+## 12. Pylance/인코딩 운영 기준
+- 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
+- VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
+- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`)
+- 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 점검

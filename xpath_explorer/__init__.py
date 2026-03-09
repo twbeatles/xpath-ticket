@@ -1,3 +1,4 @@
+# pyright: reportUnsupportedDunderAll=false
 """XPath Explorer package."""
 
 __all__ = ["XPathExplorer", "main"]
