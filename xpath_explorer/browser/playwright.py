@@ -12,7 +12,7 @@ import json
 import re
 import subprocess
 import sys
-from typing import List, Dict, Optional, Any, Callable, Union, TYPE_CHECKING, TypeAlias, Literal, Sequence, cast
+from typing import List, Dict, Optional, Any, Callable, Union, TypeAlias, Literal, Sequence, cast
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,14 +23,9 @@ from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
-if TYPE_CHECKING:
-    from playwright.sync_api import Browser as PlaywrightBrowserType
-    from playwright.sync_api import BrowserContext as PlaywrightBrowserContextType
-    from playwright.sync_api import Page as PlaywrightPageType
-else:
-    PlaywrightBrowserType: TypeAlias = Any
-    PlaywrightBrowserContextType: TypeAlias = Any
-    PlaywrightPageType: TypeAlias = Any
+PlaywrightBrowserType: TypeAlias = Any
+PlaywrightBrowserContextType: TypeAlias = Any
+PlaywrightPageType: TypeAlias = Any
 
 # Playwright 가용성 확인
 try:

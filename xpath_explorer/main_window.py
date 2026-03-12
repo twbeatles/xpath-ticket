@@ -69,11 +69,13 @@ class XPathExplorer(
         self.diff_worker = None
         self.batch_worker = None
         self.scenario_worker = None
+        self.playwright_install_worker = None
         self._live_preview_request_id = 0
         self._ai_request_id = 0
         self._ai_last_xpath = ""
         self._dom_diff_baseline = []
         self._dom_diff_source = ""
+        self._editing_original_name = ""
         self.undo_action: Optional[QAction] = None
         self.redo_action: Optional[QAction] = None
         

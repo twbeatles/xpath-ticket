@@ -35,6 +35,7 @@ WebDriverException =Exception
 NoSuchFrameException =Exception 
 StaleElementReferenceException =Exception 
 NoSuchElementException =Exception 
+InvalidSelectorException =Exception 
 try :
     from selenium import webdriver 
     from selenium .webdriver .chrome .service import Service 
@@ -45,6 +46,7 @@ try :
     from selenium .webdriver .support .ui import WebDriverWait 
     from selenium .webdriver .support import expected_conditions as EC 
     from selenium .common .exceptions import (
+    InvalidSelectorException ,
     NoSuchElementException ,
     NoSuchFrameException ,
     NoSuchWindowException ,
@@ -743,6 +745,13 @@ class BrowserManager :
                 "text":element .text [:50 ]if element .text else "",
                 "frame_path":frame_path ,
                 }
+        except InvalidSelectorException as e :
+            return {
+            "found":False ,
+            "msg":f"Invalid XPath selector: {self ._short_webdriver_error (e )}",
+            "error_type":"invalid_selector",
+            "frame_path":frame_path ,
+            }
         except Exception :
             return None 
 
@@ -1320,6 +1329,17 @@ class BrowserManager :
                 if not self .is_alive ():
                     return {"found":False ,"msg":"뚮씪곗 곌껐 덈맖"}
 
+                try :
+                    self .driver .find_elements (By .XPATH ,xpath )
+                except InvalidSelectorException as e :
+                    return {
+                    "found":False ,
+                    "msg":f"Invalid XPath selector: {self ._short_webdriver_error (e )}",
+                    "error_type":"invalid_selector",
+                    }
+                except Exception :
+                    pass 
+
                 self ._session_refresh_frame_signature (session )
 
                 tried :Set [str ]=set ()
@@ -1342,9 +1362,11 @@ class BrowserManager :
                 for frame_path in candidate_frames :
                     tried .add (frame_path )
                     found =self ._try_find_in_frame (xpath ,frame_path )
-                    if found :
+                    if found and bool (found .get ("found")):
                         self ._set_xpath_frame_hint (xpath ,frame_path )
                         self ._session_set_hint (session ,xpath ,frame_path )
+                        return found 
+                    if found and found .get ("error_type")=="invalid_selector":
                         return found 
 
                         #4) 몄뀡 꾨젅쒗쉶
@@ -1355,9 +1377,11 @@ class BrowserManager :
                             continue 
                         tried .add (frame_path )
                         found =self ._try_find_in_frame (xpath ,frame_path )
-                        if found :
+                        if found and bool (found .get ("found")):
                             self ._set_xpath_frame_hint (xpath ,frame_path )
                             self ._session_set_hint (session ,xpath ,frame_path )
+                            return found 
+                        if found and found .get ("error_type")=="invalid_selector":
                             return found 
 
                             #5) 몄뀡먯꽌 대 miss 섎━XPath꾩닔 먯깋앸왂
@@ -1371,7 +1395,9 @@ class BrowserManager :
                     return {"found":False ,"msg":"붿냼얠쓣 놁쓬"}
 
                 found =self ._try_find_in_frame (xpath ,frame_path )
-                if not found :
+                if found and found .get ("error_type")=="invalid_selector":
+                    return found 
+                if not found or not bool (found .get ("found")):
                     self ._session_add_miss (session ,xpath )
                     return {"found":False ,"msg":"붿냼얠쓣 놁쓬"}
 

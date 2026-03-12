@@ -64,8 +64,11 @@
 ## 📦 설치
 
 ```bash
-# (권장) requirements 사용
-pip install -r requirements/requirements-full.txt
+# (권장) 개발 표준 환경
+pip install -r requirements/requirements-dev.txt
+
+# 배포/풀 기능 빌드가 필요하면
+# pip install -r requirements/requirements-full.txt
 
 # 최소 설치만 원하면
 # pip install -r requirements/requirements.txt
@@ -196,6 +199,8 @@ python scripts/check_encoding_health.py
 pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
 ```
 
+`pyright` 명령이 없으면 `python -m pyright`를 사용하세요.
+
 ## 테스트 맵 (핵심 회귀 축)
 
 - 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`
@@ -208,6 +213,7 @@ pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).p
 
 ```bash
 python scripts/run_quality_checks.py
+python scripts/run_quality_checks.py --with-pyright
 ```
 
 릴리즈 스모크까지 포함:
@@ -221,6 +227,12 @@ python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 ```bash
 python scripts/run_release_smoke_checks.py
 ```
+
+## CI 품질 게이트
+
+- 워크플로: `.github/workflows/quality.yml`
+- 실행 대상: PR, `main`/`master` push
+- 고정 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
 
 ## 구현 점검 반영 (2026-02-28)
 
@@ -245,3 +257,5 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 - 엔트리포인트는 레거시 래퍼(`xpath 조사기(모든 티켓 사이트).py`)를 사용하고,
   실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
 - `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.
+- `openai`/`google.genai`/`playwright`는 빌드 환경에 설치된 경우에만 `hiddenimports`로 포함됩니다.
+  - 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.

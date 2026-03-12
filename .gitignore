@@ -19,6 +19,7 @@ ENV/
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 
 # Build artifacts (PyInstaller)
@@ -31,6 +32,7 @@ pyright-scope-report*.json
 # Logs / local app data
 *.log
 .xpath_explorer/
+docs-sync-report*.md
 
 # Project-specific local folders
 backup/

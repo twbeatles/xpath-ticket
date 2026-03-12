@@ -106,6 +106,30 @@ class _StopWorker:
         return True
 
 
+class _TimeoutWorker:
+    def __init__(self):
+        self.cancel_called = 0
+        self.wait_args = []
+        self.disconnect_called = 0
+        self.terminate_called = 0
+
+    def isRunning(self):
+        return True
+
+    def cancel(self):
+        self.cancel_called += 1
+
+    def wait(self, timeout):
+        self.wait_args.append(timeout)
+        return False
+
+    def disconnect(self):
+        self.disconnect_called += 1
+
+    def terminate(self):
+        self.terminate_called += 1
+
+
 def _first_preset_name() -> str:
     return list(SITE_PRESETS.keys())[0]
 
@@ -117,6 +141,27 @@ class _ToolHost(ExplorerToolsMixin):
         self.right_tabs = _FakeTabs(index=1, count=3)
         self.url_collapsible = _FakeCollapsible(expanded=False)
         self.combo_preset = _FakePreset(_first_preset_name())
+
+
+class _NoopWorker:
+    def isRunning(self):
+        return False
+
+
+class _FakeTimer:
+    def __init__(self):
+        self.stopped = False
+
+    def stop(self):
+        self.stopped = True
+
+
+class _FakeEvent:
+    def __init__(self):
+        self.accepted = False
+
+    def accept(self):
+        self.accepted = True
 
 
 class _DataHost(ExplorerDataMixin):
@@ -163,6 +208,55 @@ def test_tools_mixin_stop_worker_thread_supports_cancel_and_stop_paths():
     host._stop_worker_thread(stop_worker, "stop-worker")
     assert stop_worker.stop_called == 1
     assert stop_worker.wait_args == [WORKER_WAIT_TIMEOUT]
+
+
+def test_tools_mixin_stop_worker_thread_disconnects_on_timeout_without_terminate():
+    host = _ToolHost()
+    timeout_worker = _TimeoutWorker()
+
+    host._stop_worker_thread(timeout_worker, "timeout-worker")
+
+    assert timeout_worker.cancel_called == 1
+    assert timeout_worker.wait_args == [WORKER_WAIT_TIMEOUT]
+    assert timeout_worker.disconnect_called == 1
+    assert timeout_worker.terminate_called == 0
+
+
+def test_tools_mixin_close_event_clears_worker_references():
+    class _CloseHost(_ToolHost):
+        def __init__(self):
+            super().__init__()
+            self.check_timer = _FakeTimer()
+            self.picker_watcher = _NoopWorker()
+            self.validate_worker = _NoopWorker()
+            self.live_preview_worker = _NoopWorker()
+            self.ai_worker = _NoopWorker()
+            self.diff_worker = _NoopWorker()
+            self.batch_worker = _NoopWorker()
+            self.scenario_worker = _NoopWorker()
+            self.playwright_install_worker = _NoopWorker()
+            self.pw_manager = type("PW", (), {"close": lambda self: None})()
+            self.stats_manager = type("Stats", (), {"shutdown": lambda self, timeout=5.0: None})()
+            self.browser = type("Browser", (), {"close": lambda self: None})()
+
+        def saveGeometry(self):
+            return b"geometry"
+
+    host = _CloseHost()
+    event = _FakeEvent()
+
+    host.closeEvent(event)
+
+    assert event.accepted is True
+    assert host.check_timer.stopped is True
+    assert host.picker_watcher is None
+    assert host.validate_worker is None
+    assert host.live_preview_worker is None
+    assert host.ai_worker is None
+    assert host.diff_worker is None
+    assert host.batch_worker is None
+    assert host.scenario_worker is None
+    assert host.playwright_install_worker is None
 
 
 def test_data_mixin_load_settings_restores_font_preset_tab_and_url_panel():

@@ -11,8 +11,25 @@ from pathlib import Path
 
 def _run(cmd: list[str], cwd: Path) -> int:
     print(f"$ {' '.join(cmd)}")
-    completed = subprocess.run(cmd, cwd=str(cwd), check=False)
+    try:
+        completed = subprocess.run(cmd, cwd=str(cwd), check=False)
+    except FileNotFoundError as e:
+        print(f"Command not found: {cmd[0]} ({e})")
+        return 127
     return completed.returncode
+
+
+def _run_pyright(cwd: Path) -> int:
+    """Run pyright with fallback to python -m pyright."""
+    code = _run(["pyright"], cwd)
+    if code != 127:
+        return code
+
+    fallback_cmd = [sys.executable, "-m", "pyright"]
+    code = _run(fallback_cmd, cwd)
+    if code != 0:
+        print("Pyright is not available. Install dev deps: pip install -r requirements/requirements-dev.txt")
+    return code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +49,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run release smoke checks after docs/tests",
     )
+    parser.add_argument(
+        "--with-pyright",
+        action="store_true",
+        help="Run pyright type checks after docs/tests",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -44,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         return code
 
     if args.skip_tests:
-        if not args.smoke_release:
+        if not args.with_pyright and not args.smoke_release:
             return 0
     else:
         test_cmd = [
@@ -56,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
             "--cov-report=html",
         ]
         code = _run(test_cmd, repo_root)
+        if code != 0:
+            return code
+
+    if args.with_pyright:
+        code = _run_pyright(repo_root)
         if code != 0:
             return code
 

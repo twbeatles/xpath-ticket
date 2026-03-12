@@ -46,23 +46,34 @@
 - AI 설정 저장 누락: `ai.py`에서 저장 경로 resolve 실패 경고 확인
 
 ## 테스트/검증 루틴
-1. 문서 동기화
+1. 개발/배포 환경 설치
+- 개발 표준: `pip install -r requirements/requirements-dev.txt`
+- 풀 기능 배포 빌드: `pip install -r requirements/requirements-full.txt`
+
+2. 문서 동기화
 - `python scripts/check_docs_sync.py --strict-warnings`
 
-2. 인코딩/타입 점검
+3. 인코딩/타입 점검
 - `python scripts/check_encoding_health.py`
 - `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"`
+- `pyright` 명령이 없으면 `python -m pyright ...` 사용
 
-3. 회귀 테스트
+4. 회귀 테스트
 - `pytest -q`
 
-4. 릴리즈 사전 점검
+5. 릴리즈 사전 점검
 - `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 - 내부적으로 `scripts/run_release_smoke_checks.py`를 호출
 
+6. CI 게이트 확인
+- 워크플로: `.github/workflows/quality.yml`
+- 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 트리거: PR, `main`/`master` push
+
 ## 배포 체크리스트
 - `packaging/pyinstaller/xpath_explorer.spec`에서 TLS 관련 exclude 회귀 확인
-- `packaging/pyinstaller/xpath_explorer.spec`에서 `xpath_explorer.core.paths` hidden import 유지 확인
+- `collect_submodules("xpath_explorer")` 기반 수집 확인
+- `openai`/`google.genai`/`playwright` optional hidden import는 설치된 환경에서만 포함되는지 확인
 - HTTPS smoke 성공 확인
 - DOM report/diff 렌더 smoke 성공 확인
 - 선택 의존성(import) 상태 확인(openai/google-genai/playwright)
@@ -81,3 +92,4 @@
 - `.editorconfig`: 저장 인코딩 `utf-8` 강제
 - `.vscode/settings.json`: `files.encoding=utf8`, `files.autoGuessEncoding=false`
 - `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, 캐시/빌드) 고정
+- optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리

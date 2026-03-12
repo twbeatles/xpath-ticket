@@ -53,12 +53,23 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 저장 실패: `core/paths.py` 폴백 경로와 in-memory 모드 경고 확인
 
 ## 8. 배포/품질 절차
+개발 표준 설치:
+`pip install -r requirements/requirements-dev.txt`
+
+풀 기능 배포 빌드(선택 기능 포함) 시:
+`pip install -r requirements/requirements-full.txt`
+
 ### 로컬 필수 체크
 1. `python scripts/check_docs_sync.py --strict-warnings`
 2. `python scripts/check_encoding_health.py`
-3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"`
+3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` (없으면 `python -m pyright ...`)
 4. `pytest -q`
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
+
+### CI 게이트
+- 워크플로: `.github/workflows/quality.yml`
+- 실행 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 트리거: PR, `main`/`master` push
 
 ### 릴리즈 스모크
 `python scripts/run_release_smoke_checks.py`
@@ -71,7 +82,8 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - spec 파일: `packaging/pyinstaller/xpath_explorer.spec`
 - TLS 관련 라이브러리(`libcrypto`, `libssl`)는 exclude에 넣지 않습니다.
 - 변경 후 반드시 release smoke 스크립트로 회귀 확인합니다.
-- `hiddenimports`에는 `xpath_explorer.core.paths`를 포함해 경로 유틸 누락을 방지합니다.
+- `hiddenimports`는 `collect_submodules("xpath_explorer")` 기반으로 수집합니다.
+- `openai`/`google.genai`/`playwright` 계열은 빌드 환경에 설치된 경우에만 포함됩니다.
 
 ## 10. 문서 동기화 원칙
 - 구조/명칭은 실제 코드 경로 기준으로 작성
@@ -81,7 +93,7 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 ## 11. Git 운영 체크
 1. 코드 변경 후 `python scripts/check_docs_sync.py --strict-warnings` 실행
 2. `python scripts/check_encoding_health.py` 실행
-3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 실행
+3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 실행 (없으면 `python -m pyright ...`)
 4. `pytest -q` 실행
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
 6. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
@@ -90,4 +102,5 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
 - VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
 - pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`)
-- 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 점검
+- optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
+- 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검

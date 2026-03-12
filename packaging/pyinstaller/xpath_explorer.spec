@@ -5,6 +5,7 @@ Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
 """
 
 import os
+from importlib.util import find_spec
 from PyInstaller.utils.hooks import collect_submodules
 os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -15,6 +16,17 @@ ENTRYPOINT_CANDIDATES = [
 ENTRYPOINT = next((path for path in ENTRYPOINT_CANDIDATES if os.path.exists(path)), None)
 if ENTRYPOINT is None:
     raise FileNotFoundError("No valid entrypoint found for PyInstaller build")
+
+
+def _module_available(module_name: str) -> bool:
+    try:
+        return find_spec(module_name) is not None
+    except Exception:
+        return False
+
+
+def _collect_optional_hiddenimports(*module_names: str):
+    return [name for name in module_names if _module_available(name)]
 
 # ============================================================================
 # 히든 임포트 (필수만)
@@ -39,15 +51,6 @@ hiddenimports = [
     'xpath_explorer.analysis.statistics',
     'xpath_explorer.ui.table_model',
     'xpath_explorer.ui.filter_proxy',
-
-    # OpenAI
-    'openai',
-
-    # Google GenAI (신규)
-    'google.genai', 'google.genai.types',
-
-    # Playwright
-    'playwright', 'playwright.sync_api', 'playwright._impl', 'pyee',
     
     # PyQt6 (필수)
     'PyQt6.QtWidgets', 'PyQt6.QtCore', 'PyQt6.QtGui',
@@ -64,6 +67,16 @@ hiddenimports = [
 
 # Project package split support: include all submodules under xpath_explorer/.
 hiddenimports += collect_submodules('xpath_explorer')
+# Optional dependencies: include only when available in build environment.
+hiddenimports += _collect_optional_hiddenimports(
+    'openai',
+    'google.genai',
+    'google.genai.types',
+    'playwright',
+    'playwright.sync_api',
+    'playwright._impl',
+    'pyee',
+)
 
 # ============================================================================
 # 제외 모듈 (경량화)
@@ -159,7 +172,8 @@ exe = EXE(
 #   pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
-# - AI 기능: openai, google-genai 별도 설치
+# - 선택 기능 포함 빌드: pip install -r requirements/requirements-full.txt
+# - AI 기능: openai, google-genai가 설치된 경우 hiddenimports에 자동 포함
 # - Playwright: pip install playwright && playwright install chromium
 # ============================================================================
 

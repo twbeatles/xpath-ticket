@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import re
 import sys
+import tokenize
 from pathlib import Path
 from typing import Iterator, List, Sequence, Tuple
 
@@ -65,6 +67,7 @@ TOKENS = (
     "\u00e2\u20ac\u00a6",
 )
 CP1252_HANGULISH = re.compile(r"[\u00ec\u00ed\u00eb\u00ea][^\s]{1,4}")
+QUESTION_MARK_RUN = re.compile(r"\?{2,}")
 
 
 def iter_candidate_files(root: Path) -> Iterator[Path]:
@@ -78,16 +81,38 @@ def iter_candidate_files(root: Path) -> Iterator[Path]:
                 yield path
 
 
-def looks_like_mojibake(line: str) -> bool:
+def looks_like_mojibake(line: str, include_question_marks: bool = False) -> bool:
     if "\ufffd" in line:
         return True
     if any(token in line for token in TOKENS):
         return True
     if CP1252_HANGULISH.search(line):
         return True
+    if include_question_marks and QUESTION_MARK_RUN.search(line):
+        return True
     if any("\u0080" <= ch <= "\u009f" for ch in line):
         return True
     return False
+
+
+def _scan_python_contexts(text: str) -> List[Tuple[int, str]]:
+    """Inspect Python comments/strings only to reduce false positives."""
+    suspicious: List[Tuple[int, str]] = []
+    reader = io.StringIO(text).readline
+    try:
+        for token in tokenize.generate_tokens(reader):
+            if token.type not in (tokenize.STRING, tokenize.COMMENT):
+                continue
+            raw = token.string
+            if not looks_like_mojibake(raw, include_question_marks=True):
+                continue
+            snippet = raw.strip()
+            if len(snippet) > 120:
+                snippet = snippet[:117] + "..."
+            suspicious.append((token.start[0], snippet))
+    except Exception:
+        return []
+    return suspicious
 
 
 def check_file(path: Path) -> Tuple[str | None, List[Tuple[int, str]]]:
@@ -96,6 +121,11 @@ def check_file(path: Path) -> Tuple[str | None, List[Tuple[int, str]]]:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         return f"{path}: decode error ({exc})", []
+
+    if path.suffix.lower() == ".py":
+        token_hits = _scan_python_contexts(text)
+        if token_hits:
+            return None, token_hits
 
     suspicious: List[Tuple[int, str]] = []
     for index, line in enumerate(text.splitlines(), start=1):

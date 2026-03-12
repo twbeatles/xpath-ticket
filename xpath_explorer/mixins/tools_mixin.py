@@ -53,6 +53,7 @@ from xpath_explorer.workers.background import (
     DiffAnalyzeWorker,
     BatchTestWorker,
     BatchScenarioWorker,
+    InstallChromiumWorker,
 )
 from xpath_explorer.core.perf import perf_span, log_perf_summary
 from xpath_explorer.tools.codegen import CodeGenerator, CodeTemplate, XPathTemplate
@@ -1190,55 +1191,111 @@ class ExplorerToolsMixin:
         layout.addLayout(btn_layout)
         dialog.exec()
 
+    def _set_playwright_status_ui(self, connected: bool):
+        if connected:
+            self.lbl_pw_status.setText("● 연결됨")
+            self.lbl_pw_status.setStyleSheet("color: #a6e3a1;")
+            self.btn_pw_toggle.setText("Playwright 종료")
+        else:
+            self.lbl_pw_status.setText("● 미연결")
+            self.lbl_pw_status.setStyleSheet("color: #f38ba8;")
+            self.btn_pw_toggle.setText("Playwright 시작")
+
+    def _start_playwright_with_navigation(self, url: str) -> bool:
+        if self.pw_manager is None:
+            return False
+        if not self.pw_manager.launch(headless=False, stealth=True):
+            return False
+
+        self._set_playwright_status_ui(True)
+
+        if url == "about:blank":
+            self._show_toast("Playwright 브라우저가 시작되었습니다.", "success")
+            return True
+
+        nav_result = self.pw_manager.navigate(url)
+        if nav_result is True:
+            self._show_toast("Playwright 브라우저가 시작되었습니다.", "success")
+        elif nav_result is None:
+            self._show_toast(
+                f"Playwright는 연결되었지만 페이지 로딩이 지연되었습니다: {url}",
+                "warning",
+                4000,
+            )
+        else:
+            self._show_toast(
+                f"Playwright는 연결되었지만 페이지 이동에 실패했습니다: {url}",
+                "warning",
+                4000,
+            )
+        return True
+
+    def _begin_playwright_chromium_install(self, url: str):
+        worker = getattr(self, "playwright_install_worker", None)
+        if worker is not None and worker.isRunning():
+            self._show_toast("Chromium 설치가 이미 진행 중입니다.", "info")
+            return
+
+        self.playwright_install_worker = InstallChromiumWorker()
+        worker = self.playwright_install_worker
+        self.btn_pw_toggle.setEnabled(False)
+        self._show_toast("Chromium 설치 중... (잠시 기다려주세요)", "info", 4000)
+        worker.completed.connect(lambda ok, msg, target=url: self._on_playwright_chromium_installed(ok, msg, target))
+        worker.start()
+
+    def _on_playwright_chromium_installed(self, success: bool, message: str, url: str):
+        self.playwright_install_worker = None
+        self.btn_pw_toggle.setEnabled(True)
+
+        if not success:
+            detail = f": {message}" if message else ""
+            self._show_toast(f"Chromium 설치 실패{detail}", "error", 5000)
+            self._set_playwright_status_ui(False)
+            return
+
+        self._show_toast("Chromium 설치 완료. Playwright를 다시 시작합니다.", "success", 3000)
+        if not self._start_playwright_with_navigation(url):
+            last_error = getattr(self.pw_manager, "last_error", "")
+            if last_error:
+                self._show_toast(f"Playwright 재시작 실패: {last_error}", "error")
+            else:
+                self._show_toast("Playwright 재시작 실패", "error")
+            self._set_playwright_status_ui(False)
+
     def _toggle_playwright(self):
         """Playwright 브라우저 토글"""
         try:
             from xpath_explorer.browser.playwright import PlaywrightManager
-            
+
             if self.pw_manager is None:
                 self.pw_manager = PlaywrightManager()
-            
+
             if self.pw_manager.is_alive():
                 self.pw_manager.close()
-                self.lbl_pw_status.setText("● 미연결")
-                self.lbl_pw_status.setStyleSheet("color: #f38ba8;")
-                self.btn_pw_toggle.setText("Playwright 시작")
+                self._set_playwright_status_ui(False)
                 self._show_toast("Playwright 브라우저가 종료되었습니다.", "info")
+                return
+
+            url = self.input_url.text().strip() or "about:blank"
+            if self._start_playwright_with_navigation(url):
+                return
+
+            self._set_playwright_status_ui(False)
+            last_error = getattr(self.pw_manager, "last_error", "")
+            if last_error:
+                self._show_toast(f"Playwright 시작 실패: {last_error}", "error")
+
+            choice = QMessageBox.question(
+                self,
+                "Playwright 시작 실패",
+                "Playwright Chromium이 설치되지 않았거나 실행에 실패했습니다.\n\n"
+                "Chromium을 지금 설치하시겠습니까? (playwright install chromium)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if choice == QMessageBox.StandardButton.Yes:
+                self._begin_playwright_chromium_install(url)
             else:
-                url = self.input_url.text().strip() or "about:blank"
-                if self.pw_manager.launch(headless=False, stealth=True):
-                    if url != "about:blank":
-                        self.pw_manager.navigate(url)
-                    self.lbl_pw_status.setText("● 연결됨")
-                    self.lbl_pw_status.setStyleSheet("color: #a6e3a1;")
-                    self.btn_pw_toggle.setText("Playwright 종료")
-                    self._show_toast("Playwright 브라우저가 시작되었습니다.", "success")
-                else:
-                    last_error = getattr(self.pw_manager, "last_error", "")
-                    if last_error:
-                        self._show_toast(f"Playwright 시작 실패: {last_error}", "error")
-                    # EXE 환경에서도 사용 가능하도록 Chromium 설치 UX 제공
-                    choice = QMessageBox.question(
-                        self,
-                        "Playwright 시작 실패",
-                        "Playwright Chromium이 설치되지 않았거나 실행에 실패했습니다.\n\n"
-                        "Chromium을 지금 설치하시겠습니까? (playwright install chromium)",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                    )
-                    if choice == QMessageBox.StandardButton.Yes:
-                        self._show_toast("Chromium 설치 중... (잠시 기다려주세요)", "info", 4000)
-                        ok = PlaywrightManager.install_chromium()
-                        if ok and self.pw_manager.launch(headless=False, stealth=True):
-                            if url != "about:blank":
-                                self.pw_manager.navigate(url)
-                            self.lbl_pw_status.setText("● 연결됨")
-                            self.lbl_pw_status.setStyleSheet("color: #a6e3a1;")
-                            self.btn_pw_toggle.setText("Playwright 종료")
-                            self._show_toast("Playwright 브라우저가 시작되었습니다.", "success")
-                        else:
-                            self._show_toast("Chromium 설치/시작 실패. 콘솔 로그를 확인하세요.", "error")
-                    else:
-                        self._show_toast("Playwright 시작 실패", "error")
+                self._show_toast("Playwright 시작 실패", "error")
         except ImportError:
             self._show_toast("Playwright가 설치되지 않았습니다. pip install playwright", "error")
         except Exception as e:
@@ -1916,6 +1973,12 @@ class ExplorerToolsMixin:
                 waited = wait_fn(timeout)
                 if waited is False:
                     logger.warning(f"{worker_name} 종료 대기 타임아웃")
+                    disconnect_fn = getattr(worker, "disconnect", None)
+                    if callable(disconnect_fn):
+                        try:
+                            disconnect_fn()
+                        except Exception:
+                            pass
         except Exception as e:
             logger.warning(f"{worker_name} 종료 중 예외: {e}")
 
@@ -1939,6 +2002,18 @@ class ExplorerToolsMixin:
             self._stop_worker_thread(getattr(self, "diff_worker", None), "DiffWorker")
             self._stop_worker_thread(getattr(self, "batch_worker", None), "BatchWorker")
             self._stop_worker_thread(getattr(self, "scenario_worker", None), "BatchScenarioWorker")
+            self._stop_worker_thread(
+                getattr(self, "playwright_install_worker", None),
+                "InstallChromiumWorker",
+            )
+            self.picker_watcher = None
+            self.validate_worker = None
+            self.live_preview_worker = None
+            self.ai_worker = None
+            self.diff_worker = None
+            self.batch_worker = None
+            self.scenario_worker = None
+            self.playwright_install_worker = None
 
             pw_manager = getattr(self, "pw_manager", None)
             if pw_manager is not None:

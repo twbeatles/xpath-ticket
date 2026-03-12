@@ -51,6 +51,7 @@ xpath_explorer/
 - `browser/playwright.py`: Playwright 기반 보조 자동화/스캔
 - `workers/background.py`: QThread 워커(검증/배치/미리보기/AI)
 - `tools/ai.py`: OpenAI/Gemini 통합 + 설정 저장/로드
+- `core/optional_imports.py`: 선택 의존성 안전 import 헬퍼
 - `analysis/*.py`: diff/통계 관리
 - `state/history.py`: Undo/Redo 스냅샷 관리
 
@@ -71,14 +72,22 @@ python scripts/check_encoding_health.py
 pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
 ```
 
+`pyright` 명령이 없으면 `python -m pyright ...`를 사용합니다.
+
 ### 품질 일괄 점검
 ```bash
 python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 ```
 
+### CI 기본 게이트
+- 워크플로: `.github/workflows/quality.yml`
+- 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 트리거: PR, `main`/`master` push
+
 ## 6. 스펙 파일 정합성 포인트
 - `packaging/pyinstaller/xpath_explorer.spec`는 `ENTRYPOINT_CANDIDATES`로 래퍼/패키지 엔트리포인트를 모두 지원합니다.
 - `collect_submodules("xpath_explorer")`를 사용해 분할된 패키지 구조를 빌드 수집합니다.
+- 선택 의존성 hidden import는 설치된 빌드 환경에서만 조건부 수집합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 릴리즈 스모크에서 import 상태를 점검합니다.
 

@@ -7,6 +7,7 @@ import json
 import os
 import random
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -53,31 +54,27 @@ from xpath_explorer.runtime import logger
 
 class ExplorerDataMixin:
     def _on_preset_changed(self, preset_name):
-        """
-        [BUG-004] 프리셋 변경 시 확인 로직 개선
-        기존: 같은 프리셋을 다시 선택해도 변경 확인창 뜸
-        수정: 현재 config.name과 다를 때만 확인
-        """
+        """프리셋 전환 시 편집 상태를 안전하게 초기화한다."""
         if preset_name == self.config.name:
             return
 
         if len(self.config.items) > 0:
             reply = QMessageBox.question(
-                self, '확인',
+                self,
+                '확인',
                 f'"{preset_name}" 프리셋을 불러오시겠습니까?\n현재 작성 중인 목록은 초기화됩니다.',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
+                QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.No:
-                # 콤보박스를 이전 값으로 되돌려야 함 (구현 복잡성으로 인해 여기선 생략하고, 그냥 로드 취소)
                 self.combo_preset.blockSignals(True)
                 self.combo_preset.setCurrentText(self.config.name)
                 self.combo_preset.blockSignals(False)
                 return
 
         self.config = SiteConfig.from_preset(preset_name)
-        
-        # URL 입력창 업데이트
+        self._editing_original_name = ''
+
         if self.config.login_url:
             self.input_url.setText(self.config.login_url)
         elif self.config.url:
@@ -87,8 +84,8 @@ class ExplorerDataMixin:
         self._filter_options_dirty = True
         self._refresh_table(refresh_filters=True)
         self._reset_history_baseline()
-        self._show_toast(f"{preset_name} 프리셋 로드 완료", "success")
-
+        self._show_toast(f'{preset_name} 프리셋 로드 완료', 'success')
+    
     def _refresh_filter_options_if_dirty(self, force: bool = False):
         """필터 옵션(카테고리/태그)을 필요할 때만 갱신."""
         if not (force or self._filter_options_dirty):
@@ -268,6 +265,7 @@ class ExplorerDataMixin:
             self._load_to_editor(item)
 
     def _load_to_editor(self, item: XPathItem):
+        self._editing_original_name = item.name
         self.input_name.setText(item.name)
         category_index = self.input_category.findData(item.category)
         if category_index >= 0:
@@ -277,21 +275,20 @@ class ExplorerDataMixin:
         self.input_desc.setText(item.description)
         self.input_xpath.setPlainText(item.xpath)
         self.input_css.setText(item.css_selector)
-        # v3.3: 태그 로드
-        self.input_tags.setText(", ".join(item.tags))
-        
-        # 결과창에 메타데이터 표시
-        meta = f"최근 검증: {'성공' if item.is_verified else '미검증'}\n"
-        if item.element_tag: meta += f"태그: {item.element_tag}\n"
-        if item.found_frame: meta += f"프레임: {item.found_frame}\n"
-        # v3.3: 통계 표시
-        if item.test_count > 0:
-            meta += f"테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n"
-        if item.last_tested:
-            meta += f"최근 테스트: {item.last_tested[:10]}\n"
-        
-        self.txt_result.setPlainText(meta)
+        self.input_tags.setText(', '.join(item.tags))
 
+        meta = f"최근 검증: {'성공' if item.is_verified else '미검증'}\n"
+        if item.element_tag:
+            meta += f'태그: {item.element_tag}\n'
+        if item.found_frame:
+            meta += f'프레임: {item.found_frame}\n'
+        if item.test_count > 0:
+            meta += f'테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n'
+        if item.last_tested:
+            meta += f'최근 테스트: {item.last_tested[:10]}\n'
+
+        self.txt_result.setPlainText(meta)
+    
     def _add_new_item(self):
         """새 항목 추가 모드"""
         self._clear_editor()
@@ -299,41 +296,53 @@ class ExplorerDataMixin:
         self.table.clearSelection()
 
     def _clear_editor(self):
+        self._editing_original_name = ''
         self.input_name.clear()
         self.input_desc.clear()
         self.input_xpath.clear()
         self.input_css.clear()
         self.txt_result.clear()
-        self.input_tags.clear()  # v3.3
-        default_category = self.input_category.findData("common")
+        self.input_tags.clear()
+        default_category = self.input_category.findData('common')
         if default_category >= 0:
             self.input_category.setCurrentIndex(default_category)
         else:
-            self.input_category.setCurrentText("공통")
-
+            self.input_category.setCurrentText('공통')
+    
     def _save_item(self):
-        """항목 저장 - v3.3: 태그 및 통계 보존, v4.0: 히스토리 기록"""
+        """항목 저장 - 이름 변경 충돌 방지 + 메타데이터 보존."""
         name = self.input_name.text().strip()
         xpath = self.input_xpath.toPlainText().strip()
-        
+
         if not name or not xpath:
-            self._show_toast("이름과 XPath는 필수입니다.", "warning")
+            self._show_toast('이름과 XPath는 필수입니다.', 'warning')
             return
-        
-        # 기존 항목이 있는지 확인 (통계 보존용)
+
+        original_name = str(getattr(self, '_editing_original_name', '') or '').strip()
+        original_item = self.config.get_item(original_name) if original_name else None
         existing = self.config.get_item(name)
-        
-        # v4.0: 변경 전 상태 히스토리에 저장
-        action = "update" if existing else "add"
-        self.history_manager.push_state(
-            self.config.items, action, name,
-            f"{name} 항목 {'수정' if existing else '추가'}"
-        )
-        
-        # v3.3: 태그 파싱
+
+        if original_name and original_name != name and existing is not None:
+            self._show_toast(f"'{name}' 이름은 이미 사용 중입니다.", 'warning')
+            return
+
+        source_item = original_item if original_item is not None else existing
+        action = 'add'
+        action_desc = f'{name} 항목 추가'
+        action_name = name
+        if original_name and original_name != name and original_item is not None:
+            action = 'rename'
+            action_name = f'{original_name}->{name}'
+            action_desc = f'{original_name} -> {name} 이름 변경'
+        elif source_item is not None:
+            action = 'update'
+            action_desc = f'{name} 항목 수정'
+
+        self.history_manager.push_state(self.config.items, action, action_name, action_desc)
+
         tags_text = self.input_tags.text().strip()
-        tags = [t.strip() for t in tags_text.split(",") if t.strip()]
-            
+        tags = [t.strip() for t in tags_text.split(',') if t.strip()]
+
         category_value = self.input_category.currentData()
         if not isinstance(category_value, str) or not category_value:
             category_value = category_to_value(self.input_category.currentText().strip())
@@ -344,39 +353,40 @@ class ExplorerDataMixin:
             category=category_value,
             description=self.input_desc.text(),
             css_selector=self.input_css.text().strip(),
-            tags=tags
+            tags=tags,
         )
-        
-        # v3.3: 기존 항목의 메타데이터 보존
-        if existing:
-            item.is_favorite = existing.is_favorite
-            item.test_count = existing.test_count
-            item.success_count = existing.success_count
-            item.last_tested = existing.last_tested
-            item.sort_order = existing.sort_order
-            item.is_verified = existing.is_verified
-            item.element_tag = existing.element_tag
-            item.element_text = existing.element_text
-            item.found_window = existing.found_window
-            item.found_frame = existing.found_frame
-            item.alternatives = list(existing.alternatives or [])
-            item.element_attributes = dict(existing.element_attributes or {})
-            item.screenshot_path = existing.screenshot_path
-            item.ai_generated = existing.ai_generated
-        
-        # 현재 활성 프레임 정보가 있다면 저장 (테스트 후 저장 시 유용)
+
+        if source_item:
+            item.is_favorite = source_item.is_favorite
+            item.test_count = source_item.test_count
+            item.success_count = source_item.success_count
+            item.last_tested = source_item.last_tested
+            item.sort_order = source_item.sort_order
+            item.is_verified = source_item.is_verified
+            item.element_tag = source_item.element_tag
+            item.element_text = source_item.element_text
+            item.found_window = source_item.found_window
+            item.found_frame = source_item.found_frame
+            item.alternatives = list(source_item.alternatives or [])
+            item.element_attributes = dict(source_item.element_attributes or {})
+            item.screenshot_path = source_item.screenshot_path
+            item.ai_generated = source_item.ai_generated
+
         if self.browser.current_frame_path:
-             item.found_frame = self.browser.current_frame_path
-             
+            item.found_frame = self.browser.current_frame_path
+
+        if original_name and original_name != name and original_item is not None:
+            self.config.remove_item(original_name)
+
         self.config.add_or_update(item)
         self._table_data_dirty = True
         self._filter_options_dirty = True
         self._refresh_table(refresh_filters=True)
-        self._update_undo_redo_actions()  # v4.0
-        # 히스토리 현재 상태 동기화 (변경 후)
+        self._update_undo_redo_actions()
         self.history_manager.sync_current_state(self.config.items)
-        self._show_toast(f"'{name}' 저장 완료", "success")
-
+        self._editing_original_name = name
+        self._show_toast(f"'{name}' 저장 완료", 'success')
+    
     def _delete_item(self, name):
         """항목 삭제 - v4.0: 히스토리 기록"""
         if QMessageBox.question(self, "삭제", f"'{name}' 항목을 삭제하시겠습니까?", 
@@ -424,6 +434,7 @@ class ExplorerDataMixin:
     def _new_config(self):
         if QMessageBox.question(self, "새 설정", "모든 항목을 지우고 초기화하시겠습니까?") == QMessageBox.StandardButton.Yes:
             self.config = SiteConfig.from_preset("빈 템플릿")
+            self._editing_original_name = ''
             self._table_data_dirty = True
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
@@ -437,6 +448,7 @@ class ExplorerDataMixin:
                 with open(fname, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.config = SiteConfig.from_dict(data)
+                    self._editing_original_name = ''
                     self._table_data_dirty = True
                     self._filter_options_dirty = True
                     self._refresh_table(refresh_filters=True)
@@ -458,12 +470,13 @@ class ExplorerDataMixin:
     def _export(self, fmt):
         """내보내기"""
         if not self.config.items:
-            self._show_toast("내보낼 항목이 없습니다.", "warning")
+            self._show_toast('내보낼 항목이 없습니다.', 'warning')
             return
-            
-        fname, _ = QFileDialog.getSaveFileName(self, f'{fmt.upper()}로 내보내기', f"xpath_export", f'{fmt.upper()} 파일 (*.{fmt})')
-        if not fname: return
-        
+
+        fname, _ = QFileDialog.getSaveFileName(self, f'{fmt.upper()}로 내보내기', 'xpath_export', f'{fmt.upper()} 파일 (*.{fmt})')
+        if not fname:
+            return
+
         try:
             if fmt == 'json':
                 data = [item.to_dict() for item in self.config.items]
@@ -472,34 +485,39 @@ class ExplorerDataMixin:
             elif fmt == 'csv':
                 with open(fname, 'w', encoding='utf-8', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(["이름", "XPath", "카테고리", "설명"])
+                    writer.writerow(['이름', 'XPath', '카테고리', '설명'])
                     for item in self.config.items:
                         writer.writerow([item.name, item.xpath, item.category, item.description])
             elif fmt == 'python':
-                content = "# Selenium XPaths\n\nclass XPaths:\n"
+                content = '# Selenium XPaths\n\nclass XPaths:\n'
+                used_names: Dict[str, int] = {}
                 for item in self.config.items:
-                    safe_name = item.name.replace(' ', '_').upper()
+                    raw_safe_name = self.code_generator._safe_var_name(item.name)
+                    suffix = used_names.get(raw_safe_name, 0)
+                    used_names[raw_safe_name] = suffix + 1
+                    safe_name = raw_safe_name if suffix == 0 else f'{raw_safe_name}_{suffix + 1}'
                     xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
-                    desc_comment = (item.description or "").replace("\n", " ").replace("\r", " ")
-                    content += f"    {safe_name} = {xpath_literal}  # {desc_comment}\n"
+                    desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
+                    content += f'    {safe_name} = {xpath_literal}  # {desc_comment}\n'
+                compile(content, '<xpath_export>', 'exec')
                 with open(fname, 'w', encoding='utf-8') as f:
                     f.write(content)
             elif fmt == 'javascript':
-                content = "const XPaths = {\n"
+                content = 'const XPaths = {\n'
                 for item in self.config.items:
                     name_literal = json.dumps(item.name, ensure_ascii=False)
                     xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
-                    desc_comment = (item.description or "").replace("\n", " ").replace("\r", " ")
-                    content += f"    {name_literal}: {xpath_literal}, // {desc_comment}\n"
-                content += "};"
+                    desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
+                    content += f'    {name_literal}: {xpath_literal}, // {desc_comment}\n'
+                content += '};'
                 with open(fname, 'w', encoding='utf-8') as f:
                     f.write(content)
-                 
-            self._show_toast(f"{fmt.upper()} 내보내기 성공", "success")
-             
-        except Exception as e:
-            self._show_toast(f"내보내기 실패: {e}", "error")
 
+            self._show_toast(f'{fmt.upper()} 내보내기 성공', 'success')
+
+        except Exception as e:
+            self._show_toast(f'내보내기 실패: {e}', 'error')
+    
     def _increase_font(self):
         self._apply_font_size(self._font_size + 1)
 
@@ -588,7 +606,7 @@ class ExplorerDataMixin:
         
         table = QTableWidget()
         table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["날짜", "??", "XPath", "???"])
+        table.setHorizontalHeaderLabels(["날짜", "태그", "XPath", "프레임"])
         history_hh = table.horizontalHeader()
         if history_hh is not None:
             history_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -648,8 +666,16 @@ class ExplorerDataMixin:
             self._save_xpath_history_data(history)
 
     def _load_xpath_history_data(self):
-        return self.settings.value("xpath_history", [])
+        raw = self.settings.value('xpath_history', [])
+        if not isinstance(raw, list):
+            return []
 
+        normalized: List[Dict[str, Any]] = []
+        for row in raw:
+            if isinstance(row, dict):
+                normalized.append(dict(row))
+        return normalized
+    
     def _save_xpath_history_data(self, history):
         self.settings.setValue("xpath_history", history)
 
@@ -735,26 +761,49 @@ class ExplorerDataMixin:
                 self._show_toast(f"실패: {e}", "error")
 
     def _load_cookies(self):
-        """쿠키 로드"""
-        if not self.browser.is_alive(): return
+        """Load cookies from JSON and report success/failure counts."""
+        if not self.browser.is_alive():
+            return
         driver = self.browser.driver
         if driver is None:
             return
-        fname, _ = QFileDialog.getOpenFileName(self, '쿠키 열기', '', 'JSON 파일 (*.json)')
+        fname, _ = QFileDialog.getOpenFileName(self, 'Open Cookies', '', 'JSON Files (*.json)')
         if fname:
             try:
                 with open(fname, 'r', encoding='utf-8') as f:
                     cookies = json.load(f)
+                if not isinstance(cookies, list):
+                    self._show_toast('Invalid cookie file format.', 'error')
+                    return
+
+                success_count = 0
+                failures: Counter[str] = Counter()
                 for cookie in cookies:
                     try:
                         driver.add_cookie(cookie)
+                        success_count += 1
                     except Exception:
-                        pass  # 개별 쿠키 추가 실패 시 무시
-                self._show_toast(f"쿠키 {len(cookies)}개 로드됨", "success")
+                        key = ''
+                        if isinstance(cookie, dict):
+                            key = str(cookie.get('name', '') or cookie.get('domain', ''))
+                        failures[key or 'unknown'] += 1
+
+                fail_count = max(0, len(cookies) - success_count)
+                if fail_count > 0:
+                    top_failures = ', '.join(
+                        f'{label}({count})' for label, count in failures.most_common(3)
+                    )
+                    summary = f'Cookie load complete: success {success_count}, failed {fail_count}'
+                    if top_failures:
+                        summary += f' | Top failures: {top_failures}'
+                    self._show_toast(summary, 'warning', 5000)
+                else:
+                    self._show_toast(f'Cookie load complete: {success_count}', 'success')
+
                 driver.refresh()
             except Exception as e:
-                self._show_toast(f"실패: {e}", "error")
-
+                self._show_toast(f'Failure: {e}', 'error')
+    
     def _clear_cookies(self):
         if self.browser.is_alive():
             driver = self.browser.driver

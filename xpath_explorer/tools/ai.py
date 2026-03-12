@@ -8,10 +8,10 @@ from typing import List, Dict, Optional, Any, cast
 from dataclasses import dataclass
 import logging
 import json
-import importlib
 import os
 
 from xpath_explorer.core.paths import resolve_storage_file
+from xpath_explorer.core.optional_imports import import_optional
 
 logger = logging.getLogger('XPathExplorer')
 
@@ -152,6 +152,22 @@ class XPathAIAssistant:
             pass
         return {}
 
+    @staticmethod
+    def _build_gemini_generate_config(system_prompt: str) -> Optional[Any]:
+        """Build GenerateContentConfig via dynamic import for optional dependency."""
+        types_module = import_optional("google.genai.types")
+        if types_module is None:
+            return None
+
+        config_cls = getattr(types_module, "GenerateContentConfig", None)
+        if config_cls is None:
+            return None
+
+        return config_cls(
+            system_instruction=system_prompt,
+            response_mime_type="application/json",
+        )
+
     def _get_client(self) -> Optional[Any]:
         """클라이언트 초기화 (Provider 분기)"""
         if self._client is not None:
@@ -161,24 +177,22 @@ class XPathAIAssistant:
             return None
 
         if self._provider == "openai":
-            try:
-                openai_module = importlib.import_module("openai")
-                openai_cls = getattr(openai_module, "OpenAI", None)
-                if openai_cls is None:
-                    raise ImportError("openai.OpenAI not found")
-                self._client = openai_cls(api_key=self._api_key)
-            except ImportError:
+            openai_module = import_optional("openai")
+            if openai_module is None:
                 raise ImportError("OpenAI 라이브러리가 필요합니다. pip install openai")
+            openai_cls = getattr(openai_module, "OpenAI", None)
+            if openai_cls is None:
+                raise ImportError("openai.OpenAI not found")
+            self._client = openai_cls(api_key=self._api_key)
                 
         elif self._provider == "gemini":
-            try:
-                genai_module = importlib.import_module("google.genai")
-                client_cls = getattr(genai_module, "Client", None)
-                if client_cls is None:
-                    raise ImportError("google.genai.Client not found")
-                self._client = client_cls(api_key=self._api_key)
-            except ImportError:
+            genai_module = import_optional("google.genai")
+            if genai_module is None:
                 raise ImportError("Google GenAI 라이브러리가 필요합니다. pip install google-genai")
+            client_cls = getattr(genai_module, "Client", None)
+            if client_cls is None:
+                raise ImportError("google.genai.Client not found")
+            self._client = client_cls(api_key=self._api_key)
                 
         return self._client
 
@@ -268,16 +282,12 @@ XPath 생성 시 고려사항:
         if client is None:
             return self._fallback_suggestion(user_prompt)
         client = cast(Any, client)
-        from google.genai import types
-        
         try:
+            config = self._build_gemini_generate_config(system_prompt)
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json"
-                )
+                **({"config": config} if config is not None else {})
             )
             result = self._safe_json_loads(getattr(response, "text", None))
             
@@ -450,16 +460,12 @@ HTML:
         if client is None:
             return []
         client = cast(Any, client)
-        from google.genai import types
-
         try:
+            config = self._build_gemini_generate_config(system_prompt)
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json"
-                )
+                **({"config": config} if config is not None else {})
             )
             result = self._safe_json_loads(getattr(response, "text", None))
             elements = result.get("elements")
@@ -584,16 +590,12 @@ HTML:
                 alternative_xpaths=[],
             )
         client = cast(Any, client)
-        from google.genai import types
-        
         try:
+            config = self._build_gemini_generate_config(system_prompt)
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json"
-                )
+                **({"config": config} if config is not None else {})
             )
             result = self._safe_json_loads(getattr(response, "text", None))
              
