@@ -243,8 +243,9 @@ python scripts/run_release_smoke_checks.py
 
 - 워크플로: `.github/workflows/quality.yml`
 - 실행 대상: PR, `main`/`master` push
-- 고정 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
-- Qt 런타임이 필요한 테스트는 `pytest -q -m qt`로 별도 실행합니다.
+- 고정 순서: `check_encoding_health` -> `pyright`
+- GitHub Actions에서는 `pytest`를 실행하지 않습니다.
+- 테스트는 로컬 또는 필요 시 수동 실행으로 유지합니다.
 
 ## 구현 점검 반영 (2026-02-28)
 

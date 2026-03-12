@@ -70,9 +70,10 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 
 ### CI 게이트
 - 워크플로: `.github/workflows/quality.yml`
-- 실행 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
+- 실행 순서: `check_encoding_health` -> `pyright`
 - 트리거: PR, `main`/`master` push
-- Qt 런타임 의존 테스트는 로컬/GUI 환경에서 `pytest -q -m qt`로 분리 실행
+- GitHub Actions에서는 `pytest`를 실행하지 않음
+- 테스트는 로컬/GUI 환경에서 수동 실행
 
 ### 릴리즈 스모크
 `python scripts/run_release_smoke_checks.py`

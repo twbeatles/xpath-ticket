@@ -93,12 +93,12 @@ python -m pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 �
 
 ### CI 기본 게이트
 - 워크플로: `.github/workflows/quality.yml`
-- 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
+- 순서: `check_encoding_health` -> `pyright`
 - 트리거: PR, `main`/`master` push
+- GitHub Actions에서는 `pytest`를 실행하지 않습니다.
 
 ### Qt 테스트 정책
 - Qt 런타임이 필요한 테스트는 `pytest.mark.qt`로 분리됩니다.
-- headless CI에서는 `-m "not qt"`를 사용합니다.
 - 로컬 GUI/Qt 환경에서는 `pytest -q -m qt`로 별도 확인합니다.
 
 ## 6. 배포 스펙 정합성

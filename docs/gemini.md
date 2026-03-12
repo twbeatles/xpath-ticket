@@ -69,9 +69,10 @@
 
 6. CI 게이트 확인
 - 워크플로: `.github/workflows/quality.yml`
-- 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
+- 순서: `check_encoding_health` -> `pyright`
 - 트리거: PR, `main`/`master` push
-- Qt 런타임 의존 테스트는 로컬/GUI 환경에서 `pytest -q -m qt`로 별도 확인
+- GitHub Actions에서는 `pytest`를 실행하지 않음
+- 테스트는 로컬/GUI 환경에서 별도 확인
 
 ## 배포 체크리스트
 - `packaging/pyinstaller/xpath_explorer.spec`에서 TLS 관련 exclude 회귀 확인

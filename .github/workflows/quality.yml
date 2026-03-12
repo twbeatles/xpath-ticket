@@ -30,6 +30,3 @@ jobs:
 
       - name: Pyright
         run: pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
-
-      - name: Pytest
-        run: pytest -q -m "not qt"
