@@ -1,7 +1,11 @@
 ﻿from PyQt6.QtCore import QCoreApplication
 
+import pytest
+
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.workers.background import BatchScenarioWorker
+
+pytestmark = pytest.mark.qt
 
 
 class _FakeBrowser:

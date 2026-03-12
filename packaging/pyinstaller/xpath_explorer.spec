@@ -11,7 +11,7 @@ os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 ENTRYPOINT_CANDIDATES = [
     os.path.join(ROOT_DIR, 'xpath 조사기(모든 티켓 사이트).py'),
-    os.path.join(ROOT_DIR, 'xpath_explorer', 'main_window.py'),
+    os.path.join(ROOT_DIR, 'xpath_explorer', '__main__.py'),
 ]
 ENTRYPOINT = next((path for path in ENTRYPOINT_CANDIDATES if os.path.exists(path)), None)
 if ENTRYPOINT is None:
@@ -41,6 +41,7 @@ hiddenimports = [
     'xpath_explorer.ui.styles',
     'xpath_explorer.core.config',
     'xpath_explorer.core.paths',
+    'xpath_explorer.qt_compat',
     'xpath_explorer.ui.widgets',
     # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
     'xpath_explorer.browser.browser',

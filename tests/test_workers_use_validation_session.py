@@ -1,7 +1,11 @@
 from PyQt6.QtCore import QCoreApplication
 
+import pytest
+
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.workers.background import BatchTestWorker, ValidateWorker
+
+pytestmark = pytest.mark.qt
 
 
 def _ensure_qt_app():

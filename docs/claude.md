@@ -5,7 +5,9 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 핵심 실행 진입점은 `xpath_explorer/main_window.py`이며, 화면/브라우저/데이터/도구 책임을 mixin으로 분리했습니다.
 
 ## 2. 현재 코드 구조
+- 패키지 진입점: `xpath_explorer/__main__.py`
 - UI 조립: `xpath_explorer/main_window.py`
+- Qt 호환 계층: `xpath_explorer/qt_compat.py`
 - UI 동작: `xpath_explorer/mixins/ui_mixin.py`
 - 브라우저 제어: `xpath_explorer/mixins/browser_mixin.py`
 - 데이터/설정 관리: `xpath_explorer/mixins/data_mixin.py`
@@ -68,8 +70,9 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 
 ### CI 게이트
 - 워크플로: `.github/workflows/quality.yml`
-- 실행 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 실행 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
 - 트리거: PR, `main`/`master` push
+- Qt 런타임 의존 테스트는 로컬/GUI 환경에서 `pytest -q -m qt`로 분리 실행
 
 ### 릴리즈 스모크
 `python scripts/run_release_smoke_checks.py`
@@ -80,9 +83,11 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 
 ## 9. 패키징 메모
 - spec 파일: `packaging/pyinstaller/xpath_explorer.spec`
+- 엔트리포인트 후보: `xpath 조사기(모든 티켓 사이트).py`, `xpath_explorer/__main__.py`
 - TLS 관련 라이브러리(`libcrypto`, `libssl`)는 exclude에 넣지 않습니다.
 - 변경 후 반드시 release smoke 스크립트로 회귀 확인합니다.
 - `hiddenimports`는 `collect_submodules("xpath_explorer")` 기반으로 수집합니다.
+- `xpath_explorer.qt_compat`는 PyInstaller hidden import에 명시해 headless-safe bootstrap 경로를 유지합니다.
 - `openai`/`google.genai`/`playwright` 계열은 빌드 환경에 설치된 경우에만 포함됩니다.
 
 ## 10. 문서 동기화 원칙
@@ -102,5 +107,6 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
 - VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
 - pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`)
+- Qt 타입은 `TYPE_CHECKING` 분리 또는 `xpath_explorer/qt_compat.py`를 통해 가져와 headless CI import와 충돌시키지 않습니다.
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
 - 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검

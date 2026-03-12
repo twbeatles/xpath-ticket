@@ -5,7 +5,9 @@
 구현 실제와 문서를 항상 동기화하는 것이 목표입니다.
 
 ## 아키텍처 요약
+- 패키지 진입점: `xpath_explorer/__main__.py`
 - 메인 조립: `xpath_explorer/main_window.py`
+- Qt 호환 계층: `xpath_explorer/qt_compat.py`
 - Selenium 제어: `xpath_explorer/browser/browser.py`
 - 워커 실행: `xpath_explorer/workers/background.py`
 - AI 제안: `xpath_explorer/tools/ai.py`
@@ -67,12 +69,15 @@
 
 6. CI 게이트 확인
 - 워크플로: `.github/workflows/quality.yml`
-- 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
 - 트리거: PR, `main`/`master` push
+- Qt 런타임 의존 테스트는 로컬/GUI 환경에서 `pytest -q -m qt`로 별도 확인
 
 ## 배포 체크리스트
 - `packaging/pyinstaller/xpath_explorer.spec`에서 TLS 관련 exclude 회귀 확인
+- 엔트리포인트 후보(`xpath 조사기(모든 티켓 사이트).py`, `xpath_explorer/__main__.py`) 유지 확인
 - `collect_submodules("xpath_explorer")` 기반 수집 확인
+- `xpath_explorer.qt_compat` hidden import 포함 확인
 - `openai`/`google.genai`/`playwright` optional hidden import는 설치된 환경에서만 포함되는지 확인
 - HTTPS smoke 성공 확인
 - DOM report/diff 렌더 smoke 성공 확인
@@ -92,4 +97,5 @@
 - `.editorconfig`: 저장 인코딩 `utf-8` 강제
 - `.vscode/settings.json`: `files.encoding=utf8`, `files.autoGuessEncoding=false`
 - `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, 캐시/빌드) 고정
+- Qt 관련 타입은 `TYPE_CHECKING` import 분리 또는 `xpath_explorer/qt_compat.py`를 사용해 headless CI와 정적 분석을 함께 만족시킴
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리

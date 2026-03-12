@@ -1,8 +1,12 @@
 from PyQt6.QtCore import QCoreApplication
 
+import pytest
+
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
 from xpath_explorer.ui.table_model import XPathItemTableModel
+
+pytestmark = pytest.mark.qt
 
 
 def _ensure_qt_app():

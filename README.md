@@ -33,6 +33,8 @@
 - **저장 경로 폴백**: `Path.home()/.xpath_explorer` 실패 시 TEMP 폴백, 최종 in-memory 동작 보장
 - **DOM Diff Source Guard**: Selenium/Playwright 소스 불일치 시 baseline 재설정
 - **HiDPI 적용 순서 보정**: `configure_qt_env()`를 `QApplication` 생성 전에 적용
+- **Headless Qt 호환성**: `xpath_explorer/qt_compat.py`로 CI/headless import 안전성 확보
+- **패키지 엔트리포인트 추가**: `python -m xpath_explorer` 및 PyInstaller package entrypoint 지원
 - **Release Smoke 자동화**: spec TLS 회귀, HTTPS smoke, DOM 렌더 smoke, optional import 점검
 
 ### 🎨 UI/UX 개선 (v4.1)
@@ -85,6 +87,9 @@ python -m playwright install chromium
 
 ```bash
 python "xpath 조사기(모든 티켓 사이트).py"
+
+# 패키지 엔트리포인트
+python -m xpath_explorer
 ```
 
 ---
@@ -105,7 +110,9 @@ pyinstaller packaging/pyinstaller/xpath_explorer.spec
 | 경로 | 설명 |
 |------|------|
 | `xpath 조사기(모든 티켓 사이트).py` | 레거시 진입점 래퍼 |
+| `xpath_explorer/__main__.py` | 패키지 진입점 (`python -m xpath_explorer`) |
 | `xpath_explorer/main_window.py` | 메인 윈도우 조합 |
+| `xpath_explorer/qt_compat.py` | headless/CI용 Qt 호환 계층 |
 | `xpath_explorer/mixins/` | UI 조립/브라우저 액션/데이터/도구 Mixin |
 | `xpath_explorer/core/` | 상수, 설정 모델, 성능 로깅 |
 | `xpath_explorer/browser/` | Selenium/Playwright, DOM Export |
@@ -201,6 +208,10 @@ pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).p
 
 `pyright` 명령이 없으면 `python -m pyright`를 사용하세요.
 
+타입 안정성 규칙:
+- Qt 의존 import는 `xpath_explorer/qt_compat.py` 또는 `TYPE_CHECKING` 분리 패턴을 우선 사용합니다.
+- headless CI에서도 import 가능한 비GUI 모듈 구조를 유지합니다.
+
 ## 테스트 맵 (핵심 회귀 축)
 
 - 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`
@@ -232,7 +243,8 @@ python scripts/run_release_smoke_checks.py
 
 - 워크플로: `.github/workflows/quality.yml`
 - 실행 대상: PR, `main`/`master` push
-- 고정 순서: `check_encoding_health` -> `pyright` -> `pytest -q`
+- 고정 순서: `check_encoding_health` -> `pyright` -> `pytest -q -m "not qt"`
+- Qt 런타임이 필요한 테스트는 `pytest -q -m qt`로 별도 실행합니다.
 
 ## 구현 점검 반영 (2026-02-28)
 
@@ -254,8 +266,9 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 ## 배포 스펙 점검 메모
 
 - 현재 배포 스펙 파일은 `packaging/pyinstaller/xpath_explorer.spec`입니다.
-- 엔트리포인트는 레거시 래퍼(`xpath 조사기(모든 티켓 사이트).py`)를 사용하고,
-  실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
+- 엔트리포인트 후보는 레거시 래퍼(`xpath 조사기(모든 티켓 사이트).py`)와 패키지 엔트리포인트(`xpath_explorer/__main__.py`)입니다.
+- 실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
 - `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.
+- `xpath_explorer.qt_compat`는 hidden import에 명시되어 headless-safe Qt bootstrap 경로를 유지합니다.
 - `openai`/`google.genai`/`playwright`는 빌드 환경에 설치된 경우에만 `hiddenimports`로 포함됩니다.
   - 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.

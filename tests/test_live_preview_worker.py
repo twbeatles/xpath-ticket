@@ -1,6 +1,10 @@
 from PyQt6.QtCore import QCoreApplication
 
+import pytest
+
 from xpath_explorer.workers.background import LivePreviewWorker
+
+pytestmark = pytest.mark.qt
 
 
 class FakeBrowser:
