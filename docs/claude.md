@@ -48,6 +48,11 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 디버그 로그(`debug.log`)
 - AI 설정(`ai_config.json`)
 
+AI 설정 저장 정책:
+- `XPathAIAssistant.configure()`는 `ok/config_saved/storage_source/message` 결과를 반환합니다.
+- 저장 경로가 없어도 유효한 설정은 현재 세션에 적용되며, UI는 저장 성공과 세션 전용 적용을 구분해 표시합니다.
+- OpenAI 앱 기본 모델은 `gpt-5.4`, Gemini 기본 모델은 `gemini-flash-latest`입니다.
+
 ## 7. 운영 디버깅 체크리스트
 - 브라우저 연결 실패: `browser.py`의 `is_alive`, `_recover_to_available_window` 로그 확인
 - 세션 미스 오탐: `validate_xpath()`의 TTL/프레임 시그니처 갱신 로직 확인
@@ -74,6 +79,11 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 트리거: PR, `main`/`master` push
 - GitHub Actions에서는 `pytest`를 실행하지 않음
 - 테스트는 로컬/GUI 환경에서 수동 실행
+
+보조 메모:
+- `pytest`는 기본적으로 repo-local temp 경로(`.pytest_tmp/`)를 사용합니다.
+- `run_quality_checks.py`는 `pytest-cov`가 없으면 plain `pytest`로 자동 폴백합니다.
+- 커버리지가 필요 없으면 `python scripts/run_quality_checks.py --no-cov` 사용
 
 ### 릴리즈 스모크
 `python scripts/run_release_smoke_checks.py`
@@ -107,7 +117,7 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 ## 12. Pylance/인코딩 운영 기준
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
 - VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
-- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`)
+- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`, exclude에 `.pytest_tmp` 포함)
 - Qt 타입은 `TYPE_CHECKING` 분리 또는 `xpath_explorer/qt_compat.py`를 통해 가져와 headless CI import와 충돌시키지 않습니다.
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
 - 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검

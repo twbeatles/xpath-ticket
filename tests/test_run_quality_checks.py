@@ -41,13 +41,53 @@ def test_quality_checks_smoke_release_runs_after_pytest(monkeypatch):
         return 0
 
     monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: True)
 
     code = module.main(["--smoke-release"])
     assert code == 0
     assert len(calls) == 3
     assert calls[0][1] == "scripts/check_docs_sync.py"
     assert calls[1][1] == "-m"
+    assert "--cov=." in calls[1]
     assert calls[2][1] == "scripts/run_release_smoke_checks.py"
+
+
+def test_quality_checks_runs_plain_pytest_when_pytest_cov_missing(monkeypatch):
+    module = _load_quality_module()
+    calls = []
+
+    def fake_run(cmd, cwd):
+        calls.append(cmd)
+        return 0
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: False)
+
+    code = module.main([])
+
+    assert code == 0
+    assert len(calls) == 2
+    assert calls[1][:3] == [module.sys.executable, "-m", "pytest"]
+    assert "--cov=." not in calls[1]
+
+
+def test_quality_checks_no_cov_disables_coverage_even_when_available(monkeypatch):
+    module = _load_quality_module()
+    calls = []
+
+    def fake_run(cmd, cwd):
+        calls.append(cmd)
+        return 0
+
+    monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: True)
+
+    code = module.main(["--no-cov"])
+
+    assert code == 0
+    assert len(calls) == 2
+    assert calls[1][:3] == [module.sys.executable, "-m", "pytest"]
+    assert "--cov=." not in calls[1]
 
 
 def test_quality_checks_with_pyright_runs_after_pytest(monkeypatch):
@@ -59,6 +99,7 @@ def test_quality_checks_with_pyright_runs_after_pytest(monkeypatch):
         return 0
 
     monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: True)
 
     code = module.main(["--with-pyright"])
     assert code == 0
@@ -94,6 +135,7 @@ def test_quality_checks_with_pyright_and_smoke_release_run_in_order(monkeypatch)
         return 0
 
     monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: True)
 
     code = module.main(["--with-pyright", "--smoke-release"])
     assert code == 0
@@ -115,6 +157,7 @@ def test_quality_checks_with_pyright_failure_stops_smoke_release(monkeypatch):
         return 0
 
     monkeypatch.setattr(module, "_run", fake_run)
+    monkeypatch.setattr(module, "_has_pytest_cov", lambda: True)
 
     code = module.main(["--with-pyright", "--smoke-release"])
     assert code == 7
@@ -164,4 +207,3 @@ def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path
 
     assert code == 127
     assert calls == [["pyright"], [sys.executable, "-m", "pyright"]]
-

@@ -13,8 +13,10 @@ class FakeBrowser:
             "//first": 1,
             "//second": 2,
         }
+        self.calls = []
 
     def count_elements(self, xpath, frame_path=None):
+        self.calls.append((xpath, frame_path))
         return self._counts.get(xpath, -1)
 
 
@@ -58,3 +60,13 @@ def test_latest_request_can_ignore_stale_worker_result():
     older.run()
 
     assert latest["count"] == 2
+
+
+def test_live_preview_worker_passes_frame_path():
+    _ensure_qt_app()
+    browser = FakeBrowser()
+
+    worker = LivePreviewWorker(browser, "//first", 303, frame_path="frame://seat")
+    worker.run()
+
+    assert browser.calls[-1] == ("//first", "frame://seat")

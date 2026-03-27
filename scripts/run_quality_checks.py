@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,10 @@ def _run_pyright(cwd: Path) -> int:
     return code
 
 
+def _has_pytest_cov() -> bool:
+    return importlib.util.find_spec("pytest_cov") is not None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run docs-sync + pytest coverage checks.")
     parser.add_argument(
@@ -54,6 +59,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run pyright type checks after docs/tests",
     )
+    parser.add_argument(
+        "--no-cov",
+        action="store_true",
+        help="Run pytest without coverage even if pytest-cov is installed.",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -73,10 +83,18 @@ def main(argv: list[str] | None = None) -> int:
             sys.executable,
             "-m",
             "pytest",
-            "--cov=.",
-            "--cov-report=term-missing",
-            "--cov-report=html",
         ]
+        enable_coverage = (not args.no_cov) and _has_pytest_cov()
+        if enable_coverage:
+            test_cmd.extend(
+                [
+                    "--cov=.",
+                    "--cov-report=term-missing",
+                    "--cov-report=html",
+                ]
+            )
+        elif not args.no_cov:
+            print("pytest-cov not found; running pytest without coverage.")
         code = _run(test_cmd, repo_root)
         if code != 0:
             return code

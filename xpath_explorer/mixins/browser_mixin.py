@@ -83,6 +83,7 @@ class ExplorerBrowserMixin:
         live_preview_worker: Optional[LivePreviewWorker]
         _live_preview_timer: QTimer
         _live_preview_request_id: int
+        _frame_selection_explicit: bool
         _last_browser_state: Optional[bool]
         _last_window_count: int
 
@@ -100,6 +101,103 @@ class ExplorerBrowserMixin:
         btn_unlock = getattr(self, "btn_picker_unlock", None)
         if btn_unlock is not None:
             btn_unlock.setEnabled(enabled)
+
+    def _get_frame_combo_path(self) -> str:
+        combo = self.__dict__.get("combo_frames")
+        if combo is None:
+            return "main"
+        index = combo.currentIndex()
+        if index < 0:
+            return "main"
+        data = combo.itemData(index)
+        if isinstance(data, str) and data:
+            return data
+        return "main"
+
+    def _set_frame_combo_path(self, frame_path: Optional[str], explicit: Optional[bool] = None):
+        combo = self.__dict__.get("combo_frames")
+        if combo is None:
+            if explicit is not None:
+                self._frame_selection_explicit = explicit
+            return
+
+        target = frame_path or "main"
+        index = combo.findData(target)
+        if index < 0:
+            target = "main"
+            index = combo.findData(target)
+        if index < 0 and combo.count() > 0:
+            index = 0
+
+        combo.blockSignals(True)
+        try:
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        finally:
+            combo.blockSignals(False)
+
+        if explicit is not None:
+            self._frame_selection_explicit = explicit
+
+    def _get_current_item(self) -> Optional[XPathItem]:
+        name_widget = self.__dict__.get("input_name")
+        if name_widget is None or not hasattr(name_widget, "text"):
+            return None
+        name = str(name_widget.text() or "").strip()
+        if not name:
+            return None
+        return self.config.get_item(name)
+
+    def _resolve_active_frame_path(self) -> Optional[str]:
+        combo_frame = self._get_frame_combo_path()
+        if getattr(self, "_frame_selection_explicit", False):
+            return combo_frame or "main"
+
+        item = self._get_current_item()
+        if item is not None and item.found_frame:
+            return item.found_frame
+
+        if combo_frame and combo_frame != "main":
+            return combo_frame
+        return None
+
+    def _validate_xpath_for_ui(self, xpath: str, frame_path: Optional[str]) -> Dict[str, Any]:
+        if frame_path is None:
+            return cast(Dict[str, Any], self.browser.validate_xpath(xpath))
+
+        try:
+            try:
+                info = self.browser.get_element_info(xpath, frame_path=frame_path, include_attributes=False)
+            except TypeError:
+                info = self.browser.get_element_info(xpath, frame_path=frame_path)
+        except Exception as e:
+            return {"found": False, "msg": str(e), "frame_path": frame_path}
+
+        if not info or not info.get("found"):
+            return {
+                "found": False,
+                "msg": str((info or {}).get("msg") or getattr(self.browser, "last_error", "") or "요소를 찾을 수 없습니다."),
+                "frame_path": str((info or {}).get("frame_path", frame_path) or frame_path or ""),
+            }
+
+        return {
+            "found": True,
+            "count": int(info.get("count", 1) or 1),
+            "tag": info.get("tag", ""),
+            "text": info.get("text", ""),
+            "frame_path": str(info.get("frame_path", frame_path) or frame_path or "main"),
+            "msg": "",
+        }
+
+    def _set_live_preview_error(self, message: str):
+        detail = (message or "").strip()
+        if detail and len(detail) > 28:
+            display = detail[:25] + "..."
+        else:
+            display = detail or "오류"
+        self.lbl_live_preview.setText(f"⚠️ {display}")
+        self.lbl_live_preview.setToolTip(detail)
+        self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
 
     def _check_browser(self):
         """브라우저 연결 상태 주기적 확인 (popup/window 변화 포함)."""
@@ -143,6 +241,7 @@ class ExplorerBrowserMixin:
             self.btn_open.setObjectName("primary")
             self.combo_windows.clear()
             self.combo_frames.clear()
+            self._frame_selection_explicit = False
             self._last_window_count = 0
             self._set_picker_action_enabled(False)
 
@@ -180,7 +279,8 @@ class ExplorerBrowserMixin:
                 self._refresh_windows()
                 self._show_toast("브라우저가 실행되었습니다.", "success")
             else:
-                self._show_toast("브라우저 실행 실패. 드라이버를 확인하세요.", "error")
+                last_error = getattr(self.browser, "last_error", "")
+                self._show_toast(last_error or "브라우저 실행 실패. 드라이버를 확인하세요.", "error")
 
     def _navigate(self):
         """URL 이동"""
@@ -290,9 +390,28 @@ class ExplorerBrowserMixin:
             self._show_toast("윈도우 전환 실패", "error")
             self._refresh_windows()
 
+    def _on_frame_changed(self, index):
+        """프레임 전환"""
+        if index < 0:
+            self._frame_selection_explicit = False
+            return
+
+        target_frame = self._get_frame_combo_path()
+        self._frame_selection_explicit = True
+
+        if not self.browser.is_alive():
+            return
+
+        if self.browser.switch_to_frame_by_path(target_frame):
+            self._show_toast("프레임이 전환되었습니다.", "success")
+        else:
+            last_error = getattr(self.browser, "last_error", "")
+            self._show_toast(last_error or "프레임 전환 실패", "error")
+
     def _scan_frames(self):
         """iframe 목록 스캔"""
         with perf_span("ui.scan_frames"):
+            manual_target = self._get_frame_combo_path() if getattr(self, "_frame_selection_explicit", False) else None
             self.combo_frames.blockSignals(True)
             try:
                 self.combo_frames.clear()
@@ -305,6 +424,20 @@ class ExplorerBrowserMixin:
                 for path, identifier in frames:
                     indent = "  " * path.count('/')
                     self.combo_frames.addItem(f"{indent}📄 {identifier}", path)
+                if manual_target and self.combo_frames.findData(manual_target) < 0:
+                    manual_target = None
+                    self._frame_selection_explicit = False
+                target_frame = manual_target
+                if not target_frame:
+                    item = self._get_current_item()
+                    item_frame = item.found_frame if item is not None else ""
+                    if item_frame and self.combo_frames.findData(item_frame) >= 0:
+                        target_frame = item_frame
+                    elif self.browser.current_frame_path and self.combo_frames.findData(self.browser.current_frame_path) >= 0:
+                        target_frame = self.browser.current_frame_path
+                    else:
+                        target_frame = "main"
+                self._set_frame_combo_path(target_frame, explicit=getattr(self, "_frame_selection_explicit", False))
                 self._show_toast(f"{len(frames)}개의 프레임을 찾았습니다.", "info")
             finally:
                 self.combo_frames.blockSignals(False)
@@ -322,15 +455,10 @@ class ExplorerBrowserMixin:
         
         original_frame = self.browser.current_frame_path
 
-        # 테스트 전 현재 선택된 프레임이 있다면 반영
-        selected_frame_idx = self.combo_frames.currentIndex()
-        target_frame = None
-        if selected_frame_idx > 0:
-            target_frame = self.combo_frames.itemData(selected_frame_idx)
-            self.browser.switch_to_frame_by_path(target_frame)
-        
+        target_frame = self._resolve_active_frame_path()
+
         try:
-            result = self.browser.validate_xpath(xpath, preferred_frame=target_frame)
+            result = self._validate_xpath_for_ui(xpath, target_frame)
             success = bool(result.get('found'))
             name = self.input_name.text().strip()
             self._record_validation_outcome(name, xpath, success, result)
@@ -347,8 +475,9 @@ class ExplorerBrowserMixin:
                 else:
                     self.browser.highlight(xpath)
             else:
-                self.txt_result.setPlainText(f"❌ 실패\n{result.get('msg')}")
-                self._show_toast("요소를 찾을 수 없습니다.", "error")
+                error_msg = str(result.get('msg') or getattr(self.browser, "last_error", "") or "요소를 찾을 수 없습니다.")
+                self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
+                self._show_toast(error_msg, "error")
             self._refresh_table()
         finally:
             # 프레임 복구 (항상 원복)
@@ -365,7 +494,10 @@ class ExplorerBrowserMixin:
         if not self.browser.is_alive():
             self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
             return
-        self.browser.highlight(xpath)
+        frame_path = self._resolve_active_frame_path()
+        if not self.browser.highlight(xpath, frame_path=frame_path):
+            last_error = getattr(self.browser, "last_error", "")
+            self._show_toast(last_error or "하이라이트 실패", "error")
 
     def _start_picker(self):
         """요소 선택기 시작"""
@@ -377,12 +509,13 @@ class ExplorerBrowserMixin:
             self._show_toast("요소 선택 모드가 이미 실행 중입니다.", "info")
             return
 
-        self.picker_watcher = PickerWatcher(self.browser)
-        self.picker_watcher.picked.connect(self._on_picked)
-        self.picker_watcher.cancelled.connect(self._on_pick_cancelled)
+        watcher = PickerWatcher(self.browser)
+        self.picker_watcher = watcher
+        watcher.picked.connect(self._on_picked)
+        watcher.cancelled.connect(self._on_pick_cancelled)
         
         self.browser.start_picker(overlay_mode=self.chk_overlay.isChecked())
-        self.picker_watcher.start()
+        watcher.start()
         self._set_picker_action_enabled(True)
 
         self._show_toast(
@@ -476,11 +609,12 @@ class ExplorerBrowserMixin:
         # 현재 열린 모든 윈도우 핸들 수집 (워커에 전달용)
         windows = [w['handle'] for w in self.browser.get_windows()]
         
-        self.validate_worker = ValidateWorker(self.browser, self.config.items, windows)
-        self.validate_worker.progress.connect(lambda v, m: (self.progress_bar.setValue(v), self.lbl_status.setText(m)))
-        self.validate_worker.validated.connect(self._on_validated)
-        self.validate_worker.finished.connect(self._on_validate_finished)
-        self.validate_worker.start()
+        worker = ValidateWorker(self.browser, self.config.items, windows)
+        self.validate_worker = worker
+        worker.progress.connect(lambda v, m: (self.progress_bar.setValue(v), self.lbl_status.setText(m)))
+        worker.validated.connect(self._on_validated)
+        worker.finished.connect(self._on_validate_finished)
+        worker.start()
 
     def _on_validated(self, name, result):
         """개별 검증 결과 처리"""
@@ -502,6 +636,14 @@ class ExplorerBrowserMixin:
         if success:
             item.element_tag = (result or {}).get('tag', '') or item.element_tag
             item.found_frame = frame_path or item.found_frame
+            current_item = self._get_current_item()
+            if (
+                current_item is not None
+                and current_item.name == item.name
+                and not getattr(self, "_frame_selection_explicit", False)
+                and frame_path
+            ):
+                self._set_frame_combo_path(frame_path, explicit=False)
 
         if self.stats_manager:
             self.stats_manager.record_test(
@@ -594,7 +736,7 @@ class ExplorerBrowserMixin:
             self.lbl_live_preview.setText("🔍 매칭: 계산 중...")
             self.lbl_live_preview.setStyleSheet("color: #89b4fa; font-size: 11px;")
 
-            worker = LivePreviewWorker(self.browser, xpath, request_id)
+            worker = LivePreviewWorker(self.browser, xpath, request_id, frame_path=self._resolve_active_frame_path())
             worker.counted.connect(self._on_live_preview_counted)
             worker.failed.connect(self._on_live_preview_failed)
             worker.finished.connect(lambda w=worker: self._on_live_preview_worker_finished(w))
@@ -606,23 +748,25 @@ class ExplorerBrowserMixin:
             return
 
         if count < 0:
-            self.lbl_live_preview.setText("⚠️ 오류")
-            self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+            self._set_live_preview_error(getattr(self.browser, "last_error", ""))
         elif count == 0:
             self.lbl_live_preview.setText("❌ 매칭: 0개")
+            self.lbl_live_preview.setToolTip("")
             self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
         elif count == 1:
             self.lbl_live_preview.setText("✅ 매칭: 1개")
+            self.lbl_live_preview.setToolTip("")
             self.lbl_live_preview.setStyleSheet("color: #a6e3a1; font-size: 11px;")
         else:
             self.lbl_live_preview.setText(f"🔍 매칭: {count}개")
+            self.lbl_live_preview.setToolTip("")
             self.lbl_live_preview.setStyleSheet("color: #fab387; font-size: 11px;")
 
     def _on_live_preview_failed(self, request_id: int, _error: str):
         if request_id != self._live_preview_request_id:
             return
-        self.lbl_live_preview.setText("⚠️ 오류")
-        self.lbl_live_preview.setStyleSheet("color: #f38ba8; font-size: 11px;")
+        last_error = getattr(self.browser, "last_error", "") or _error
+        self._set_live_preview_error(last_error)
 
     def _on_live_preview_worker_finished(self, worker):
         if self.live_preview_worker is worker:
@@ -649,8 +793,9 @@ class ExplorerBrowserMixin:
             return
         
         # 스크린샷 저장
-        success = self.browser.screenshot_element(xpath, fname)
-        
+        frame_path = self._resolve_active_frame_path()
+        success = self.browser.screenshot_element(xpath, fname, frame_path=frame_path)
+
         if success:
             self._show_toast(f"스크린샷 저장 완료: {fname}", "success")
             
@@ -660,7 +805,8 @@ class ExplorerBrowserMixin:
             if item:
                 item.screenshot_path = fname
         else:
-            self._show_toast("스크린샷 저장 실패", "error")
+            last_error = getattr(self.browser, "last_error", "")
+            self._show_toast(last_error or "스크린샷 저장 실패", "error")
 
     def _export_dom_selenium_htm(self):
         """현재 Selenium 브라우저의 전체 DOM을 단일 HTM으로 저장."""

@@ -357,6 +357,7 @@ class ExplorerUIMixin:
         self.browser_layout.addWidget(lbl_frame)
         self.combo_frames = NoWheelComboBox()
         self.combo_frames.setMinimumWidth(70)
+        self.combo_frames.currentIndexChanged.connect(self._on_frame_changed)
         self.browser_layout.addWidget(self.combo_frames)
         
         self.btn_scan_frames = QPushButton("🔍")

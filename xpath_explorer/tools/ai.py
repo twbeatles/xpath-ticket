@@ -4,137 +4,230 @@ XPath Explorer AI Assistant v4.0
 AI 기반 XPath 추천 모듈 (Google GenAI 통합)
 """
 
-from typing import List, Dict, Optional, Any, cast
-from dataclasses import dataclass
-import logging
+from __future__ import annotations
+
 import json
+import logging
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, cast
 
 from xpath_explorer.core.paths import resolve_storage_file
 from xpath_explorer.core.optional_imports import import_optional
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
+
+DEFAULT_OPENAI_MODEL = "gpt-5.4"
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
+SUPPORTED_PROVIDERS = {"openai", "gemini"}
 
 
 @dataclass
 class XPathSuggestion:
     """AI가 제안한 XPath"""
+
     xpath: str
     confidence: float  # 0.0 - 1.0
     explanation: str
     alternative_xpaths: List[str]
 
 
+@dataclass(frozen=True)
+class AIConfigResult:
+    """AI 설정 적용/저장 결과"""
+
+    ok: bool
+    config_saved: bool
+    storage_source: str
+    message: str
+
+
 class XPathAIAssistant:
     """AI 기반 XPath 추천 어시스턴트"""
-    
+
     def __init__(self, api_key: Optional[str] = None):
         """
         Args:
             api_key: OpenAI API 키 (없으면 환경변수 또는 설정 파일에서 로드)
         """
         self._client = None
-        self._provider = "openai"  # "openai" or "gemini"
-        self._model = "gpt-5.2"
-        
-        # 설정 로드 (먼저 실행해야 함)
-        self._config = self._load_config()
-        
-        # 설정 파일에서 provider/model 복원
-        if self._config.get('provider'):
-            self._provider = self._config.get('provider')
-            self._model = self._config.get('model', self._model)
-        
-        # API 키 설정 (인자 > 설정 파일 > 환경변수 순서)
-        self._api_key = api_key or self._config.get(f'{self._provider}_api_key')
+        self._provider = "openai"
+        self._model = DEFAULT_OPENAI_MODEL
 
-        
+        self._config = self._load_config()
+
+        provider = self._coerce_text(self._config.get("provider"), default="openai").lower()
+        if provider in SUPPORTED_PROVIDERS:
+            self._provider = provider
+        self._model = self._coerce_text(
+            self._config.get("model"),
+            default=self._default_model_for_provider(self._provider),
+        )
+
+        self._api_key = api_key or self._config.get(f"{self._provider}_api_key")
+
+    @staticmethod
+    def _default_model_for_provider(provider: str) -> str:
+        return DEFAULT_OPENAI_MODEL if provider == "openai" else DEFAULT_GEMINI_MODEL
+
     def _load_config(self) -> Dict[str, Any]:
         """설정 로드"""
-        config = {}
-        
-        # 1. 환경변수 확인
-        openai_key = os.environ.get('OPENAI_API_KEY')
-        gemini_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
-        
-        if openai_key: config['openai_api_key'] = openai_key
-        if gemini_key: config['gemini_api_key'] = gemini_key
-        
-        # 2. 파일 확인
-        config_path, _source = resolve_storage_file("ai_config.json")
+        config: Dict[str, Any] = {}
+
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+        if openai_key:
+            config["openai_api_key"] = openai_key
+        if gemini_key:
+            config["gemini_api_key"] = gemini_key
+
+        config_path, source = resolve_storage_file("ai_config.json")
         if config_path is not None and config_path.exists():
             try:
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, "r", encoding="utf-8") as f:
                     file_config = json.load(f)
+                if isinstance(file_config, dict):
                     config.update(file_config)
-            except Exception:
-                pass
-                
+            except Exception as e:
+                logger.warning("AI config load failed from %s storage: %s", source, e)
+
         return config
 
     def _load_api_key(self) -> Optional[str]:
         """Deprecated: Use _load_config instead"""
-        if not hasattr(self, '_config') or not hasattr(self, '_provider'):
+        if not hasattr(self, "_config") or not hasattr(self, "_provider"):
             return None
-        return self._config.get(f'{self._provider}_api_key')
-    
+        return cast(Optional[str], self._config.get(f"{self._provider}_api_key"))
+
     def configure(
         self,
         api_key: str,
         model: Optional[str] = None,
         provider: str = "openai",
-    ) -> bool:
+    ) -> AIConfigResult:
         """
         AI 설정
-        
+
         Args:
             api_key: API 키
             model: 사용할 모델
             provider: 'openai' or 'gemini'
-            
+
         Returns:
-            bool: 설정 성공 여부
+            AIConfigResult: 적용 및 저장 결과
         """
-        # API 키 유효성 검증
-        if not api_key or len(api_key.strip()) < 10:
-            return False
-        
-        api_key = api_key.strip()
+        provider = self._coerce_text(provider, default="openai").lower()
+        if provider not in SUPPORTED_PROVIDERS:
+            return AIConfigResult(
+                ok=False,
+                config_saved=False,
+                storage_source="memory",
+                message=f"지원하지 않는 AI 제공자입니다: {provider}",
+            )
+
+        api_key = self._coerce_text(api_key).strip()
+        if len(api_key) < 10:
+            return AIConfigResult(
+                ok=False,
+                config_saved=False,
+                storage_source="memory",
+                message="API 키 형식이 올바르지 않습니다.",
+            )
+
+        resolved_model = self._coerce_text(
+            model,
+            default=self._default_model_for_provider(provider),
+        ).strip() or self._default_model_for_provider(provider)
+
         self._provider = provider
         self._api_key = api_key
-        
-        if model:
-            self._model = model
-        else:
-            # 기본 모델 설정
-            self._model = "gpt-5.2" if provider == "openai" else "gemini-flash-latest"
-            
-        self._client = None  # 재초기화
-        
-        # 설정 업데이트 및 저장
-        self._config['provider'] = provider
-        self._config['model'] = self._model
-        self._config[f'{provider}_api_key'] = api_key
-        
-        self._save_config()
-        return True
+        self._model = resolved_model
+        self._client = None
 
-    def _save_config(self):
-        config_path, _source = resolve_storage_file("ai_config.json")
+        self._config["provider"] = provider
+        self._config["model"] = self._model
+        self._config[f"{provider}_api_key"] = api_key
+
+        return self._save_config()
+
+    def _save_config(self) -> AIConfigResult:
+        config_path, source = resolve_storage_file("ai_config.json")
         if config_path is None:
+            message = "설정은 적용되었지만 저장 가능한 경로가 없어 현재 세션에만 유지됩니다."
             logger.warning("AI config save skipped: no writable storage path.")
-            return
-        config_path.parent.mkdir(parents=True, exist_ok=True)
+            return AIConfigResult(
+                ok=True,
+                config_saved=False,
+                storage_source=source,
+                message=message,
+            )
+
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning("AI config directory init failed (%s): %s", source, e)
+            return AIConfigResult(
+                ok=True,
+                config_saved=False,
+                storage_source=source,
+                message="설정은 적용되었지만 저장 디렉터리를 준비하지 못해 현재 세션에만 유지됩니다.",
+            )
+
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(self._config, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-    
+            return AIConfigResult(
+                ok=True,
+                config_saved=True,
+                storage_source=source,
+                message=f"설정이 {source} 저장소에 저장되었습니다.",
+            )
+        except Exception as e:
+            logger.warning("AI config save failed (%s): %s", source, e)
+            return AIConfigResult(
+                ok=True,
+                config_saved=False,
+                storage_source=source,
+                message="설정은 적용되었지만 디스크 저장에 실패해 현재 세션에만 유지됩니다.",
+            )
+
     def is_available(self) -> bool:
         """AI 기능 사용 가능 여부"""
         return bool(self._api_key)
-    
+
+    @staticmethod
+    def _coerce_text(value: Any, default: str = "") -> str:
+        if value is None:
+            return default
+        if isinstance(value, str):
+            return value
+        try:
+            return str(value)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _coerce_float(value: Any, default: float = 0.0) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return default
+        if number != number:
+            return default
+        return max(0.0, min(1.0, number))
+
+    @classmethod
+    def _coerce_string_list(cls, value: Any) -> List[str]:
+        if not isinstance(value, (list, tuple)):
+            return []
+        results: List[str] = []
+        for item in value:
+            text = cls._coerce_text(item).strip()
+            if text:
+                results.append(text)
+        return results
+
     @staticmethod
     def _safe_json_loads(payload: Any) -> Dict[str, Any]:
         if isinstance(payload, (bytes, bytearray)):
@@ -146,11 +239,37 @@ class XPathAIAssistant:
             return {}
         try:
             data = json.loads(payload)
-            if isinstance(data, dict):
-                return data
         except Exception:
-            pass
-        return {}
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _build_xpath_suggestion(
+        self,
+        payload: Dict[str, Any],
+        *,
+        xpath_key: str = "xpath",
+        fallback_xpath: str = "",
+        fallback_explanation: str = "",
+        confidence_default: float = 0.0,
+    ) -> XPathSuggestion:
+        return XPathSuggestion(
+            xpath=self._coerce_text(payload.get(xpath_key), fallback_xpath),
+            confidence=self._coerce_float(payload.get("confidence"), confidence_default),
+            explanation=self._coerce_text(payload.get("explanation"), fallback_explanation),
+            alternative_xpaths=self._coerce_string_list(payload.get("alternatives")),
+        )
+
+    @staticmethod
+    def _extract_openai_content(response: Any) -> Optional[str]:
+        try:
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                return None
+            message = getattr(choices[0], "message", None)
+            content = getattr(message, "content", None)
+            return content if isinstance(content, str) else None
+        except Exception:
+            return None
 
     @staticmethod
     def _build_gemini_generate_config(system_prompt: str) -> Optional[Any]:
@@ -172,7 +291,7 @@ class XPathAIAssistant:
         """클라이언트 초기화 (Provider 분기)"""
         if self._client is not None:
             return self._client
-            
+
         if not self._api_key:
             return None
 
@@ -184,7 +303,6 @@ class XPathAIAssistant:
             if openai_cls is None:
                 raise ImportError("openai.OpenAI not found")
             self._client = openai_cls(api_key=self._api_key)
-                
         elif self._provider == "gemini":
             genai_module = import_optional("google.genai")
             if genai_module is None:
@@ -193,7 +311,6 @@ class XPathAIAssistant:
             if client_cls is None:
                 raise ImportError("google.genai.Client not found")
             self._client = client_cls(api_key=self._api_key)
-                
         return self._client
 
     def _xpath_text_expr(self, text: str) -> str:
@@ -217,30 +334,29 @@ class XPathAIAssistant:
             return f"'{text}'"
 
         return f'"{text}"'
-    
+
     def generate_xpath_from_description(
-        self, 
-        description: str, 
+        self,
+        description: str,
         page_context: Optional[str] = None,
-        existing_xpaths: Optional[List[str]] = None
+        existing_xpaths: Optional[List[str]] = None,
     ) -> XPathSuggestion:
         """
         자연어 설명으로 XPath 생성
-        
+
         Args:
-            description: 요소에 대한 자연어 설명 (예: "로그인 버튼", "이메일 입력창")
-            page_context: 페이지 HTML 일부 (선택)
-            existing_xpaths: 이미 저장된 XPath 목록 (중복 방지용)
-        
+            description: 요소에 대한 자연어 설명
+            page_context: 페이지 HTML 일부
+            existing_xpaths: 이미 저장된 XPath 목록
+
         Returns:
             XPathSuggestion 객체
         """
         client = self._get_client()
         if not client:
             return self._fallback_suggestion(description)
-        
-        # 프롬프트 구성
-        system_prompt = """당신은 웹 자동화 전문가입니다. 
+
+        system_prompt = """당신은 웹 자동화 전문가입니다.
 사용자가 설명하는 웹 요소에 대해 가장 적합한 XPath를 생성합니다.
 
 응답 형식 (JSON):
@@ -259,23 +375,21 @@ XPath 생성 시 고려사항:
 5. 한국어/영어 텍스트 모두 고려"""
 
         user_prompt = f"다음 요소에 대한 XPath를 생성해주세요: {description}"
-        
+
         if page_context:
             user_prompt += f"\n\n페이지 컨텍스트:\n{page_context[:2000]}"
-        
+
         if existing_xpaths:
-            user_prompt += f"\n\n이미 존재하는 XPath (중복 방지):\n" + "\n".join(existing_xpaths[:10])
-        
+            user_prompt += "\n\n이미 존재하는 XPath (중복 방지):\n" + "\n".join(existing_xpaths[:10])
+
         try:
             if self._provider == "gemini":
                 return self._generate_with_gemini(system_prompt, user_prompt)
-            else:
-                return self._generate_with_openai(system_prompt, user_prompt)
-            
+            return self._generate_with_openai(system_prompt, user_prompt)
         except Exception as e:
-            logger.warning(f"AI 요청 실패: {e}")
+            logger.warning("AI 요청 실패: %s", e)
             return self._fallback_suggestion(description)
-    
+
     def _generate_with_gemini(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
         """Gemini API 사용하여 생성 (google-genai)"""
         client = self._get_client()
@@ -290,21 +404,17 @@ XPath 생성 시 고려사항:
                 **({"config": config} if config is not None else {})
             )
             result = self._safe_json_loads(getattr(response, "text", None))
-            
-            return XPathSuggestion(
-                xpath=result.get("xpath", ""),
-                confidence=float(result.get("confidence", 0.0)),
-                explanation=result.get("explanation", ""),
-                alternative_xpaths=list(result.get("alternatives") or [])
+            return self._build_xpath_suggestion(
+                result,
+                fallback_explanation="Gemini 응답을 해석하지 못해 기본값을 사용했습니다.",
             )
         except Exception as e:
-            # Fallback
             err_expr = self._xpath_text_expr(str(e))
             return XPathSuggestion(
                 xpath=f"//error[contains(text(), {err_expr})]",
                 confidence=0.0,
                 explanation=f"AI 오류: {e}",
-                alternative_xpaths=[]
+                alternative_xpaths=[],
             )
 
     def _generate_with_openai(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
@@ -317,33 +427,24 @@ XPath 생성 시 고려사항:
             model=self._model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
             max_tokens=500,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
-        content = None
-        try:
-            content = response.choices[0].message.content
-        except Exception:
-            content = None
-        result = self._safe_json_loads(content)
-        
-        return XPathSuggestion(
-            xpath=result.get("xpath", ""),
-            confidence=float(result.get("confidence", 0.0)),
-            explanation=result.get("explanation", ""),
-            alternative_xpaths=list(result.get("alternatives") or [])
+        result = self._safe_json_loads(self._extract_openai_content(response))
+        return self._build_xpath_suggestion(
+            result,
+            fallback_explanation="OpenAI 응답을 해석하지 못해 기본값을 사용했습니다.",
         )
-    
+
     def _fallback_suggestion(self, description: str) -> XPathSuggestion:
         """AI 없이 기본 XPath 제안 (규칙 기반)"""
         desc_lower = description.lower()
-        
-        # 버튼 패턴
-        if any(word in desc_lower for word in ['버튼', 'button', 'btn', '클릭']):
-            button_text = description.replace('버튼', '').replace('button', '').strip()
+
+        if any(word in desc_lower for word in ["버튼", "button", "btn", "클릭"]):
+            button_text = description.replace("버튼", "").replace("button", "").strip()
             if not button_text:
                 button_text = description.strip()
             button_expr = self._xpath_text_expr(button_text)
@@ -353,16 +454,15 @@ XPath 생성 시 고려사항:
                 explanation="텍스트 기반 버튼 XPath (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
                     f'//*[contains(@class, "btn")][contains(text(), {button_expr})]',
-                    f'//input[@type="submit"][@value={button_expr}]'
-                ]
+                    f"//input[@type=\"submit\"][@value={button_expr}]",
+                ],
             )
-        
-        # 입력 필드 패턴
-        if any(word in desc_lower for word in ['입력', 'input', '필드', '텍스트박스']):
+
+        if any(word in desc_lower for word in ["입력", "input", "필드", "텍스트박스"]):
             field_type = "text"
-            if '이메일' in desc_lower or 'email' in desc_lower:
+            if "이메일" in desc_lower or "email" in desc_lower:
                 field_type = "email"
-            elif '비밀번호' in desc_lower or 'password' in desc_lower:
+            elif "비밀번호" in desc_lower or "password" in desc_lower:
                 field_type = "password"
             description_expr = self._xpath_text_expr(description)
             field_type_expr = self._xpath_text_expr(field_type)
@@ -372,13 +472,12 @@ XPath 생성 시 고려사항:
                 explanation=f"{field_type} 타입 입력 필드 (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
                     f"//input[contains(@placeholder, {description_expr})]",
-                    f"//input[contains(@name, {field_type_expr})]"
-                ]
+                    f"//input[contains(@name, {field_type_expr})]",
+                ],
             )
-        
-        # 링크 패턴
-        if any(word in desc_lower for word in ['링크', 'link', '메뉴', '탭']):
-            link_text = description.replace('링크', '').replace('link', '').strip()
+
+        if any(word in desc_lower for word in ["링크", "link", "메뉴", "탭"]):
+            link_text = description.replace("링크", "").replace("link", "").strip()
             if not link_text:
                 link_text = description.strip()
             link_expr = self._xpath_text_expr(link_text)
@@ -388,19 +487,18 @@ XPath 생성 시 고려사항:
                 confidence=0.5,
                 explanation="텍스트 기반 링크 XPath (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
-                    f"//*[contains(@href, {href_expr})]"
-                ]
+                    f"//*[contains(@href, {href_expr})]",
+                ],
             )
-        
-        # 기본 (텍스트 기반)
+
         description_expr = self._xpath_text_expr(description)
         return XPathSuggestion(
             xpath=f"//*[contains(text(), {description_expr})]",
             confidence=0.3,
             explanation="일반 텍스트 검색 XPath (AI 없이 규칙 기반 생성)",
-            alternative_xpaths=[]
+            alternative_xpaths=[],
         )
-    
+
     def analyze_page_elements(
         self,
         page_html: str,
@@ -408,20 +506,13 @@ XPath 생성 시 고려사항:
     ) -> List[Dict[str, Any]]:
         """
         페이지 분석 후 주요 요소 자동 인식
-        
-        Args:
-            page_html: 페이지 HTML
-            target_types: 찾을 요소 타입 ["button", "input", "link", "form"]
-        
-        Returns:
-            [{name, xpath, type, confidence}, ...]
         """
         client = self._get_client()
         if not client:
             return []
-        
+
         target_types = target_types or ["button", "input", "link", "form"]
-        
+
         system_prompt = """웹 페이지 HTML을 분석하여 자동화에 중요한 요소들을 식별합니다.
 
 응답 형식 (JSON):
@@ -444,16 +535,13 @@ HTML:
 {page_html[:8000]}"""
 
         try:
-            # Provider에 따라 분기 처리
             if self._provider == "gemini":
                 return self._analyze_with_gemini(system_prompt, user_prompt)
-            else:
-                return self._analyze_with_openai(system_prompt, user_prompt)
-            
+            return self._analyze_with_openai(system_prompt, user_prompt)
         except Exception as e:
-            logger.warning(f"페이지 분석 실패: {e}")
+            logger.warning("페이지 분석 실패: %s", e)
             return []
-    
+
     def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
         """Gemini API로 페이지 분석 (google-genai)"""
         client = self._get_client()
@@ -471,9 +559,9 @@ HTML:
             elements = result.get("elements")
             return list(elements) if isinstance(elements, list) else []
         except Exception as e:
-            logger.warning(f"Gemini Analyze Error: {e}")
+            logger.warning("Gemini Analyze Error: %s", e)
             return []
-    
+
     def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
         """OpenAI API로 페이지 분석"""
         client = self._get_client()
@@ -484,28 +572,19 @@ HTML:
             model=self._model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
             max_tokens=1500,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
-        content = None
-        try:
-            content = response.choices[0].message.content
-        except Exception:
-            content = None
-        result = self._safe_json_loads(content)
+        result = self._safe_json_loads(self._extract_openai_content(response))
         elements = result.get("elements")
         return list(elements) if isinstance(elements, list) else []
-    
+
     def improve_xpath(self, xpath: str, issue_description: Optional[str] = None) -> XPathSuggestion:
         """
         기존 XPath 개선 제안
-        
-        Args:
-            xpath: 개선할 XPath
-            issue_description: 문제 설명 (예: "요소를 찾지 못함", "너무 많은 요소가 매칭됨")
         """
         client = self._get_client()
         if not client:
@@ -513,9 +592,9 @@ HTML:
                 xpath=xpath,
                 confidence=0.0,
                 explanation="AI가 비활성화되어 개선할 수 없습니다.",
-                alternative_xpaths=[]
+                alternative_xpaths=[],
             )
-        
+
         system_prompt = """XPath 전문가로서 주어진 XPath를 분석하고 개선합니다.
 
 응답 형식 (JSON):
@@ -529,23 +608,26 @@ HTML:
         user_prompt = f"XPath: {xpath}"
         if issue_description:
             user_prompt += f"\n문제: {issue_description}"
-        
+
         try:
             if self._provider == "gemini":
                 return self._improve_with_gemini(system_prompt, user_prompt, xpath)
-            else:
-                return self._improve_with_openai(system_prompt, user_prompt, xpath)
-            
+            return self._improve_with_openai(system_prompt, user_prompt, xpath)
         except Exception as e:
-            logger.warning(f"XPath 개선 실패: {e}")
+            logger.warning("XPath 개선 실패: %s", e)
             return XPathSuggestion(
                 xpath=xpath,
                 confidence=0.0,
                 explanation=f"개선 실패: {e}",
-                alternative_xpaths=[]
+                alternative_xpaths=[],
             )
 
-    def _improve_with_openai(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
+    def _improve_with_openai(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        original_xpath: str,
+    ) -> XPathSuggestion:
         client = self._get_client()
         if client is None:
             return XPathSuggestion(
@@ -559,27 +641,27 @@ HTML:
             model=self._model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
             max_tokens=400,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
-        content = None
-        try:
-            content = response.choices[0].message.content
-        except Exception:
-            content = None
-        result = self._safe_json_loads(content)
-        
-        return XPathSuggestion(
-            xpath=result.get("improved_xpath", original_xpath),
-            confidence=float(result.get("confidence", 0.5)),
-            explanation=result.get("explanation", ""),
-            alternative_xpaths=list(result.get("alternatives") or [])
+        result = self._safe_json_loads(self._extract_openai_content(response))
+        return self._build_xpath_suggestion(
+            result,
+            xpath_key="improved_xpath",
+            fallback_xpath=original_xpath,
+            fallback_explanation="OpenAI 응답을 해석하지 못해 원본 XPath를 유지합니다.",
+            confidence_default=0.5,
         )
-        
-    def _improve_with_gemini(self, system_prompt: str, user_prompt: str, original_xpath: str) -> XPathSuggestion:
+
+    def _improve_with_gemini(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        original_xpath: str,
+    ) -> XPathSuggestion:
         """Gemini를 사용한 XPath 개선"""
         client = self._get_client()
         if client is None:
@@ -598,36 +680,34 @@ HTML:
                 **({"config": config} if config is not None else {})
             )
             result = self._safe_json_loads(getattr(response, "text", None))
-             
-            return XPathSuggestion(
-                xpath=result.get("improved_xpath", original_xpath),
-                confidence=float(result.get("confidence", 0.5)),
-                explanation=result.get("explanation", ""),
-                alternative_xpaths=list(result.get("alternatives") or [])
+            return self._build_xpath_suggestion(
+                result,
+                xpath_key="improved_xpath",
+                fallback_xpath=original_xpath,
+                fallback_explanation="Gemini 응답을 해석하지 못해 원본 XPath를 유지합니다.",
+                confidence_default=0.5,
             )
         except Exception as e:
-             return XPathSuggestion(
+            return XPathSuggestion(
                 xpath=original_xpath,
                 confidence=0.0,
                 explanation=f"Gemini 개선 실패: {e}",
-                alternative_xpaths=[]
+                alternative_xpaths=[],
             )
 
 
-# 테스트용
 if __name__ == "__main__":
     assistant = XPathAIAssistant()
-    
+
     print(f"AI Available: {assistant.is_available()}")
-    
-    # Fallback 테스트
+
     result = assistant.generate_xpath_from_description("로그인 버튼")
-    print(f"\n=== '로그인 버튼' 제안 ===")
+    print("\n=== '로그인 버튼' 제안 ===")
     print(f"XPath: {result.xpath}")
     print(f"Confidence: {result.confidence}")
     print(f"Explanation: {result.explanation}")
     print(f"Alternatives: {result.alternative_xpaths}")
-    
+
     result = assistant.generate_xpath_from_description("이메일 입력창")
-    print(f"\n=== '이메일 입력창' 제안 ===")
+    print("\n=== '이메일 입력창' 제안 ===")
     print(f"XPath: {result.xpath}")

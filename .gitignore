@@ -17,6 +17,7 @@ ENV/
 
 # Pytest
 .pytest_cache/
+.pytest_tmp/
 .coverage
 .coverage.*
 coverage.xml

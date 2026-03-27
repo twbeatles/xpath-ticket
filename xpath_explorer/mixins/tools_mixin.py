@@ -1748,7 +1748,10 @@ class ExplorerToolsMixin:
         layout.addWidget(input_model)
         
         # 힌트
-        lbl_hint = QLabel("OpenAI 권장: gpt-4o-mini, gpt-4o\nGemini 권장: gemini-flash-latest, gemini-pro")
+        lbl_hint = QLabel(
+            "앱 기본 OpenAI 모델: gpt-5.4\n"
+            "예시 Gemini 모델: gemini-flash-latest, gemini-pro"
+        )
         lbl_hint.setStyleSheet("color: #7f849c; font-size: 11px;")
         layout.addWidget(lbl_hint)
         
@@ -1757,7 +1760,7 @@ class ExplorerToolsMixin:
             input_key.clear()
             if text == "openai":
                 input_key.setText(self.ai_assistant._config.get('openai_api_key', ''))
-                input_model.setText("gpt-4o-mini")
+                input_model.setText("gpt-5.4")
             else:
                 input_key.setText(self.ai_assistant._config.get('gemini_api_key', ''))
                 input_model.setText("gemini-flash-latest")
@@ -1777,9 +1780,19 @@ class ExplorerToolsMixin:
             if not key:
                 self._show_toast("API 키를 입력하세요.", "warning")
                 return
-                
-            self.ai_assistant.configure(key, model, provider)
-            self._show_toast(f"{provider} 설정이 저장되었습니다.", "success")
+
+            result = self.ai_assistant.configure(key, model, provider)
+            if not result.ok:
+                self._show_toast(result.message, "error")
+                return
+
+            if result.config_saved:
+                self._show_toast(
+                    f"{provider} 설정이 저장되었습니다. ({result.storage_source})",
+                    "success",
+                )
+            else:
+                self._show_toast(result.message, "warning", 5000)
             dialog.accept()
             
         btn_save.clicked.connect(save)

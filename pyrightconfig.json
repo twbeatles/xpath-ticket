@@ -9,6 +9,7 @@
     "archive",
     "**/__pycache__",
     ".pytest_cache",
+    ".pytest_tmp",
     "build",
     "dist"
   ],

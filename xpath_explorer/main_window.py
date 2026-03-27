@@ -86,6 +86,7 @@ if QT_AVAILABLE:
             self._live_preview_request_id = 0
             self._ai_request_id = 0
             self._ai_last_xpath = ""
+            self._frame_selection_explicit = False
             self._dom_diff_baseline = []
             self._dom_diff_source = ""
             self._editing_original_name = ""
@@ -105,7 +106,6 @@ if QT_AVAILABLE:
             self._search_timer.setSingleShot(True)
             self._search_timer.setInterval(SEARCH_DEBOUNCE_MS)
             self._search_timer.timeout.connect(self._perform_search)
-
             self._live_preview_timer = QTimer()
             self._live_preview_timer.setSingleShot(True)
             self._live_preview_timer.setInterval(LIVE_PREVIEW_DEBOUNCE_MS)
@@ -120,7 +120,6 @@ if QT_AVAILABLE:
 
         def init_settings(self):
             self.settings = QSettings("MyCompany", "XPathExplorer")
-
 else:
 
     class _HeadlessXPathExplorer:  # pragma: no cover - exercised only in headless CI

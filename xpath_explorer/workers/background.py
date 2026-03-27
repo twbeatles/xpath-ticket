@@ -147,7 +147,11 @@ class ValidateWorker(QThread):
                     try:
                         result = cast(
                             Dict[str, Any],
-                            self.browser.validate_xpath(item.xpath, session=session),
+                            self.browser.validate_xpath(
+                                item.xpath,
+                                preferred_frame=item.found_frame or None,
+                                session=session,
+                            ),
                         )
                     except TypeError:
                         # 구 시그니처(validate_xpath(xpath)) 호환
@@ -334,7 +338,11 @@ class BatchTestWorker(QThread):
                         try:
                             result = cast(
                                 Dict[str, Any],
-                                self.browser.validate_xpath(item.xpath, session=session),
+                                self.browser.validate_xpath(
+                                    item.xpath,
+                                    preferred_frame=item.found_frame or None,
+                                    session=session,
+                                ),
                             )
                         except TypeError:
                             # 구 시그니처(validate_xpath(xpath)) 호환

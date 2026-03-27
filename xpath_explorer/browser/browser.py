@@ -90,7 +90,14 @@ class BrowserManager :
         self ._xpath_frame_hints :Dict [str ,Tuple [str ,float ]]={}
         self ._lock =RLock ()#WebDriver 묎렐 곷젹(QThread 쎌웳 ⑹)
         self ._last_alive_error :str =""
+        self .last_error :str =""
         self ._root_window_handle :str =""
+
+    def _set_last_error (self ,message :str ):
+        self .last_error =str (message or "")
+
+    def _clear_last_error (self ):
+        self .last_error =""
 
     @staticmethod 
     def _is_invalid_session_error (error :Exception )->bool :
@@ -155,6 +162,7 @@ class BrowserManager :
         """쒕씪대쾭 앹꽦"""
         with self ._lock :
             try :
+                self ._clear_last_error ()
                 logger .info ("뚮씪곗 쒕씪대쾭 앹꽦 쒖옉...")
                 if use_undetected and UC_AVAILABLE :
                     options =uc .ChromeOptions ()
@@ -183,8 +191,10 @@ class BrowserManager :
                 except Exception :
                     self ._root_window_handle =""
 
+                self ._clear_last_error ()
                 return True 
             except Exception as e :
+                self ._set_last_error (f"드라이버 생성 실패: {e }")
                 logger .error (f"드라이버 생성 실패: {e }")
                 return False 
 
@@ -210,6 +220,7 @@ class BrowserManager :
                 self .driver =None 
                 self ._invalidate_frame_cache ()
                 self ._root_window_handle =""
+                self ._clear_last_error ()
 
     def _invalidate_frame_cache (self ):
         """Invalidate cached frame metadata."""
@@ -1272,6 +1283,7 @@ class BrowserManager :
         """Highlight matched element, including nested iframe context."""
         with self .frame_context ():
             self .ensure_valid_window ()
+            self ._clear_last_error ()
 
             try :
                 effective_frame =None 
@@ -1284,6 +1296,7 @@ class BrowserManager :
                 if not effective_frame :
                     _ ,found_path =self .find_element_in_all_frames (xpath )
                     if not found_path :
+                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
                         return False 
                     effective_frame =found_path 
 
@@ -1291,6 +1304,7 @@ class BrowserManager :
                     try :
                         el =self .driver .find_element (By .XPATH ,xpath )
                     except NoSuchElementException :
+                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
                         return False 
 
                         #섏씠쇱씠ㅽ뻾
@@ -1311,9 +1325,11 @@ class BrowserManager :
                         }, arguments[1]);
                     """,el ,duration )
 
+                self ._clear_last_error ()
                 return True 
 
             except Exception as e :
+                self ._set_last_error (f"하이라이트 오류: {e }")
                 logger .error (f"하이라이트 오류: {e }")
                 return False 
 
@@ -1430,14 +1446,22 @@ class BrowserManager :
         """XPathㅼ묶섎뒗 ⑤뱺 붿냼 쒖닔 섑솚 (ㅼ떆몃━닿린 Args: xpath: 됲븷 XPath frame_path: 꾨젅쎈줈 (None대㈃ 꾩옱 꾨젅 Returns: ㅼ묶 붿냼 쒖닔 (ㅻ쪟 -1)"""
         with self .frame_context ():
             if not self .is_alive ():
+                self ._set_last_error ("브라우저가 연결되지 않았습니다.")
                 return -1 
+
+            self ._clear_last_error ()
 
             try :
                 if frame_path is not None :
                     with self .frame_context (frame_path ):
-                        return len (self .driver .find_elements (By .XPATH ,xpath ))
-                return len (self .driver .find_elements (By .XPATH ,xpath ))
+                        count =len (self .driver .find_elements (By .XPATH ,xpath ))
+                        self ._clear_last_error ()
+                        return count 
+                count =len (self .driver .find_elements (By .XPATH ,xpath ))
+                self ._clear_last_error ()
+                return count 
             except Exception as e :
+                self ._set_last_error (f"요소 카운트 실패: {e }")
                 logger .debug (f"요소 카운트 실패: {e }")
                 return -1 
 
@@ -1549,16 +1573,21 @@ class BrowserManager :
         """붿냼 ㅽ겕곗꺑 Args: xpath: 붿냼 XPath save_path: ν븷 쎈줈 (.png) frame_path: 꾨젅쎈줈 Returns: 깃났 щ"""
         with self .frame_context ():
             if not self .is_alive ():
+                self ._set_last_error ("브라우저가 연결되지 않았습니다.")
                 return False 
+
+            self ._clear_last_error ()
 
             try :
                 if frame_path is not None :
                     if not self .switch_to_frame_by_path (frame_path ):
+                        self ._set_last_error (f"프레임 전환 실패: {frame_path }")
                         return False 
 
                 try :
                     element =self .driver .find_element (By .XPATH ,xpath )
                 except NoSuchElementException :
+                    self ._set_last_error (f"스크린샷 대상 요소 없음: {xpath }")
                     logger .error (f"스크린샷 대상 요소 없음: {xpath }")
                     return False 
 
@@ -1566,10 +1595,12 @@ class BrowserManager :
                 time .sleep (0.3 )
 
                 element .screenshot (save_path )
+                self ._clear_last_error ()
                 logger .info (f"요소 스크린샷 저장: {save_path }")
                 return True 
 
             except Exception as e :
+                self ._set_last_error (f"스크린샷 저장 실패: {e }")
                 logger .error (f"스크린샷 저장 실패: {e }")
                 return False 
 

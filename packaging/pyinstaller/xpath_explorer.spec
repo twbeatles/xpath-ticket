@@ -5,10 +5,15 @@ Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
 """
 
 import os
+import sys
 from importlib.util import find_spec
 from PyInstaller.utils.hooks import collect_submodules
 os.environ['SETUPTOOLS_USE_DISTUTILS'] = 'stdlib'
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+SPEC_PATH = next((arg for arg in reversed(sys.argv) if str(arg).lower().endswith('.spec')), None)
+if SPEC_PATH is None:
+    SPEC_PATH = os.path.join(os.getcwd(), 'packaging', 'pyinstaller', 'xpath_explorer.spec')
+SPEC_PATH = os.path.abspath(SPEC_PATH)
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(SPEC_PATH), '..', '..'))
 ENTRYPOINT_CANDIDATES = [
     os.path.join(ROOT_DIR, 'xpath 조사기(모든 티켓 사이트).py'),
     os.path.join(ROOT_DIR, 'xpath_explorer', '__main__.py'),
@@ -24,10 +29,8 @@ def _module_available(module_name: str) -> bool:
     except Exception:
         return False
 
-
 def _collect_optional_hiddenimports(*module_names: str):
     return [name for name in module_names if _module_available(name)]
-
 # ============================================================================
 # 히든 임포트 (필수만)
 # ============================================================================
@@ -52,7 +55,6 @@ hiddenimports = [
     'xpath_explorer.analysis.statistics',
     'xpath_explorer.ui.table_model',
     'xpath_explorer.ui.filter_proxy',
-    
     # PyQt6 (필수)
     'PyQt6.QtWidgets', 'PyQt6.QtCore', 'PyQt6.QtGui',
     
@@ -169,12 +171,14 @@ exe = EXE(
 # ============================================================================
 # 빌드 팁:
 # - 빌드 전 정합성 점검:
+#   python scripts/check_docs_sync.py --strict-warnings
 #   python scripts/check_encoding_health.py
 #   pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+#   python scripts/run_quality_checks.py --strict-doc-warnings
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
 # - 선택 기능 포함 빌드: pip install -r requirements/requirements-full.txt
-# - AI 기능: openai, google-genai가 설치된 경우 hiddenimports에 자동 포함
-# - Playwright: pip install playwright && playwright install chromium
+# - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
+# - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
 # ============================================================================
 

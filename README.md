@@ -47,7 +47,7 @@
 
 ## 🤖 AI XPath 어시스턴트
 - **OpenAI & Gemini 연동**: 자연어로 XPath 자동 생성
-- **멀티 모델 지원**: GPT-5.2, Gemini Flash Latest 등 최신 경량 모델
+- **멀티 모델 지원**: 앱 기본 OpenAI 모델 `gpt-5.4`, Gemini Flash Latest 등
 
 ## 🔄 히스토리 & 안전 장치
 - **Undo/Redo**: 기본 50개 히스토리(`HISTORY_MAX_SIZE`, 조정 가능)
@@ -74,6 +74,9 @@ pip install -r requirements/requirements-dev.txt
 
 # 최소 설치만 원하면
 # pip install -r requirements/requirements.txt
+
+# 개발/품질 점검까지 하려면
+# pip install -r requirements/requirements-dev.txt
 
 # Playwright Chromium 설치 (선택 기능이지만 EXE에서도 동일 기능 사용 시 필요)
 python -m playwright install chromium
@@ -204,6 +207,7 @@ python scripts/check_docs_sync.py
 ```bash
 python scripts/check_encoding_health.py
 pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+pytest -q
 ```
 
 `pyright` 명령이 없으면 `python -m pyright`를 사용하세요.
@@ -227,6 +231,10 @@ python scripts/run_quality_checks.py
 python scripts/run_quality_checks.py --with-pyright
 ```
 
+- `pytest`는 기본적으로 repo-local temp 경로(`.pytest_tmp/`)를 사용합니다.
+- `pytest-cov`가 없으면 `run_quality_checks.py`는 자동으로 plain `pytest`로 폴백합니다.
+- 커버리지를 강제로 끄려면 `python scripts/run_quality_checks.py --no-cov`를 사용합니다.
+
 릴리즈 스모크까지 포함:
 
 ```bash
@@ -246,10 +254,9 @@ python scripts/run_release_smoke_checks.py
 - 고정 순서: `check_encoding_health` -> `pyright`
 - GitHub Actions에서는 `pytest`를 실행하지 않습니다.
 - 테스트는 로컬 또는 필요 시 수동 실행으로 유지합니다.
+## 구현 점검 반영 (2026-03-27)
 
-## 구현 점검 반영 (2026-02-28)
-
-- `IMPLEMENTATION_REVIEW.md`의 실행 계획 항목을 코드에 반영했습니다.
+- `IMPLEMENTATION_REVIEW_20260327.md`의 실행 계획 항목을 코드에 반영했습니다.
 - 핵심 반영:
   - Playwright 초기화 실패 시 부분 생성 리소스 정리
   - 배치 시나리오 워커 실패 시그널/재시도 메타데이터(`attempt`, `retry_count`, `max_attempts`)
@@ -257,6 +264,10 @@ python scripts/run_release_smoke_checks.py
   - 설정 저장/복원(`ui/font_size`, `ui/right_tab_index`, `ui/url_panel_expanded`, `ui/last_preset`)
   - 오류 텔레메트리 Markdown escape 및 로거 파일 핸들러 폴백
   - 종료 시 워커 정리 helper 일원화
+  - iframe 공통 resolver 적용으로 단일 테스트/live preview/하이라이트/스크린샷 프레임 기준 통일
+  - AI 설정 결과 구조화(`ok/config_saved/storage_source/message`) 및 세션 전용 적용 UX 분리
+  - `pytest` repo-local temp(`.pytest_tmp/`) 고정, `run_quality_checks.py`의 `pytest-cov` 자동 폴백과 `--no-cov` 지원
+  - Selenium 사용자 액션 실패 시 `last_error` 우선 노출, 프레임 액션 테스트 더블의 Pylance 타입 정합성 정리
 - 문서 정합성 체크는 계층형(README/docs/tests)으로 검증합니다.
 
 ```bash
@@ -272,4 +283,4 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 - `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.
 - `xpath_explorer.qt_compat`는 hidden import에 명시되어 headless-safe Qt bootstrap 경로를 유지합니다.
 - `openai`/`google.genai`/`playwright`는 빌드 환경에 설치된 경우에만 `hiddenimports`로 포함됩니다.
-  - 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.
+- 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.

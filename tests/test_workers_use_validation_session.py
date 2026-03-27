@@ -20,6 +20,7 @@ class _SessionBrowser:
         self.begin_calls = 0
         self.end_calls = 0
         self.validate_sessions = []
+        self.preferred_frames = []
         self.driver = type("Driver", (), {"current_window_handle": "w1"})()
 
     def is_alive(self):
@@ -39,6 +40,7 @@ class _SessionBrowser:
 
     def validate_xpath(self, xpath, preferred_frame=None, session=None):
         self.validate_sessions.append(session)
+        self.preferred_frames.append(preferred_frame)
         return {"found": True, "msg": "", "frame_path": "main"}
 
     def switch_window(self, _handle):
@@ -50,7 +52,7 @@ def test_validate_worker_uses_single_validation_session():
     browser = _SessionBrowser()
     items = [
         XPathItem(name="a", xpath="//a", category="common"),
-        XPathItem(name="b", xpath="//b", category="common"),
+        XPathItem(name="b", xpath="//b", category="common", found_frame="f1"),
     ]
     worker = ValidateWorker(browser, items, handles=["w1"])
     worker.run()
@@ -59,6 +61,7 @@ def test_validate_worker_uses_single_validation_session():
     assert browser.end_calls == 1
     assert len(browser.validate_sessions) == 2
     assert browser.validate_sessions[0] is browser.validate_sessions[1]
+    assert browser.preferred_frames == [None, "f1"]
 
 
 def test_batch_worker_uses_single_validation_session():
@@ -66,7 +69,7 @@ def test_batch_worker_uses_single_validation_session():
     browser = _SessionBrowser()
     items = [
         XPathItem(name="a", xpath="//a", category="common"),
-        XPathItem(name="b", xpath="//b", category="common"),
+        XPathItem(name="b", xpath="//b", category="common", found_frame="f1"),
     ]
     worker = BatchTestWorker(browser, items)
     worker.run()
@@ -75,4 +78,5 @@ def test_batch_worker_uses_single_validation_session():
     assert browser.end_calls == 1
     assert len(browser.validate_sessions) == 2
     assert browser.validate_sessions[0] is browser.validate_sessions[1]
+    assert browser.preferred_frames == [None, "f1"]
 
