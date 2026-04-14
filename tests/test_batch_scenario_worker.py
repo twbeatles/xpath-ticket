@@ -14,6 +14,9 @@ class _FakeBrowser:
         self.end_calls = 0
         self.validate_calls = []
         self._flaky_calls = 0
+        self.current_handle = "root"
+        self.current_title = "Root"
+        self.window_action_calls = []
 
     def is_alive(self):
         return True
@@ -40,6 +43,40 @@ class _FakeBrowser:
                 return {"found": True, "msg": "recovered", "frame_path": preferred_frame or "main", "count": 1}
             return {"found": False, "msg": "temporary failure", "frame_path": preferred_frame or "main", "count": 0}
         return {"found": False, "msg": "not found", "frame_path": preferred_frame or "main", "count": 0}
+
+    def get_current_window_metadata(self):
+        return {
+            "handle": self.current_handle,
+            "title": self.current_title,
+            "url": f"https://{self.current_handle}.example",
+            "is_popup": self.current_handle != "root",
+        }
+
+    def wait_for_popup(self, timeout_seconds=0.0, title=""):
+        self.window_action_calls.append(("wait_for_popup", timeout_seconds, title))
+        if title and title != "Popup":
+            return None
+        return {"handle": "popup", "title": "Popup", "url": "https://popup.example"}
+
+    def switch_to_latest_popup(self):
+        self.window_action_calls.append(("switch_to_latest_popup",))
+        self.current_handle = "popup"
+        self.current_title = "Popup"
+        return True
+
+    def switch_to_window_by_title(self, title):
+        self.window_action_calls.append(("switch_to_window_by_title", title))
+        if title != "Popup":
+            return False
+        self.current_handle = "popup"
+        self.current_title = "Popup"
+        return True
+
+    def switch_to_root_window(self):
+        self.window_action_calls.append(("switch_to_root_window",))
+        self.current_handle = "root"
+        self.current_title = "Root"
+        return True
 
 
 class _BrokenSessionBrowser(_FakeBrowser):
@@ -187,3 +224,45 @@ def test_batch_scenario_worker_emits_failed_signal_for_unhandled_error():
     assert completed == []
     assert failed_messages
     assert "session exploded" in failed_messages[0]
+
+
+def test_batch_scenario_worker_supports_popup_and_window_switch_actions():
+    _ensure_qt_app()
+    browser = _FakeBrowser()
+    scenario = {
+        "name": "popup-flow",
+        "steps": [
+            {"name": "detect popup", "action": "wait_for_popup", "seconds": 0.5, "title": "Popup"},
+            {"name": "switch popup", "action": "switch_latest_popup"},
+            {"name": "switch by title", "action": "switch_window_by_title", "title": "Popup"},
+            {"name": "back root", "action": "switch_root_window"},
+        ],
+    }
+
+    completed = {}
+    worker = BatchScenarioWorker(browser, [], scenario)
+    worker.completed.connect(
+        lambda results, cancelled, scenario_name: completed.update(
+            results=results,
+            cancelled=cancelled,
+            scenario_name=scenario_name,
+        )
+    )
+
+    worker.run()
+
+    assert completed["cancelled"] is False
+    assert completed["scenario_name"] == "popup-flow"
+    assert [row["action"] for row in completed["results"]] == [
+        "wait_for_popup",
+        "switch_latest_popup",
+        "switch_window_by_title",
+        "switch_root_window",
+    ]
+    assert completed["results"][0]["success"] is True
+    assert completed["results"][0]["window_handle"] == "popup"
+    assert completed["results"][0]["window_title"] == "Popup"
+    assert completed["results"][1]["window_title"] == "Popup"
+    assert completed["results"][2]["window_title"] == "Popup"
+    assert completed["results"][3]["window_handle"] == "root"
+    assert completed["results"][3]["window_title"] == "Root"

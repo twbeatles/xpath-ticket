@@ -66,11 +66,11 @@ xpath_explorer/
 - `main_window.py`: `XPathExplorer` 조합, 초기 상태/타이머/모듈 초기화
 - `qt_compat.py`: PyQt6 import와 headless fallback을 분리해 CI 수집 안정성 보장
 - `mixins/ui_mixin.py`: 메뉴/패널/편집기/상태 UI 구성
-- `mixins/browser_mixin.py`: Selenium 브라우저 연결, 창/프레임, DOM export
+- `mixins/browser_mixin.py`: Selenium 브라우저 연결, 창/프레임, popup-aware 검증, current-scope DOM export
 - `mixins/data_mixin.py`: 편집기 데이터 바인딩, 히스토리, import/export, 설정 복원
 - `mixins/tools_mixin.py`: 배치/시나리오/AI/통계/DOM diff/리포트
-- `browser/browser.py`: Selenium 검증 세션, 프레임 힌트, miss cache
-- `browser/playwright.py`: Playwright 실행/탐색/DOM 수집
+- `browser/browser.py`: Selenium 검증 세션, 창 문맥 매핑, 프레임 힌트, miss cache
+- `browser/playwright.py`: Playwright 실행/탐색/활성 page 추적/DOM 수집
 - `workers/background.py`: Validate/Batch/Scenario/AI/QThread 워커
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
 
@@ -81,14 +81,14 @@ xpath_explorer/
 ```bash
 python scripts/check_docs_sync.py --strict-warnings
 python scripts/check_encoding_health.py
-pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+pyright -p .
 pytest -q
 ```
 
 `pyright` 명령이 없으면:
 
 ```bash
-python -m pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+python -m pyright -p .
 ```
 
 ## 6. 스펙 파일 정합성 포인트
@@ -96,6 +96,7 @@ python -m pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 �
 - `collect_submodules("xpath_explorer")`를 사용해 분할된 패키지 구조를 빌드 수집합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 설치된 경우에만 hidden import로 포함하며, 릴리즈 스모크에서 import 상태를 점검합니다.
+- spec 주석의 품질 점검 명령도 `pyright -p .` 기준으로 유지합니다.
 
 ### Qt 테스트 정책
 - Qt 런타임이 필요한 테스트는 `pytest.mark.qt`로 분리됩니다.
@@ -119,8 +120,9 @@ python -m pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 �
 - `pyrightconfig.json`
   - include: `xpath_explorer`, `tests`, `scripts`, `xpath 조사기(모든 티켓 사이트).py`
   - exclude: `archive`, `__pycache__`, `.pytest_cache`, `.pytest_tmp`, `build`, `dist`
+  - venv: `.venv`
 - Qt 관련 import는 `TYPE_CHECKING` 분리 또는 `qt_compat.py`를 우선 사용합니다.
-- `typeCheckingMode = basic`, `pythonVersion = 3.10`
+- `typeCheckingMode = basic`, `pythonVersion = 3.10`, `reportMissingImports = none`
 
 ## 8. 운영 메모
 - `archive/`는 보관 영역이며 정적 분석/기본 점검 대상에서 제외됩니다.

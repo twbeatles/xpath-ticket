@@ -73,6 +73,7 @@ class PlaywrightManager:
         self._browser: Optional[PlaywrightBrowserType] = None
         self._context: Optional[PlaywrightBrowserContextType] = None
         self._page: Optional[PlaywrightPageType] = None
+        self._root_page: Optional[PlaywrightPageType] = None
         self._current_frame = None  # 현재 활성 프레임 컨텍스트
         self._is_initialized = False
         self._stealth_enabled = False
@@ -92,7 +93,109 @@ class PlaywrightManager:
     @property
     def page(self) -> Optional[PlaywrightPageType]:
         """현재 페이지 객체"""
-        return self._page
+        return self._get_current_page()
+
+    def _set_current_page(self, page: Optional[PlaywrightPageType], *, make_root: bool = False):
+        self._page = page
+        if make_root or self._root_page is None:
+            self._root_page = page
+        if page is None:
+            self._current_frame = None
+            return
+        try:
+            self._current_frame = getattr(page, "main_frame", None)
+        except Exception:
+            self._current_frame = None
+        self._attach_page_close_handler(page)
+
+    def _attach_page_close_handler(self, page: Optional[PlaywrightPageType]):
+        if page is None or not hasattr(page, "on"):
+            return
+        try:
+            page.on("close", lambda *_args, closed=page: self._handle_page_closed(closed))
+        except Exception:
+            pass
+
+    def _handle_page_closed(self, closed_page: Optional[PlaywrightPageType]):
+        if closed_page is None:
+            return
+        if self._root_page is closed_page:
+            self._root_page = None
+        if self._page is not closed_page:
+            return
+        self._page = self._pick_fallback_page()
+        if self._page is None:
+            self._current_frame = None
+            return
+        try:
+            self._current_frame = getattr(self._page, "main_frame", None)
+        except Exception:
+            self._current_frame = None
+
+    def _register_context_page_tracking(self):
+        if self._context is None or not hasattr(self._context, "on"):
+            return
+        try:
+            self._context.on("page", lambda page: self._set_current_page(page))
+        except Exception:
+            pass
+
+    def _get_open_pages(self) -> List[PlaywrightPageType]:
+        context = self._context
+        if context is None:
+            return []
+        try:
+            pages = list(context.pages)
+        except Exception:
+            pages = [self._page] if self._page else []
+        open_pages: List[PlaywrightPageType] = []
+        for page in pages:
+            try:
+                if hasattr(page, "is_closed") and page.is_closed():
+                    continue
+            except Exception:
+                continue
+            open_pages.append(page)
+        return open_pages
+
+    def _pick_fallback_page(self) -> Optional[PlaywrightPageType]:
+        open_pages = self._get_open_pages()
+        if self._root_page in open_pages:
+            root_page = self._root_page
+        else:
+            root_page = None
+        if open_pages:
+            return open_pages[-1]
+        return root_page
+
+    def _get_current_page(self) -> Optional[PlaywrightPageType]:
+        page = self._page
+        try:
+            if page is not None and hasattr(page, "is_closed") and page.is_closed():
+                page = None
+        except Exception:
+            page = None
+        if page is None:
+            page = self._pick_fallback_page()
+            self._page = page
+        return page
+
+    @staticmethod
+    def _classify_dom_error_type(error_text: str, *, page_level: bool = False) -> str:
+        lowered = str(error_text or "").lower()
+        if not lowered:
+            return ""
+        if "page is closed" in lowered or ("closed" in lowered and page_level):
+            return "closed_page"
+        if "detached" in lowered:
+            return "detached_frame"
+        if "access denied" in lowered:
+            return "access_denied"
+        if "cross-origin" in lowered or "cross origin" in lowered:
+            return "cross_origin"
+        if "frame scan" in lowered:
+            return "frames_scan_failed"
+        return "unknown"
 
     @staticmethod
     def _pick_user_agent(stealth: bool) -> str:
@@ -233,10 +336,12 @@ class PlaywrightManager:
                 self.last_error = "browser context creation failed"
                 return False
             
-            self._page = self._context.new_page()
-            if self._page is None:
+            page = self._context.new_page()
+            if page is None:
                 self.last_error = "page creation failed"
                 return False
+            self._set_current_page(page, make_root=True)
+            self._register_context_page_tracking()
             
             # 탐지 우회 스크립트 주입
             if stealth:
@@ -302,6 +407,7 @@ class PlaywrightManager:
         
         # 5. 상태 초기화 (finally 역할)
         self._page = None
+        self._root_page = None
         self._context = None
         self._browser = None
         self._playwright = None
@@ -311,12 +417,16 @@ class PlaywrightManager:
     
     def is_alive(self) -> bool:
         """연결 상태 확인"""
-        if not self._is_initialized or not self._page:
+        if not self._is_initialized:
             return False
         try:
-            self._page.evaluate("() => true")
+            page = self._get_current_page()
+            if page is None:
+                return False
+            page.evaluate("() => true")
             return True
         except Exception:
+            self._page = self._pick_fallback_page()
             return False
     
     def navigate(
@@ -336,7 +446,7 @@ class PlaywrightManager:
         if not self.is_alive():
             return False
         try:
-            page = self._page
+            page = self._get_current_page()
             if page is None:
                 return False
             page.goto(url, timeout=timeout, wait_until=wait_until)
@@ -350,15 +460,41 @@ class PlaywrightManager:
     
     def get_current_url(self) -> str:
         """현재 URL 반환"""
-        if self._page:
-            return self._page.url
+        page = self._get_current_page()
+        if page:
+            return page.url
         return ""
     
     def get_page_title(self) -> str:
         """현재 페이지 제목"""
-        if self._page:
-            return self._page.title()
+        page = self._get_current_page()
+        if page:
+            return page.title()
         return ""
+
+    def get_current_window_metadata(self) -> Dict[str, Any]:
+        page = self._get_current_page()
+        if page is None:
+            return {"handle": "", "title": "", "url": "", "is_popup": False}
+        try:
+            title = str(page.title() or "")
+        except Exception:
+            title = ""
+        try:
+            url = str(page.url or "")
+        except Exception:
+            url = ""
+        pages = self._get_open_pages()
+        handle = ""
+        if page in pages:
+            handle = f"page-{pages.index(page) + 1}"
+        root_page = self._root_page or page
+        return {
+            "handle": handle,
+            "title": title,
+            "url": url,
+            "is_popup": bool(root_page and page is not root_page),
+        }
     
     # =========================================================================
     # 네트워크 모니터링
@@ -402,7 +538,7 @@ class PlaywrightManager:
         # 핸들러 참조 저장 (나중에 제거용)
         self._request_handler = on_request
         self._response_handler = on_response
-        page = self._page
+        page = self._get_current_page()
         if page is None:
             return
         page.on('request', self._request_handler)
@@ -417,7 +553,7 @@ class PlaywrightManager:
     
     def _cleanup_network_listeners(self):
         """네트워크 이벤트 리스너 정리"""
-        page = self._page
+        page = self._get_current_page()
         if page and self._request_handler:
             try:
                 page.remove_listener('request', self._request_handler)
@@ -787,7 +923,7 @@ class PlaywrightManager:
         if not self.is_alive():
             return False
         try:
-            page = self._page
+            page = self._get_current_page()
             if page is None:
                 return False
             page.wait_for_load_state('domcontentloaded', timeout=timeout)
@@ -804,7 +940,7 @@ class PlaywrightManager:
         if not self.is_alive():
             return None
         try:
-            page = self._page
+            page = self._get_current_page()
             if page is None:
                 return None
             if path:
@@ -844,7 +980,7 @@ class PlaywrightManager:
             return False
         
         try:
-            page = self._page
+            page = self._get_current_page()
             if page is None:
                 return False
             page.pdf(path=path)
@@ -853,25 +989,29 @@ class PlaywrightManager:
             logger.error(f"PDF 저장 실패: {e}")
             return False
 
-    def collect_dom_snapshots(self, include_frames: bool = True) -> List[DomSnapshot]:
-        """Collect DOM snapshots from all open pages (popups) and frames."""
+    def collect_dom_snapshots(
+        self,
+        include_frames: bool = True,
+        scope: Literal["all", "current"] = "all",
+    ) -> List[DomSnapshot]:
+        """Collect DOM snapshots from open pages (popups) and frames."""
         if not self.is_alive() or not self._context:
             return []
 
         snapshots: List[DomSnapshot] = []
-        root_page = self._page
-
+        current_page = self._get_current_page()
+        root_page = self._root_page or current_page
         try:
-            pages = list(self._context.pages)
+            raw_pages = list(self._context.pages)
         except Exception:
-            pages = [self._page] if self._page else []
+            raw_pages = [current_page] if current_page is not None else []
+        pages = raw_pages
+        if scope == "current":
+            pages = [current_page] if current_page is not None else []
+        elif root_page and root_page in pages:
+            pages = [p for p in pages if p != root_page] + [root_page]
 
-        if root_page and root_page in pages:
-            ordered_pages = [p for p in pages if p != root_page] + [root_page]
-        else:
-            ordered_pages = pages
-
-        for page_index, page in enumerate(ordered_pages, start=1):
+        for page_index, page in enumerate(pages, start=1):
             window_id = f"page-{page_index}"
             is_popup = bool(root_page and page is not root_page)
 
@@ -879,6 +1019,7 @@ class PlaywrightManager:
                 if hasattr(page, "is_closed") and page.is_closed():
                     raise Exception("page is closed")
             except Exception as e:
+                error_text = str(e)
                 snapshots.append(
                     DomSnapshot(
                         engine="playwright",
@@ -890,7 +1031,8 @@ class PlaywrightManager:
                         frame_label="main",
                         document_url="",
                         html="",
-                        error=str(e),
+                        error=error_text,
+                        error_type=self._classify_dom_error_type(error_text, page_level=True),
                     )
                 )
                 continue
@@ -927,6 +1069,7 @@ class PlaywrightManager:
             try:
                 walk_frames(page.main_frame, "main", "main")
             except Exception as e:
+                error_text = str(e)
                 snapshots.append(
                     DomSnapshot(
                         engine="playwright",
@@ -938,10 +1081,14 @@ class PlaywrightManager:
                         frame_label="main",
                         document_url="",
                         html="",
-                        error=str(e),
+                        error=error_text,
+                        error_type=self._classify_dom_error_type(error_text, page_level=True),
                     )
                 )
                 continue
+
+            if not include_frames:
+                frame_targets = frame_targets[:1]
 
             for frame, frame_path, frame_label in frame_targets:
                 doc_url = ""
@@ -974,6 +1121,7 @@ class PlaywrightManager:
                         document_url=doc_url,
                         html=html,
                         error=error_text,
+                        error_type=self._classify_dom_error_type(error_text),
                     )
                 )
 
@@ -987,7 +1135,7 @@ class PlaywrightManager:
         """모든 프레임 목록"""
         if not self.is_alive():
             return []
-        page = self._page
+        page = self._get_current_page()
         if page is None:
             return []
         frames: List[Dict[str, Any]] = []
@@ -1005,7 +1153,7 @@ class PlaywrightManager:
             return False
         
         try:
-            page = self._page
+            page = self._get_current_page()
             if page is None:
                 return False
             if not frame_name or frame_name == 'main':
@@ -1028,15 +1176,17 @@ class PlaywrightManager:
     
     def get_current_frame(self):
         """현재 활성 프레임 반환"""
-        if self._current_frame is None and self._page:
-            return self._page.main_frame
+        page = self._get_current_page()
+        if self._current_frame is None and page:
+            return page.main_frame
         return self._current_frame
 
     def _get_frame(self):
         """내부 helper: 현재 프레임 (없으면 main_frame)"""
-        if not self._page:
+        page = self._get_current_page()
+        if not page:
             return None
-        return self.get_current_frame() or self._page.main_frame
+        return self.get_current_frame() or page.main_frame
     
     # =========================================================================
     # JavaScript 실행
@@ -1057,8 +1207,9 @@ class PlaywrightManager:
     
     def inject_script(self, script: str):
         """페이지 로드 시 스크립트 주입"""
-        if self._page:
-            self._page.add_init_script(script)
+        page = self._get_current_page()
+        if page:
+            page.add_init_script(script)
 
 
 class NetworkAnalyzer:

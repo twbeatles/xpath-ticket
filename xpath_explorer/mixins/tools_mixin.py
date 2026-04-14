@@ -988,12 +988,17 @@ class ExplorerToolsMixin:
 
         dialog.exec()
 
-    def _collect_active_dom_snapshots(self) -> Tuple[List[Any], str]:
+    def _collect_active_dom_snapshots(
+        self,
+        *,
+        include_frames: bool = True,
+        scope: str = "all",
+    ) -> Tuple[List[Any], str]:
         """현재 활성 브라우저(Selenium/Playwright)의 DOM 스냅샷 수집."""
         if self.browser.is_alive():
-            return self.browser.collect_dom_snapshots(include_frames=True), "Selenium"
+            return self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope), "Selenium"
         if self.pw_manager and self.pw_manager.is_alive():
-            return self.pw_manager.collect_dom_snapshots(include_frames=True), "Playwright"
+            return self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope), "Playwright"
         return [], ""
 
     def _export_dom_diff_report(self):
@@ -1338,8 +1343,8 @@ class ExplorerToolsMixin:
             self.table_scan_results.setUpdatesEnabled(True)
             self._show_toast(f"스캔 실패: {e}", "error")
 
-    def _export_dom_playwright_htm(self):
-        """현재 Playwright 브라우저의 전체 DOM을 단일 HTM으로 저장."""
+    def _export_dom_playwright_htm(self, scope: str = "all", include_frames: bool = True):
+        """현재 Playwright 브라우저의 DOM을 단일 HTM으로 저장."""
         if not self.pw_manager or not self.pw_manager.is_alive():
             self._show_toast("Playwright 브라우저를 먼저 실행하세요.", "warning")
             return
@@ -1357,10 +1362,18 @@ class ExplorerToolsMixin:
         if not fname.lower().endswith((".htm", ".html")):
             fname += ".htm"
 
-        self._show_toast("Playwright DOM 추출 중...", "info", 2000)
+        scope_label = "현재 창 + iframe" if scope == "current" and include_frames else ("현재 창" if scope == "current" else "전체")
+        self._show_toast(f"Playwright DOM 추출 중... ({scope_label})", "info", 2000)
         try:
-            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=True)
-            report = render_dom_report_htm(snapshots, source_label="Playwright")
+            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            current_window = self.pw_manager.get_current_window_metadata()
+            report = render_dom_report_htm(
+                snapshots,
+                source_label="Playwright",
+                scope=scope,
+                selected_window_title=str(current_window.get("title", "") or ""),
+                selected_window_url=str(current_window.get("url", "") or ""),
+            )
             with open(fname, "w", encoding="utf-8") as f:
                 f.write(report)
 
@@ -1447,6 +1460,8 @@ class ExplorerToolsMixin:
                 element_tag=d.get('element_tag', ''),
                 element_text=d.get('element_text', ''),
                 found_window=d.get('found_window', ''),
+                found_window_title=d.get('found_window_title', ''),
+                found_window_url=d.get('found_window_url', ''),
                 found_frame=d.get('found_frame', ''),
                 is_favorite=d.get('is_favorite', False),
                 tags=d.get('tags', []),

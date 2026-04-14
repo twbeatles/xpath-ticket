@@ -23,6 +23,7 @@ class DomSnapshot:
     document_url: str
     html: str
     error: str = ""
+    error_type: str = ""
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,9 @@ def render_dom_report_htm(
     snapshots: list[DomSnapshot],
     source_label: str,
     generated_at_iso: str | None = None,
+    scope: str = "all",
+    selected_window_title: str = "",
+    selected_window_url: str = "",
 ) -> str:
     """Render a standalone HTM report with all captured DOM documents."""
 
@@ -59,6 +63,11 @@ def render_dom_report_htm(
     fail_count = sum(1 for s in snapshots if s.error)
     engines = sorted({s.engine for s in snapshots if s.engine})
     engine_text = ", ".join(engines) if engines else "-"
+    error_types: dict[str, int] = {}
+    for snapshot in snapshots:
+        if not snapshot.error_type:
+            continue
+        error_types[snapshot.error_type] = error_types.get(snapshot.error_type, 0) + 1
 
     parts: list[str] = []
     parts.append("<!DOCTYPE html>")
@@ -91,8 +100,16 @@ def render_dom_report_htm(
     parts.append("  <div class='summary'>")
     parts.append(f"    <div class='meta'><strong>Generated At:</strong> {_safe(generated_at_iso)}</div>")
     parts.append(f"    <div class='meta'><strong>Engine:</strong> {_safe(engine_text)}</div>")
+    parts.append(f"    <div class='meta'><strong>Scope:</strong> {_safe(scope)}</div>")
+    if selected_window_title:
+        parts.append(f"    <div class='meta'><strong>Selected Window:</strong> {_safe(selected_window_title)}</div>")
+    if selected_window_url:
+        parts.append(f"    <div class='meta'><strong>Selected URL:</strong> {_safe(selected_window_url)}</div>")
     parts.append(f"    <div class='meta'><strong>Total Documents:</strong> {total_count}</div>")
     parts.append(f"    <div class='meta'><strong>Failed Documents:</strong> {fail_count}</div>")
+    if error_types:
+        summary = ", ".join(f"{key}={value}" for key, value in sorted(error_types.items()))
+        parts.append(f"    <div class='meta'><strong>Error Types:</strong> {_safe(summary)}</div>")
     parts.append("  </div>")
 
     parts.append("  <div class='toc'>")
@@ -127,7 +144,8 @@ def render_dom_report_htm(
         parts.append(f"    <div class='meta'><strong>Window URL:</strong> {_safe(snap.window_url)}</div>")
         parts.append(f"    <div class='meta'><strong>Document URL:</strong> {_safe(snap.document_url)}</div>")
         if snap.error:
-            parts.append(f"    <div class='error'><strong>수집 실패:</strong> {_safe(snap.error)}</div>")
+            error_type = f" ({snap.error_type})" if snap.error_type else ""
+            parts.append(f"    <div class='error'><strong>수집 실패{_safe(error_type)}:</strong> {_safe(snap.error)}</div>")
         parts.append("    <details open>")
         parts.append("      <summary><strong>DOM 원문</strong></summary>")
         parts.append(f"      <pre>{dom_html}</pre>")

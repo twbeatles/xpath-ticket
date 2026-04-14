@@ -257,6 +257,12 @@ class ExplorerDataMixin:
         meta = f"최근 검증: {'성공' if item.is_verified else '미검증'}\n"
         if item.element_tag:
             meta += f'태그: {item.element_tag}\n'
+        if item.found_window_title:
+            meta += f'창: {item.found_window_title}\n'
+        elif item.found_window_url:
+            meta += f'창 URL: {item.found_window_url}\n'
+        elif item.found_window:
+            meta += f'창 핸들: {item.found_window}\n'
         if item.found_frame:
             meta += f'프레임: {item.found_frame}\n'
         if item.test_count > 0:
@@ -343,11 +349,34 @@ class ExplorerDataMixin:
             item.element_tag = source_item.element_tag
             item.element_text = source_item.element_text
             item.found_window = source_item.found_window
+            item.found_window_title = source_item.found_window_title
+            item.found_window_url = source_item.found_window_url
             item.found_frame = source_item.found_frame
             item.alternatives = list(source_item.alternatives or [])
             item.element_attributes = dict(source_item.element_attributes or {})
             item.screenshot_path = source_item.screenshot_path
             item.ai_generated = source_item.ai_generated
+
+        current_window = None
+        for browser_attr in ("browser", "pw_manager"):
+            browser = getattr(self, browser_attr, None)
+            if browser is not None and hasattr(browser, "get_current_window_metadata"):
+                try:
+                    current_window = browser.get_current_window_metadata()
+                except Exception:
+                    current_window = None
+                if isinstance(current_window, dict) and any(
+                    (
+                        current_window.get("handle"),
+                        current_window.get("title"),
+                        current_window.get("url"),
+                    )
+                ):
+                    break
+        if isinstance(current_window, dict):
+            item.found_window = str(current_window.get("handle", "") or item.found_window or "")
+            item.found_window_title = str(current_window.get("title", "") or item.found_window_title or "")
+            item.found_window_url = str(current_window.get("url", "") or item.found_window_url or "")
 
         if self.browser.current_frame_path:
             item.found_frame = self.browser.current_frame_path

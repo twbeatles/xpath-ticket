@@ -37,6 +37,14 @@
 - **패키지 엔트리포인트 추가**: `python -m xpath_explorer` 및 PyInstaller package entrypoint 지원
 - **Release Smoke 자동화**: spec TLS 회귀, HTTPS smoke, DOM 렌더 smoke, optional import 점검
 
+### 🪟 팝업/DOM 문맥 보강 (2026.04)
+- **창 문맥 저장**: `found_window`, `found_window_title`, `found_window_url`를 항목에 저장해 팝업 예매창에서도 동일 창 기준으로 재검증/하이라이트/스크린샷 수행
+- **현재 창 DOM 저장**: Selenium/Playwright 모두 `전체 DOM 저장`, `현재 창 DOM 저장`, `현재 창 + iframe DOM 저장` 메뉴 지원
+- **DOM 리포트 확장**: `scope`, 선택 창 title/URL, `error_type` 집계(`closed_window`, `closed_page`, `detached_frame` 등) 추가
+- **Playwright 활성 페이지 추적**: 새 popup/page를 current page로 추적하고 닫힐 때 자동 fallback
+- **시나리오 팝업 제어**: `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션 추가
+- **수동 프레임 새로고침**: 프레임 스캔 UI에서 `get_all_frames(force_refresh=True)`를 사용해 캐시를 강제 갱신
+
 ### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
 - 테이블 선택/hover 효과 강화
@@ -59,30 +67,34 @@
 - 요소 스크린샷
 - XPath 템플릿 라이브러리
 - 배치 시나리오 실행기
-- DOM 추출/DOM 비교 리포트
+- 팝업-aware 검증/하이라이트/스크린샷
+- 현재 창 DOM 추출/DOM 비교 리포트
 
 ---
 
 ## 📦 설치
 
 ```bash
-# (권장) 개발 표준 환경
-pip install -r requirements/requirements-dev.txt
+# (권장) repo-local 가상환경
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements/requirements-dev.txt
 
 # 배포/풀 기능 빌드가 필요하면
-# pip install -r requirements/requirements-full.txt
+# .\.venv\Scripts\python.exe -m pip install -r requirements/requirements-full.txt
 
 # 최소 설치만 원하면
-# pip install -r requirements/requirements.txt
+# .\.venv\Scripts\python.exe -m pip install -r requirements/requirements.txt
 
 # 개발/품질 점검까지 하려면
-# pip install -r requirements/requirements-dev.txt
+# .\.venv\Scripts\python.exe -m pip install -r requirements/requirements-dev.txt
 
 # Playwright Chromium 설치 (선택 기능이지만 EXE에서도 동일 기능 사용 시 필요)
-python -m playwright install chromium
+.\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
 > 네트워크 분석/Playwright 스캔 기능은 Chromium 설치가 되어 있어야 정상 동작합니다.
+> `pyrightconfig.json`은 repo-local `.venv`를 우선 보며, 외부 GUI/브라우저 패키지 import 진단보다 프로젝트 내부 타입 오류 검출에 집중합니다.
 
 ---
 
@@ -206,11 +218,11 @@ python scripts/check_docs_sync.py
 
 ```bash
 python scripts/check_encoding_health.py
-pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+pyright -p .
 pytest -q
 ```
 
-`pyright` 명령이 없으면 `python -m pyright`를 사용하세요.
+`pyright` 명령이 없으면 `python -m pyright -p .`를 사용하세요.
 
 타입 안정성 규칙:
 - Qt 의존 import는 `xpath_explorer/qt_compat.py` 또는 `TYPE_CHECKING` 분리 패턴을 우선 사용합니다.
@@ -220,7 +232,7 @@ pytest -q
 
 - 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`
 - DOM Export: `tests/test_browser_dom_export.py`, `tests/test_playwright_dom_export.py`, `tests/test_dom_report_renderer.py`
-- 배치/워커: `tests/test_batch_worker_cancel.py`, `tests/test_batch_scenario_worker.py`
+- 배치/워커: `tests/test_batch_worker_cancel.py`, `tests/test_batch_scenario_worker.py`, `tests/test_workers_use_validation_session.py`
 - Playwright 어댑터: `tests/test_network_analyzer_adapter.py`
 - 문서 정합성: `tests/test_docs_sync_check.py`
 
@@ -274,6 +286,19 @@ python scripts/run_release_smoke_checks.py
 python scripts/check_docs_sync.py --strict-warnings
 python scripts/run_quality_checks.py --strict-doc-warnings
 ```
+
+## 구현 점검 반영 (2026-04-14)
+
+- `IMPLEMENTATION_REVIEW_20260414.md` 기준의 팝업/창 문맥 보강 작업을 코드에 반영했습니다.
+- 핵심 반영:
+  - 항목 저장 스키마에 `found_window_title`, `found_window_url` 추가
+  - 저장된 창 문맥 우선 재검증/하이라이트/스크린샷 경로 적용
+  - Selenium/Playwright DOM export 범위 분리(`all`, `current`, `current + iframe`)
+  - DOM 리포트에 `scope`, 선택 창 title/URL, `error_type` 요약 추가
+  - Playwright 활성 페이지 추적 및 popup/page close fallback
+  - 시나리오 워커 popup/window 액션(`wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window`) 추가
+  - 수동 프레임 스캔에 `force_refresh=True` 적용
+  - 관련 회귀 테스트 추가: 창 문맥, current-scope DOM export, popup 시나리오 액션, DOM 리포트 요약
 
 ## 배포 스펙 점검 메모
 

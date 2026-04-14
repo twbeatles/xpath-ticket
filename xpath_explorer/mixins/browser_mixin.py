@@ -8,7 +8,7 @@ import random
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, cast
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, cast, Literal
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -84,6 +84,7 @@ class ExplorerBrowserMixin:
         _live_preview_timer: QTimer
         _live_preview_request_id: int
         _frame_selection_explicit: bool
+        _window_selection_explicit: bool
         _last_browser_state: Optional[bool]
         _last_window_count: int
 
@@ -113,6 +114,40 @@ class ExplorerBrowserMixin:
         if isinstance(data, str) and data:
             return data
         return "main"
+
+    def _get_window_combo_handle(self) -> str:
+        combo = self.__dict__.get("combo_windows")
+        if combo is None:
+            return ""
+        index = combo.currentIndex()
+        if index < 0:
+            return ""
+        data = combo.itemData(index)
+        if isinstance(data, str):
+            return data
+        return ""
+
+    def _set_window_combo_handle(self, handle: Optional[str], explicit: Optional[bool] = None):
+        combo = self.__dict__.get("combo_windows")
+        if combo is None:
+            if explicit is not None:
+                self._window_selection_explicit = explicit
+            return
+
+        target = handle or ""
+        index = combo.findData(target) if target else -1
+        if index < 0 and combo.count() > 0:
+            index = 0
+
+        combo.blockSignals(True)
+        try:
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        finally:
+            combo.blockSignals(False)
+
+        if explicit is not None:
+            self._window_selection_explicit = explicit
 
     def _set_frame_combo_path(self, frame_path: Optional[str], explicit: Optional[bool] = None):
         combo = self.__dict__.get("combo_frames")
@@ -148,6 +183,52 @@ class ExplorerBrowserMixin:
             return None
         return self.config.get_item(name)
 
+    def _resolve_active_window_context(self) -> Dict[str, str]:
+        combo_handle = self._get_window_combo_handle()
+        if getattr(self, "_window_selection_explicit", False):
+            return {"handle": combo_handle or "", "title": "", "url": ""}
+
+        item = self._get_current_item()
+        if item is not None and (item.found_window or item.found_window_title or item.found_window_url):
+            return {
+                "handle": item.found_window or "",
+                "title": item.found_window_title or "",
+                "url": item.found_window_url or "",
+            }
+
+        return {"handle": combo_handle or "", "title": "", "url": ""}
+
+    def _ensure_window_context_for_action(self) -> bool:
+        context = self._resolve_active_window_context()
+        handle = str(context.get("handle", "") or "")
+        title = str(context.get("title", "") or "")
+        url = str(context.get("url", "") or "")
+        if not any((handle, title, url)):
+            return True
+
+        switch_context = getattr(self.browser, "switch_to_window_context", None)
+        if callable(switch_context):
+            ok = bool(switch_context(handle=handle, window_url=url, title=title))
+        elif handle:
+            ok = bool(self.browser.switch_window(handle))
+        else:
+            ok = True
+        if not ok:
+            return False
+
+        get_current_window_metadata = getattr(self.browser, "get_current_window_metadata", None)
+        if callable(get_current_window_metadata):
+            try:
+                current_window = get_current_window_metadata()
+            except Exception:
+                current_window = None
+            if isinstance(current_window, dict):
+                self._set_window_combo_handle(
+                    str(current_window.get("handle", "") or ""),
+                    explicit=getattr(self, "_window_selection_explicit", False),
+                )
+        return True
+
     def _resolve_active_frame_path(self) -> Optional[str]:
         combo_frame = self._get_frame_combo_path()
         if getattr(self, "_frame_selection_explicit", False):
@@ -178,6 +259,9 @@ class ExplorerBrowserMixin:
                 "found": False,
                 "msg": str((info or {}).get("msg") or getattr(self.browser, "last_error", "") or "요소를 찾을 수 없습니다."),
                 "frame_path": str((info or {}).get("frame_path", frame_path) or frame_path or ""),
+                "window_handle": str((info or {}).get("window_handle", "") or ""),
+                "window_title": str((info or {}).get("window_title", "") or ""),
+                "window_url": str((info or {}).get("window_url", "") or ""),
             }
 
         return {
@@ -186,6 +270,10 @@ class ExplorerBrowserMixin:
             "tag": info.get("tag", ""),
             "text": info.get("text", ""),
             "frame_path": str(info.get("frame_path", frame_path) or frame_path or "main"),
+            "window_handle": str(info.get("window_handle", "") or ""),
+            "window_title": str(info.get("window_title", "") or ""),
+            "window_url": str(info.get("window_url", "") or ""),
+            "is_popup": bool(info.get("is_popup")),
             "msg": "",
         }
 
@@ -242,6 +330,7 @@ class ExplorerBrowserMixin:
             self.combo_windows.clear()
             self.combo_frames.clear()
             self._frame_selection_explicit = False
+            self._window_selection_explicit = False
             self._last_window_count = 0
             self._set_picker_action_enabled(False)
 
@@ -320,10 +409,7 @@ class ExplorerBrowserMixin:
 
     def _refresh_windows(self, prefer_popup: bool = False):
         """윈도우 목록 갱신 (팝업 우선 정렬 + 선택 유지)."""
-        selected_handle = None
-        current_index = self.combo_windows.currentIndex()
-        if current_index >= 0:
-            selected_handle = self.combo_windows.itemData(current_index)
+        selected_handle = self._get_window_combo_handle()
 
         self.combo_windows.blockSignals(True)
         self.combo_windows.clear()
@@ -361,8 +447,10 @@ class ExplorerBrowserMixin:
             target_handle = handles[0]
 
         if target_handle in handles:
-            target_idx = handles.index(target_handle)
-            self.combo_windows.setCurrentIndex(target_idx)
+            self._set_window_combo_handle(
+                target_handle,
+                explicit=getattr(self, "_window_selection_explicit", False),
+            )
 
         self.combo_windows.blockSignals(False)
 
@@ -380,9 +468,12 @@ class ExplorerBrowserMixin:
 
     def _on_window_changed(self, index):
         """윈도우 전환"""
-        if index < 0: return
-        
+        if index < 0:
+            self._window_selection_explicit = False
+            return
+
         handle = self.combo_windows.itemData(index)
+        self._window_selection_explicit = True
         if self.browser.switch_window(handle):
             self._scan_frames()
             self._show_toast("윈도우가 전환되었습니다.", "success")
@@ -420,7 +511,10 @@ class ExplorerBrowserMixin:
                 if not self.browser.is_alive():
                     return
                     
-                frames = self.browser.get_all_frames()
+                try:
+                    frames = self.browser.get_all_frames(force_refresh=True)
+                except TypeError:
+                    frames = self.browser.get_all_frames()
                 for path, identifier in frames:
                     indent = "  " * path.count('/')
                     self.combo_frames.addItem(f"{indent}📄 {identifier}", path)
@@ -452,6 +546,11 @@ class ExplorerBrowserMixin:
             return
             
         self._show_toast("XPath 검색 중...", "info")
+        if not self._ensure_window_context_for_action():
+            error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+            self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
+            self._show_toast(error_msg, "error")
+            return
         
         original_frame = self.browser.current_frame_path
 
@@ -465,7 +564,12 @@ class ExplorerBrowserMixin:
             
             if success:
                 msg = f"✅ 발견! (개수: {result.get('count', 1)})"
-                detail = f"태그: {result.get('tag')}\n텍스트: {result.get('text')}\n프레임: {result.get('frame_path')}"
+                detail = (
+                    f"태그: {result.get('tag')}\n"
+                    f"텍스트: {result.get('text')}\n"
+                    f"창: {result.get('window_title') or result.get('window_handle') or '-'}\n"
+                    f"프레임: {result.get('frame_path')}"
+                )
                 self.txt_result.setPlainText(msg + "\n" + detail)
                 self._show_toast("요소를 찾았습니다!", "success")
                 
@@ -493,6 +597,10 @@ class ExplorerBrowserMixin:
             return
         if not self.browser.is_alive():
             self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
+            return
+        if not self._ensure_window_context_for_action():
+            last_error = getattr(self.browser, "last_error", "")
+            self._show_toast(last_error or "대상 창을 찾을 수 없습니다.", "error")
             return
         frame_path = self._resolve_active_frame_path()
         if not self.browser.highlight(xpath, frame_path=frame_path):
@@ -563,6 +671,9 @@ class ExplorerBrowserMixin:
         tag = result.get('tag', '')
         text = result.get('text', '')
         frame = result.get('frame', 'main')
+        window_handle = str(result.get('window_handle', '') or '')
+        window_title = str(result.get('window_title', '') or '')
+        window_url = str(result.get('window_url', '') or '')
         
         # 에디터 채우기
         self.input_xpath.setPlainText(xpath)
@@ -570,7 +681,8 @@ class ExplorerBrowserMixin:
         self.input_desc.setText(f"선택됨: {tag} ({text[:20]})")
         
         # 결과창 업데이트
-        self.txt_result.setPlainText(f"캡처 위치: {frame}\n태그: {tag}\n텍스트: {text}")
+        window_desc = window_title or window_handle or "-"
+        self.txt_result.setPlainText(f"캡처 위치: {window_desc} / {frame}\n태그: {tag}\n텍스트: {text}")
         
         self._show_toast("요소 정보가 캡처되었습니다.", "success")
         
@@ -583,6 +695,16 @@ class ExplorerBrowserMixin:
             
         # 히스토리 추가
         self._add_to_history(xpath, css, tag, frame)
+
+        item = self._get_current_item()
+        if item is not None:
+            item.found_window = window_handle or item.found_window
+            item.found_window_title = window_title or item.found_window_title
+            item.found_window_url = window_url or item.found_window_url
+            item.found_frame = frame or item.found_frame
+
+        if window_handle:
+            self._set_window_combo_handle(window_handle, explicit=False)
 
     def _on_pick_cancelled(self):
         """요소 선택 취소"""
@@ -633,10 +755,23 @@ class ExplorerBrowserMixin:
         item.record_test(success)
 
         frame_path = (result or {}).get('frame_path', '') or ''
+        window_handle = str((result or {}).get('window_handle', '') or '')
+        window_title = str((result or {}).get('window_title', '') or '')
+        window_url = str((result or {}).get('window_url', '') or '')
         if success:
             item.element_tag = (result or {}).get('tag', '') or item.element_tag
+            item.found_window = window_handle or item.found_window
+            item.found_window_title = window_title or item.found_window_title
+            item.found_window_url = window_url or item.found_window_url
             item.found_frame = frame_path or item.found_frame
             current_item = self._get_current_item()
+            if (
+                current_item is not None
+                and current_item.name == item.name
+                and not getattr(self, "_window_selection_explicit", False)
+                and window_handle
+            ):
+                self._set_window_combo_handle(window_handle, explicit=False)
             if (
                 current_item is not None
                 and current_item.name == item.name
@@ -682,6 +817,9 @@ class ExplorerBrowserMixin:
             return
 
         item.element_tag = info.get('tag', item.element_tag) or item.element_tag
+        item.found_window = str(info.get('window_handle', '') or item.found_window or '')
+        item.found_window_title = str(info.get('window_title', '') or item.found_window_title or '')
+        item.found_window_url = str(info.get('window_url', '') or item.found_window_url or '')
         item.found_frame = info.get('frame_path', frame_path or item.found_frame) or item.found_frame
 
         attrs = info.get('attributes', {})
@@ -783,6 +921,10 @@ class ExplorerBrowserMixin:
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
+        if not self._ensure_window_context_for_action():
+            last_error = getattr(self.browser, "last_error", "")
+            self._show_toast(last_error or "대상 창을 찾을 수 없습니다.", "error")
+            return
         
         # 저장 경로 선택
         fname, _ = QFileDialog.getSaveFileName(
@@ -808,8 +950,12 @@ class ExplorerBrowserMixin:
             last_error = getattr(self.browser, "last_error", "")
             self._show_toast(last_error or "스크린샷 저장 실패", "error")
 
-    def _export_dom_selenium_htm(self):
-        """현재 Selenium 브라우저의 전체 DOM을 단일 HTM으로 저장."""
+    def _export_dom_selenium_htm(
+        self,
+        scope: Literal["all", "current"] = "all",
+        include_frames: bool = True,
+    ):
+        """현재 Selenium 브라우저의 DOM을 단일 HTM으로 저장."""
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
@@ -827,10 +973,18 @@ class ExplorerBrowserMixin:
         if not fname.lower().endswith((".htm", ".html")):
             fname += ".htm"
 
-        self._show_toast("DOM 추출 중...", "info", 2000)
+        scope_label = "현재 창 + iframe" if scope == "current" and include_frames else ("현재 창" if scope == "current" else "전체")
+        self._show_toast(f"DOM 추출 중... ({scope_label})", "info", 2000)
         try:
-            snapshots = self.browser.collect_dom_snapshots(include_frames=True)
-            report = render_dom_report_htm(snapshots, source_label="Selenium")
+            snapshots = self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            current_window = self.browser.get_current_window_metadata()
+            report = render_dom_report_htm(
+                snapshots,
+                source_label="Selenium",
+                scope=scope,
+                selected_window_title=str(current_window.get("title", "") or ""),
+                selected_window_url=str(current_window.get("url", "") or ""),
+            )
             with open(fname, "w", encoding="utf-8") as f:
                 f.write(report)
 

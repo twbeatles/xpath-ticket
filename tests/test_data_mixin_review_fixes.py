@@ -157,11 +157,24 @@ def test_save_item_rename_keeps_metadata_and_updates_original_name():
     source.test_count = 4
     source.success_count = 3
     source.found_frame = "frame1"
+    source.found_window = "old-popup"
+    source.found_window_title = "Old Popup"
+    source.found_window_url = "https://old-popup.example"
     host = _DataHost([source])
     host._editing_original_name = "alpha"
     host.input_name.setText("alpha_renamed")
     host.input_xpath.setPlainText("//renamed")
     host.browser.current_frame_path = "frame2"
+    host.browser = SimpleNamespace(
+        current_frame_path="frame2",
+        is_alive=lambda: True,
+        driver=None,
+        get_current_window_metadata=lambda: {
+            "handle": "new-popup",
+            "title": "New Popup",
+            "url": "https://new-popup.example",
+        },
+    )
 
     host._save_item()
 
@@ -172,6 +185,9 @@ def test_save_item_rename_keeps_metadata_and_updates_original_name():
     assert renamed.test_count == 4
     assert renamed.success_count == 3
     assert renamed.found_frame == "frame2"
+    assert renamed.found_window == "new-popup"
+    assert renamed.found_window_title == "New Popup"
+    assert renamed.found_window_url == "https://new-popup.example"
     assert host._editing_original_name == "alpha_renamed"
     assert host.history_manager.push_calls[0][0] == "rename"
 

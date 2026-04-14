@@ -21,6 +21,14 @@
 - `statistics.py`: 비동기 flush 기반 테스트 통계 누적
 - `tools_mixin.py`: DOM export/diff, 배치 리포트, 히스토리 UI 연계
 
+## 팝업/DOM 운영 포인트
+- 항목 스키마는 `found_window`, `found_window_title`, `found_window_url`, `found_frame`를 함께 저장합니다.
+- 단건 검증/하이라이트/스크린샷은 명시적 창 선택이 없으면 항목에 저장된 창 문맥을 우선 사용합니다.
+- Selenium 창 매핑 순서는 `handle -> exact URL -> exact title`입니다.
+- DOM export는 `전체`, `현재 창`, `현재 창 + iframe` 범위로 분리되어 동작합니다.
+- Playwright는 `_root_page`와 current page를 추적해 popup/page close 이후에도 page-scoped 기능을 복구합니다.
+- 시나리오 워커는 `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션을 지원합니다.
+
 ## 최근 운영 정책 반영 사항
 1. Validation miss 캐시
 - 미스는 TTL(`VALIDATION_MISS_TTL_SECONDS`) + frame_signature 조건에서만 재탐색 생략
@@ -51,16 +59,16 @@
 
 ## 테스트/검증 루틴
 1. 개발/배포 환경 설치
-- 개발 표준: `pip install -r requirements/requirements-dev.txt`
-- 풀 기능 배포 빌드: `pip install -r requirements/requirements-full.txt`
+- 개발 표준: `python -m venv .venv && .\.venv\Scripts\python.exe -m pip install -r requirements/requirements-dev.txt`
+- 풀 기능 배포 빌드: `.\.venv\Scripts\python.exe -m pip install -r requirements/requirements-full.txt`
 
 2. 문서 동기화
 - `python scripts/check_docs_sync.py --strict-warnings`
 
 3. 인코딩/타입 점검
 - `python scripts/check_encoding_health.py`
-- `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"`
-- `pyright` 명령이 없으면 `python -m pyright ...` 사용
+- `pyright -p .`
+- `pyright` 명령이 없으면 `python -m pyright -p .` 사용
 
 4. 회귀 테스트
 - `pytest -q`
@@ -96,12 +104,12 @@
 
 ## Git 정리 규칙
 1. `.gitignore`에 로컬 런타임 산출물(`.xpath_explorer/`, `.pytest_tmp/`, `htmlcov/`, PyInstaller 산출물) 누락 여부 점검
-2. `python scripts/check_encoding_health.py` + `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 점검 통과 후 커밋
+2. `python scripts/check_encoding_health.py` + `pyright -p .` 점검 통과 후 커밋
 3. 기본 브랜치(`main`) 푸시 전 테스트/문서 정합성 재확인
 
 ## Pylance/인코딩 고정 설정
 - `.editorconfig`: 저장 인코딩 `utf-8` 강제
 - `.vscode/settings.json`: `files.encoding=utf8`, `files.autoGuessEncoding=false`
-- `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, `.pytest_cache`, `.pytest_tmp`, 빌드 산출물) 고정
+- `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, `.pytest_cache`, `.pytest_tmp`, 빌드 산출물) 고정, repo-local `.venv` 우선 사용, `reportMissingImports = none`
 - Qt 관련 타입은 `TYPE_CHECKING` import 분리 또는 `xpath_explorer/qt_compat.py`를 사용해 headless CI와 정적 분석을 함께 만족시킴
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리

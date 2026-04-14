@@ -179,9 +179,9 @@ def test_run_pyright_falls_back_to_python_module(monkeypatch, tmp_path):
 
     def fake_run(cmd, cwd):
         calls.append(cmd)
-        if cmd == ["pyright"]:
+        if cmd == ["pyright", "-p", "."]:
             return 127
-        if cmd[:3] == [sys.executable, "-m", "pyright"]:
+        if cmd[:4] == [sys.executable, "-m", "pyright", "-p"]:
             return 0
         return 1
 
@@ -190,7 +190,7 @@ def test_run_pyright_falls_back_to_python_module(monkeypatch, tmp_path):
     code = module._run_pyright(tmp_path)
 
     assert code == 0
-    assert calls == [["pyright"], [sys.executable, "-m", "pyright"]]
+    assert calls == [["pyright", "-p", "."], [sys.executable, "-m", "pyright", "-p", "."]]
 
 
 def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path):
@@ -206,4 +206,4 @@ def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path
     code = module._run_pyright(tmp_path)
 
     assert code == 127
-    assert calls == [["pyright"], [sys.executable, "-m", "pyright"]]
+    assert calls == [["pyright", "-p", "."], [sys.executable, "-m", "pyright", "-p", "."]]

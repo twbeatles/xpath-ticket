@@ -34,6 +34,10 @@ pyright-scope-report*.json
 *.log
 .xpath_explorer/
 docs-sync-report*.md
+selenium_dom_export_*.htm
+playwright_dom_export_*.htm
+dom_diff_report_*.htm
+error_telemetry_*.md
 
 # Project-specific local folders
 backup/

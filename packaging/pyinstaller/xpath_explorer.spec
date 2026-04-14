@@ -173,11 +173,12 @@ exe = EXE(
 # - 빌드 전 정합성 점검:
 #   python scripts/check_docs_sync.py --strict-warnings
 #   python scripts/check_encoding_health.py
-#   pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"
+#   pyright -p .
 #   python scripts/run_quality_checks.py --strict-doc-warnings
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
 # - 선택 기능 포함 빌드: pip install -r requirements/requirements-full.txt
+# - repo-local `.venv`를 사용하면 pyright와 빌드 환경 정합성을 맞추기 쉽습니다.
 # - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
 # - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
 # ============================================================================

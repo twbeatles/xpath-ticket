@@ -134,6 +134,31 @@ def test_collect_dom_snapshots_collects_popup_and_frames_and_restores_context():
     assert len(errors) == 1
     assert errors[0].window_id == "popup"
     assert errors[0].frame_path == "popf"
+    assert errors[0].error_type == "detached_frame"
+
+    assert browser.driver.current_window_handle == "popup"
+    assert browser.driver._frame_stack == ["popf"]
+    assert browser.current_frame_path == "popf"
+
+
+def test_collect_dom_snapshots_current_scope_without_frames_limits_to_current_main_document():
+    browser = BrowserManager()
+    browser.driver = _FakeDriver()
+    browser._root_window_handle = "main"
+
+    browser.driver.switch_to.window("popup")
+    browser.driver.switch_to.frame("popf")
+    browser.current_frame_path = "popf"
+
+    snapshots = browser.collect_dom_snapshots(include_frames=False, scope="current")
+
+    assert len(snapshots) == 1
+    snapshot = snapshots[0]
+    assert snapshot.window_id == "popup"
+    assert snapshot.frame_path == "main"
+    assert snapshot.frame_label == "main"
+    assert snapshot.is_popup is True
+    assert "popup:main" in snapshot.html
 
     assert browser.driver.current_window_handle == "popup"
     assert browser.driver._frame_stack == ["popf"]

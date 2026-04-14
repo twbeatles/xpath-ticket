@@ -20,6 +20,8 @@ class XPathItem:
     element_tag: str = ""
     element_text: str = ""
     found_window: str = ""
+    found_window_title: str = ""
+    found_window_url: str = ""
     found_frame: str = ""
     # v3.3 신규 필드
     is_favorite: bool = False                    # 즐겨찾기 (#6)
@@ -115,6 +117,8 @@ class SiteConfig:
                     element_tag=item_data.get('element_tag', ''),
                     element_text=item_data.get('element_text', ''),
                     found_window=item_data.get('found_window', ''),
+                    found_window_title=item_data.get('found_window_title', ''),
+                    found_window_url=item_data.get('found_window_url', ''),
                     found_frame=item_data.get('found_frame', ''),
                     # v3.3 신규 필드 (기본값 처리)
                     is_favorite=item_data.get('is_favorite', False),

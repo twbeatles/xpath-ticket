@@ -7,7 +7,7 @@ import time
 import logging 
 from contextlib import contextmanager 
 from threading import RLock 
-from typing import List ,Dict ,Optional ,Any ,Tuple ,Set ,cast 
+from typing import List ,Dict ,Optional ,Any ,Tuple ,Set ,cast ,Literal 
 
 from xpath_explorer .core .constants import (
 PICKER_SCRIPT ,
@@ -98,6 +98,135 @@ class BrowserManager :
 
     def _clear_last_error (self ):
         self .last_error =""
+
+    def get_current_window_metadata(self) -> Dict[str, Any]:
+        with self._lock:
+            metadata = {
+                "handle": "",
+                "title": "",
+                "url": "",
+                "is_popup": False,
+            }
+            if not self.driver:
+                return metadata
+            try:
+                handle = str(self.driver.current_window_handle or "")
+            except Exception:
+                handle = ""
+            if not handle:
+                return metadata
+            try:
+                title = str(self.driver.title or "")
+            except Exception:
+                title = ""
+            try:
+                url = str(self.driver.current_url or "")
+            except Exception:
+                url = ""
+            metadata["handle"] = handle
+            metadata["title"] = title
+            metadata["url"] = url
+            metadata["is_popup"] = bool(self._root_window_handle and handle != self._root_window_handle)
+            return metadata
+
+    def _window_result_metadata(self) -> Dict[str, Any]:
+        current = self.get_current_window_metadata()
+        return {
+            "window_handle": str(current.get("handle", "") or ""),
+            "window_title": str(current.get("title", "") or ""),
+            "window_url": str(current.get("url", "") or ""),
+            "is_popup": bool(current.get("is_popup")),
+        }
+
+    def resolve_window_context(self, handle: str = "", window_url: str = "", title: str = "") -> Optional[Dict[str, Any]]:
+        with self._lock:
+            windows = self.get_windows()
+            if handle:
+                for window in windows:
+                    if str(window.get("handle") or "") == handle:
+                        return window
+            if window_url:
+                for window in windows:
+                    if str(window.get("url") or "") == window_url:
+                        return window
+            if title:
+                for window in windows:
+                    if str(window.get("title") or "") == title:
+                        return window
+            return None
+
+    def switch_to_window_context(self, handle: str = "", window_url: str = "", title: str = "") -> bool:
+        with self._lock:
+            if not any((handle, window_url, title)):
+                return self.is_alive()
+            target = self.resolve_window_context(handle=handle, window_url=window_url, title=title)
+            if not target:
+                self._set_last_error("대상 창을 찾을 수 없습니다.")
+                return False
+            target_handle = str(target.get("handle") or "")
+            if not target_handle:
+                self._set_last_error("대상 창을 찾을 수 없습니다.")
+                return False
+            if not self.switch_window(target_handle):
+                if not self.last_error:
+                    self._set_last_error("대상 창으로 전환할 수 없습니다.")
+                return False
+            self._clear_last_error()
+            return True
+
+    def switch_to_window_by_title(self, title: str) -> bool:
+        return self.switch_to_window_context(title=title)
+
+    def switch_to_root_window(self) -> bool:
+        with self._lock:
+            root = str(self._root_window_handle or "")
+            if not root:
+                windows = self.get_windows()
+                if windows:
+                    root = str(windows[-1].get("handle") or "")
+            if not root:
+                self._set_last_error("루트 창을 찾을 수 없습니다.")
+                return False
+            return self.switch_window(root)
+
+    def switch_to_latest_popup(self) -> bool:
+        with self._lock:
+            for window in self.get_windows():
+                if bool(window.get("is_popup")):
+                    return self.switch_window(str(window.get("handle") or ""))
+            self._set_last_error("팝업 창을 찾을 수 없습니다.")
+            return False
+
+    def wait_for_popup(self, timeout_seconds: float = 5.0, title: str = "") -> Optional[Dict[str, Any]]:
+        deadline = time.time() + max(0.0, float(timeout_seconds))
+        while time.time() <= deadline:
+            for window in self.get_windows():
+                if not bool(window.get("is_popup")):
+                    continue
+                if title and str(window.get("title") or "") != title:
+                    continue
+                self._clear_last_error()
+                return window
+            time.sleep(0.05)
+        self._set_last_error("팝업 창을 찾을 수 없습니다.")
+        return None
+
+    @staticmethod
+    def _classify_dom_error_type(error_text: str) -> str:
+        lowered = str(error_text or "").lower()
+        if not lowered:
+            return ""
+        if "no such window" in lowered or "target window already closed" in lowered or "closed:" in lowered:
+            return "closed_window"
+        if "detached" in lowered:
+            return "detached_frame"
+        if "access denied" in lowered:
+            return "access_denied"
+        if "cross-origin" in lowered or "cross origin" in lowered:
+            return "cross_origin"
+        if "frame switch failed" in lowered or "frame scan" in lowered:
+            return "frames_scan_failed"
+        return "unknown"
 
     @staticmethod 
     def _is_invalid_session_error (error :Exception )->bool :
@@ -362,13 +491,13 @@ class BrowserManager :
                     #Frame Element
                     # -------------------------------------------------------------------------
 
-    def get_all_frames (self ,max_depth :int =MAX_FRAME_DEPTH )->List [tuple ]:
+    def get_all_frames (self ,max_depth :int =MAX_FRAME_DEPTH ,force_refresh :bool =False )->List [tuple ]:
         """⑤뱺 iframeш곸쑝먯깋 (명꽣뚰겕 묒꺽 iframe"""
         with self ._lock :
             self .ensure_valid_window ()
             #먯떆 뺤씤
             current_time =time .time ()
-            if (self .frame_cache and 
+            if ((not force_refresh )and self .frame_cache and 
             current_time -self .frame_cache_time <self .FRAME_CACHE_DURATION ):
                 return self .frame_cache .copy ()
 
@@ -755,6 +884,7 @@ class BrowserManager :
                 "tag":element .tag_name ,
                 "text":element .text [:50 ]if element .text else "",
                 "frame_path":frame_path ,
+                **self._window_result_metadata(),
                 }
         except InvalidSelectorException as e :
             return {
@@ -1135,6 +1265,7 @@ class BrowserManager :
                                 result ["frame"]="main"
                                 result ["window_handle"]=handle 
                                 result ["window_title"]=self .driver .title 
+                                result ["window_url"]=self .driver .current_url 
                                 result ["is_popup"]=bool (
                                 self ._root_window_handle and handle !=self ._root_window_handle 
                                 )
@@ -1144,6 +1275,7 @@ class BrowserManager :
                         if result and isinstance (result ,dict ):
                             result ["window_handle"]=handle 
                             result ["window_title"]=self .driver .title 
+                            result ["window_url"]=self .driver .current_url 
                             result ["is_popup"]=bool (
                             self ._root_window_handle and handle !=self ._root_window_handle 
                             )
@@ -1505,6 +1637,7 @@ class BrowserManager :
                 'text':(element .text [:100 ]if element .text else ''),
                 'count':len (self .driver .find_elements (By .XPATH ,xpath )),
                 'frame_path':resolved_frame or 'main',
+                **self._window_result_metadata(),
                 }
 
                 if include_attributes :
@@ -1604,155 +1737,172 @@ class BrowserManager :
                 logger .error (f"스크린샷 저장 실패: {e }")
                 return False 
 
-    def collect_dom_snapshots (self ,include_frames :bool =True )->List [DomSnapshot ]:
-        """Collect DOM snapshots from all windows/popups and iframe documents."""
-        with self ._lock :
-            if not self .is_alive ():
+    def collect_dom_snapshots(
+        self,
+        include_frames: bool = True,
+        scope: Literal["all", "current"] = "all",
+    ) -> List[DomSnapshot]:
+        """Collect DOM snapshots from open windows/popups and iframe documents."""
+        with self._lock:
+            if not self.is_alive():
                 return []
 
-            snapshots :List [DomSnapshot ]=[]
-            original_frame_path =self .current_frame_path 
-            try :
-                current_handle =self .driver .current_window_handle 
-            except Exception :
-                current_handle =""
+            snapshots: List[DomSnapshot] = []
+            original_frame_path = self.current_frame_path
+            try:
+                current_handle = str(self.driver.current_window_handle or "")
+            except Exception:
+                current_handle = ""
 
-            windows =self .get_windows ()
-            if not windows and current_handle :
-                windows =[{
-                "handle":current_handle ,
-                "title":"",
-                "url":"",
-                "is_popup":False ,
+            windows = self.get_windows()
+            if scope == "current":
+                if current_handle:
+                    windows = [w for w in windows if str(w.get("handle") or "") == current_handle]
+                elif windows:
+                    windows = windows[:1]
+            if not windows and current_handle:
+                metadata = self.get_current_window_metadata()
+                windows = [{
+                    "handle": current_handle,
+                    "title": str(metadata.get("title", "") or ""),
+                    "url": str(metadata.get("url", "") or ""),
+                    "is_popup": bool(metadata.get("is_popup")),
                 }]
 
-            for window in windows :
-                handle =str (window .get ("handle")or "")
-                if not handle :
-                    continue 
+            for window in windows:
+                handle = str(window.get("handle") or "")
+                if not handle:
+                    continue
 
-                base_title =str (window .get ("title")or "")
-                base_url =str (window .get ("url")or "")
-                is_popup =bool (window .get ("is_popup"))
+                base_title = str(window.get("title") or "")
+                base_url = str(window.get("url") or "")
+                is_popup = bool(window.get("is_popup"))
 
-                try :
-                    self .driver .switch_to .window (handle )
-                    self .driver .switch_to .default_content ()
-                    self .current_frame_path =""
-                    # get_all_frames() 캐시가 다른 창 결과를 재사용하지 않도록 창 단위로 초기화
-                    self .frame_cache =[]
-                    self .frame_cache_time =0 
-                except Exception as e :
-                    snapshots .append (
-                    DomSnapshot (
-                    engine ="selenium",
-                    window_id =handle ,
-                    window_title =base_title ,
-                    window_url =base_url ,
-                    is_popup =is_popup ,
-                    frame_path ="main",
-                    frame_label ="main",
-                    document_url ="",
-                    html ="",
-                    error =self ._short_webdriver_error (e ),
-                    )
-                    )
-                    continue 
-
-                try :
-                    current_title =str (self .driver .title or base_title )
-                except Exception :
-                    current_title =base_title 
-                try :
-                    current_url =str (self .driver .current_url or base_url )
-                except Exception :
-                    current_url =base_url 
-
-                frame_targets :List [Tuple [str ,str ]]=[("main","main")]
-                if include_frames :
-                    try :
-                        frames =self .get_all_frames ()
-                        for frame_path ,frame_label in frames :
-                            frame_targets .append ((str (frame_path ),str (frame_label )))
-                    except Exception as e :
-                        snapshots .append (
-                        DomSnapshot (
-                        engine ="selenium",
-                        window_id =handle ,
-                        window_title =current_title ,
-                        window_url =current_url ,
-                        is_popup =is_popup ,
-                        frame_path ="frames_scan",
-                        frame_label ="frames_scan",
-                        document_url ="",
-                        html ="",
-                        error =self ._short_webdriver_error (e ),
+                try:
+                    self.driver.switch_to.window(handle)
+                    self.driver.switch_to.default_content()
+                    self.current_frame_path = ""
+                    self.frame_cache = []
+                    self.frame_cache_time = 0
+                except Exception as e:
+                    error_text = self._short_webdriver_error(e)
+                    snapshots.append(
+                        DomSnapshot(
+                            engine="selenium",
+                            window_id=handle,
+                            window_title=base_title,
+                            window_url=base_url,
+                            is_popup=is_popup,
+                            frame_path="main",
+                            frame_label="main",
+                            document_url="",
+                            html="",
+                            error=error_text,
+                            error_type=self._classify_dom_error_type(error_text),
                         )
+                    )
+                    continue
+
+                try:
+                    current_title = str(self.driver.title or base_title)
+                except Exception:
+                    current_title = base_title
+                try:
+                    current_url = str(self.driver.current_url or base_url)
+                except Exception:
+                    current_url = base_url
+
+                frame_targets: List[Tuple[str, str]] = [("main", "main")]
+                if include_frames:
+                    try:
+                        frames = self.get_all_frames(force_refresh=True)
+                        for frame_path, frame_label in frames:
+                            frame_targets.append((str(frame_path), str(frame_label)))
+                    except Exception as e:
+                        error_text = self._short_webdriver_error(e)
+                        snapshots.append(
+                            DomSnapshot(
+                                engine="selenium",
+                                window_id=handle,
+                                window_title=current_title,
+                                window_url=current_url,
+                                is_popup=is_popup,
+                                frame_path="frames_scan",
+                                frame_label="frames_scan",
+                                document_url="",
+                                html="",
+                                error=error_text,
+                                error_type="frames_scan_failed",
+                            )
                         )
 
-                for frame_path ,frame_label in frame_targets :
-                    normalized_path ="main"if frame_path in ("","main")else frame_path 
-                    normalized_label =frame_label or normalized_path 
-                    document_url =""
-                    html =""
-                    error_text =""
+                if not include_frames:
+                    frame_targets = [("main", "main")]
 
-                    try :
-                        self .driver .switch_to .window (handle )
-                        if normalized_path =="main":
-                            self .driver .switch_to .default_content ()
-                            self .current_frame_path =""
-                        elif not self .switch_to_frame_by_path (normalized_path ):
-                            raise Exception (f"frame switch failed: {normalized_path }")
+                for frame_path, frame_label in frame_targets:
+                    normalized_path = "main" if frame_path in ("", "main") else frame_path
+                    normalized_label = frame_label or normalized_path
+                    document_url = ""
+                    html = ""
+                    error_text = ""
 
-                        try :
-                            document_url =str (
-                            self .driver .execute_script (
-                            "return document.URL || window.location.href || '';"
+                    try:
+                        self.driver.switch_to.window(handle)
+                        if normalized_path == "main":
+                            self.driver.switch_to.default_content()
+                            self.current_frame_path = ""
+                        elif not self.switch_to_frame_by_path(normalized_path):
+                            raise Exception(f"frame switch failed: {normalized_path}")
+
+                        try:
+                            document_url = str(
+                                self.driver.execute_script(
+                                    "return document.URL || window.location.href || '';"
+                                )
+                                or ""
+                            )
+                        except Exception:
+                            document_url = current_url
+
+                        html = str(
+                            self.driver.execute_script(
+                                "return document.documentElement ? document.documentElement.outerHTML : "
+                                "(document.body ? document.body.outerHTML : '');"
                             )
                             or ""
-                            )
-                        except Exception :
-                            document_url =current_url 
-
-                        html =str (
-                        self .driver .execute_script (
-                        "return document.documentElement ? document.documentElement.outerHTML : "
-                        "(document.body ? document.body.outerHTML : '');"
                         )
-                        or ""
-                        )
-                    except Exception as e :
-                        error_text =self ._short_webdriver_error (e )
+                    except Exception as e:
+                        error_text = self._short_webdriver_error(e)
 
-                    snapshots .append (
-                    DomSnapshot (
-                    engine ="selenium",
-                    window_id =handle ,
-                    window_title =current_title ,
-                    window_url =current_url ,
-                    is_popup =is_popup ,
-                    frame_path =normalized_path ,
-                    frame_label =normalized_label ,
-                    document_url =document_url ,
-                    html =html ,
-                    error =error_text ,
-                    )
+                    snapshots.append(
+                        DomSnapshot(
+                            engine="selenium",
+                            window_id=handle,
+                            window_title=current_title,
+                            window_url=current_url,
+                            is_popup=is_popup,
+                            frame_path=normalized_path,
+                            frame_label=normalized_label,
+                            document_url=document_url,
+                            html=html,
+                            error=error_text,
+                            error_type=self._classify_dom_error_type(error_text),
+                        )
                     )
 
-            if current_handle :
-                try :
-                    self .driver .switch_to .window (current_handle )
-                except Exception :
-                    self ._recover_to_available_window ()
+            if current_handle:
+                try:
+                    self.driver.switch_to.window(current_handle)
+                except Exception:
+                    self._recover_to_available_window()
 
-            try :
-                self .switch_to_frame_by_path (original_frame_path or "main")
-            except Exception :
-                try :
-                    self .driver .switch_to .default_content ()
-                    self .current_frame_path =""
-                except Exception :
-                    pass 
+            try:
+                self.switch_to_frame_by_path(original_frame_path or "main")
+            except Exception:
+                try:
+                    self.driver.switch_to.default_content()
+                    self.current_frame_path = ""
+                except Exception:
+                    pass
 
-            return snapshots 
+            return snapshots

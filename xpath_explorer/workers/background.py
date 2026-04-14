@@ -19,6 +19,59 @@ from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
+
+def _window_context_from_item(item: Any) -> Dict[str, str]:
+    return {
+        "handle": str(getattr(item, "found_window", "") or ""),
+        "title": str(getattr(item, "found_window_title", "") or ""),
+        "url": str(getattr(item, "found_window_url", "") or ""),
+    }
+
+
+def _get_browser_window_metadata(browser: Any) -> Dict[str, Any]:
+    getter = getattr(browser, "get_current_window_metadata", None)
+    if callable(getter):
+        try:
+            metadata = getter()
+        except Exception:
+            metadata = None
+        if isinstance(metadata, dict):
+            return metadata
+    driver = getattr(browser, "driver", None)
+    try:
+        handle = str(getattr(driver, "current_window_handle", "") or "")
+    except Exception:
+        handle = ""
+    return {
+        "handle": handle,
+        "title": "",
+        "url": "",
+        "is_popup": False,
+    }
+
+
+def _switch_browser_to_item_window(browser: Any, item: Any) -> tuple[bool, str]:
+    context = _window_context_from_item(item)
+    handle = context["handle"]
+    title = context["title"]
+    url = context["url"]
+    if not any((handle, title, url)):
+        return True, ""
+
+    switch_context = getattr(browser, "switch_to_window_context", None)
+    try:
+        if callable(switch_context):
+            ok = bool(switch_context(handle=handle, window_url=url, title=title))
+        elif handle:
+            ok = bool(browser.switch_window(handle))
+        else:
+            ok = True
+    except Exception as e:
+        return False, str(e)
+    if ok:
+        return True, ""
+    return False, str(getattr(browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+
 class PickerWatcher(QThread):
     """요소 선택 감시 워커 (스레드 안전)."""
     picked = pyqtSignal(dict)
@@ -144,6 +197,20 @@ class ValidateWorker(QThread):
                 self.progress.emit(int((i / total) * 100), f"검증 중: {item.name}")
 
                 try:
+                    ok, error_msg = _switch_browser_to_item_window(self.browser, item)
+                    if not ok:
+                        self.validated.emit(
+                            item.name,
+                            {
+                                'found': False,
+                                'msg': error_msg,
+                                'frame_path': getattr(item, 'found_frame', '') or '',
+                                'window_handle': getattr(item, 'found_window', '') or '',
+                                'window_title': getattr(item, 'found_window_title', '') or '',
+                                'window_url': getattr(item, 'found_window_url', '') or '',
+                            },
+                        )
+                        continue
                     try:
                         result = cast(
                             Dict[str, Any],
@@ -334,21 +401,26 @@ class BatchTestWorker(QThread):
                 self.progress.emit(int((i / total) * 100), f"테스트 중: {item.name} ({i+1}/{total})")
 
                 try:
-                    with perf_span("worker.batch_validate_loop"):
-                        try:
-                            result = cast(
-                                Dict[str, Any],
-                                self.browser.validate_xpath(
-                                    item.xpath,
-                                    preferred_frame=item.found_frame or None,
-                                    session=session,
-                                ),
-                            )
-                        except TypeError:
-                            # 구 시그니처(validate_xpath(xpath)) 호환
-                            result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
-                    success = result.get('found', False)
-                    msg = result.get('msg', '')
+                    ok, error_msg = _switch_browser_to_item_window(self.browser, item)
+                    if not ok:
+                        success = False
+                        msg = error_msg
+                    else:
+                        with perf_span("worker.batch_validate_loop"):
+                            try:
+                                result = cast(
+                                    Dict[str, Any],
+                                    self.browser.validate_xpath(
+                                        item.xpath,
+                                        preferred_frame=item.found_frame or None,
+                                        session=session,
+                                    ),
+                                )
+                            except TypeError:
+                                # 구 시그니처(validate_xpath(xpath)) 호환
+                                result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
+                        success = result.get('found', False)
+                        msg = result.get('msg', '')
                 except Exception as e:
                     success = False
                     msg = str(e)
@@ -358,6 +430,8 @@ class BatchTestWorker(QThread):
                     'success': success,
                     'xpath': item.xpath,
                     'msg': msg,
+                    'window_handle': str(_get_browser_window_metadata(self.browser).get('handle', '') or ''),
+                    'window_title': str(_get_browser_window_metadata(self.browser).get('title', '') or ''),
                 }
                 results.append(row)
                 self.item_tested.emit(item.name, success, item.xpath, msg)
@@ -432,6 +506,7 @@ class BatchScenarioWorker(QThread):
                 "item_name": str(raw.get("item") or raw.get("item_name") or ""),
                 "xpath": str(raw.get("xpath") or ""),
                 "frame_path": str(raw.get("frame_path") or ""),
+                "title": str(raw.get("title") or ""),
                 "wait_seconds": max(0.0, wait_seconds),
                 "retries": max(0, cls._to_int(raw.get("retries", 0), default=0)),
             }
@@ -515,6 +590,46 @@ class BatchScenarioWorker(QThread):
         last_outcome["retry_count"] = max(0, attempt - 1)
         return last_outcome
 
+    def _run_window_action(self, action: str, title: str, timeout_seconds: float) -> Dict[str, Any]:
+        if action == "wait_for_popup":
+            wait_for_popup = getattr(self.browser, "wait_for_popup", None)
+            if not callable(wait_for_popup):
+                return {"success": False, "msg": "wait_for_popup not supported"}
+            popup = wait_for_popup(timeout_seconds=timeout_seconds, title=title)
+            if isinstance(popup, dict):
+                return {
+                    "success": True,
+                    "msg": "popup detected",
+                    "window_handle": str(popup.get("handle", "") or ""),
+                    "window_title": str(popup.get("title", "") or ""),
+                }
+            return {"success": False, "msg": str(getattr(self.browser, "last_error", "") or "popup not found")}
+
+        if action == "switch_latest_popup":
+            switch_latest_popup = getattr(self.browser, "switch_to_latest_popup", None)
+            if not callable(switch_latest_popup):
+                return {"success": False, "msg": "switch_to_latest_popup not supported"}
+            ok = bool(switch_latest_popup())
+            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "popup switch failed")}
+
+        if action == "switch_window_by_title":
+            switch_window_by_title = getattr(self.browser, "switch_to_window_by_title", None)
+            if not callable(switch_window_by_title):
+                return {"success": False, "msg": "switch_to_window_by_title not supported"}
+            if not title:
+                return {"success": False, "msg": "title is required"}
+            ok = bool(switch_window_by_title(title))
+            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "window switch failed")}
+
+        if action == "switch_root_window":
+            switch_root_window = getattr(self.browser, "switch_to_root_window", None)
+            if not callable(switch_root_window):
+                return {"success": False, "msg": "switch_to_root_window not supported"}
+            ok = bool(switch_root_window())
+            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "root window switch failed")}
+
+        return {"success": False, "msg": f"unsupported action: {action}"}
+
     def run(self):
         scenario_name = str(self.scenario.get("name") or "시나리오")
         steps = self._normalize_steps(self.scenario.get("steps"))
@@ -552,6 +667,7 @@ class BatchScenarioWorker(QThread):
                 item_name = step.get("item_name", "")
                 xpath = step.get("xpath", "")
                 frame_path = step.get("frame_path", "")
+                title = step.get("title", "")
                 target = ""
                 success = False
                 msg = ""
@@ -560,6 +676,7 @@ class BatchScenarioWorker(QThread):
                 attempt = 1
                 max_attempts = 1
                 retry_count = 0
+                outcome: Dict[str, Any] = {}
 
                 if action in ("wait", "sleep"):
                     wait_seconds = float(step.get("wait_seconds", 0.0))
@@ -574,18 +691,23 @@ class BatchScenarioWorker(QThread):
                         success = False
                         msg = f"item not found: {item_name}"
                     else:
+                        ok, error_msg = _switch_browser_to_item_window(self.browser, item)
                         xpath = item.xpath
                         if not frame_path:
                             frame_path = item.found_frame or ""
                         target = xpath
-                        outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
-                        success = bool(outcome["success"])
-                        msg = str(outcome["msg"])
-                        frame_path = str(outcome["frame_path"])
-                        count = int(outcome["count"])
-                        attempt = int(outcome["attempt"])
-                        max_attempts = int(outcome["max_attempts"])
-                        retry_count = int(outcome["retry_count"])
+                        if not ok:
+                            success = False
+                            msg = error_msg
+                        else:
+                            outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
+                            success = bool(outcome["success"])
+                            msg = str(outcome["msg"])
+                            frame_path = str(outcome["frame_path"])
+                            count = int(outcome["count"])
+                            attempt = int(outcome["attempt"])
+                            max_attempts = int(outcome["max_attempts"])
+                            retry_count = int(outcome["retry_count"])
                 elif action in ("validate_xpath", "xpath", "validate"):
                     if not xpath:
                         success = False
@@ -600,11 +722,23 @@ class BatchScenarioWorker(QThread):
                         attempt = int(outcome["attempt"])
                         max_attempts = int(outcome["max_attempts"])
                         retry_count = int(outcome["retry_count"])
+                elif action in ("wait_for_popup", "switch_latest_popup", "switch_window_by_title", "switch_root_window"):
+                    target = title or action
+                    outcome = self._run_window_action(
+                        action,
+                        str(title or ""),
+                        float(step.get("wait_seconds", 0.0) or 0.0),
+                    )
+                    success = bool(outcome.get("success"))
+                    msg = str(outcome.get("msg", ""))
                 else:
                     success = False
                     msg = f"unsupported action: {action}"
 
                 duration_ms = int((time.perf_counter() - started) * 1000)
+                window_meta = _get_browser_window_metadata(self.browser)
+                row_window_handle = str(outcome.get("window_handle", "") or window_meta.get("handle", "") or "")
+                row_window_title = str(outcome.get("window_title", "") or window_meta.get("title", "") or "")
                 row = {
                     "step": idx,
                     "name": step["name"],
@@ -620,6 +754,8 @@ class BatchScenarioWorker(QThread):
                     "attempt": attempt,
                     "max_attempts": max_attempts,
                     "retry_count": retry_count,
+                    "window_handle": row_window_handle,
+                    "window_title": row_window_title,
                 }
                 results.append(row)
                 self.step_completed.emit(row)

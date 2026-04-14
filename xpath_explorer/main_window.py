@@ -87,6 +87,7 @@ if QT_AVAILABLE:
             self._ai_request_id = 0
             self._ai_last_xpath = ""
             self._frame_selection_explicit = False
+            self._window_selection_explicit = False
             self._dom_diff_baseline = []
             self._dom_diff_source = ""
             self._editing_original_name = ""

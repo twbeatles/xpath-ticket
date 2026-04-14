@@ -32,6 +32,16 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 미스 캐시는 TTL 기반(`VALIDATION_MISS_TTL_SECONDS`)이며 프레임 시그니처가 바뀌면 무효화합니다.
 - 배치 검증 워커는 동일 세션을 재사용해 중복 스캔을 줄입니다.
 
+## 4-1. 팝업/창 문맥 전략
+- 항목 스키마는 `found_window`, `found_window_title`, `found_window_url`, `found_frame`를 함께 보존합니다.
+- 단건 검증/하이라이트/스크린샷은 다음 우선순위를 사용합니다.
+  1. 사용자가 창 콤보를 명시적으로 변경한 경우 해당 창
+  2. 현재 선택 항목의 저장된 창 문맥
+- Selenium 창 매핑 순서는 `handle -> exact URL -> exact title`입니다.
+- 대상 창을 찾지 못하면 다른 창으로 자동 폴백하지 않고 실패시킵니다.
+- 수동 프레임 스캔은 `get_all_frames(force_refresh=True)`로 캐시를 강제 갱신합니다.
+- 시나리오 워커는 `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션을 지원합니다.
+
 ## 5. 히스토리 정책
 - `HistoryManager`는 Undo/Redo 스냅샷에서 `alternatives`, `screenshot_path`를 보존합니다.
 - `element_attributes`는 최대 64개 키만 저장해 메모리 사용량 폭증을 방지합니다.
@@ -61,15 +71,15 @@ AI 설정 저장 정책:
 
 ## 8. 배포/품질 절차
 개발 표준 설치:
-`pip install -r requirements/requirements-dev.txt`
+`python -m venv .venv && .\.venv\Scripts\python.exe -m pip install -r requirements/requirements-dev.txt`
 
 풀 기능 배포 빌드(선택 기능 포함) 시:
-`pip install -r requirements/requirements-full.txt`
+`.\.venv\Scripts\python.exe -m pip install -r requirements/requirements-full.txt`
 
 ### 로컬 필수 체크
 1. `python scripts/check_docs_sync.py --strict-warnings`
 2. `python scripts/check_encoding_health.py`
-3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` (없으면 `python -m pyright ...`)
+3. `pyright -p .` (없으면 `python -m pyright -p .`)
 4. `pytest -q`
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 
@@ -109,7 +119,7 @@ AI 설정 저장 정책:
 ## 11. Git 운영 체크
 1. 코드 변경 후 `python scripts/check_docs_sync.py --strict-warnings` 실행
 2. `python scripts/check_encoding_health.py` 실행
-3. `pyright xpath_explorer tests scripts "xpath 조사기(모든 티켓 사이트).py"` 실행 (없으면 `python -m pyright ...`)
+3. `pyright -p .` 실행 (없으면 `python -m pyright -p .`)
 4. `pytest -q` 실행
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
 6. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
@@ -117,7 +127,7 @@ AI 설정 저장 정책:
 ## 12. Pylance/인코딩 운영 기준
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
 - VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
-- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`, exclude에 `.pytest_tmp` 포함)
+- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`, `venv = .venv`, `reportMissingImports = none`, exclude에 `.pytest_tmp` 포함)
 - Qt 타입은 `TYPE_CHECKING` 분리 또는 `xpath_explorer/qt_compat.py`를 통해 가져와 headless CI import와 충돌시키지 않습니다.
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
 - 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검

@@ -22,11 +22,11 @@ def _run(cmd: list[str], cwd: Path) -> int:
 
 def _run_pyright(cwd: Path) -> int:
     """Run pyright with fallback to python -m pyright."""
-    code = _run(["pyright"], cwd)
+    code = _run(["pyright", "-p", "."], cwd)
     if code != 127:
         return code
 
-    fallback_cmd = [sys.executable, "-m", "pyright"]
+    fallback_cmd = [sys.executable, "-m", "pyright", "-p", "."]
     code = _run(fallback_cmd, cwd)
     if code != 0:
         print("Pyright is not available. Install dev deps: pip install -r requirements/requirements-dev.txt")
