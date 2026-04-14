@@ -106,7 +106,7 @@ def test_quality_checks_with_pyright_runs_after_pytest(monkeypatch):
     assert len(calls) == 3
     assert calls[0][1] == "scripts/check_docs_sync.py"
     assert calls[1][1] == "-m"
-    assert calls[2][0] == "pyright"
+    assert calls[2][:4] == [module.sys.executable, "-m", "pyright", "-p"]
 
 
 def test_quality_checks_with_pyright_runs_without_pytest_when_skip_tests(monkeypatch):
@@ -123,7 +123,7 @@ def test_quality_checks_with_pyright_runs_without_pytest_when_skip_tests(monkeyp
     assert code == 0
     assert len(calls) == 2
     assert calls[0][1] == "scripts/check_docs_sync.py"
-    assert calls[1][0] == "pyright"
+    assert calls[1][:4] == [module.sys.executable, "-m", "pyright", "-p"]
 
 
 def test_quality_checks_with_pyright_and_smoke_release_run_in_order(monkeypatch):
@@ -142,7 +142,7 @@ def test_quality_checks_with_pyright_and_smoke_release_run_in_order(monkeypatch)
     assert len(calls) == 4
     assert calls[0][1] == "scripts/check_docs_sync.py"
     assert calls[1][1] == "-m"
-    assert calls[2][0] == "pyright"
+    assert calls[2][:4] == [module.sys.executable, "-m", "pyright", "-p"]
     assert calls[3][1] == "scripts/run_release_smoke_checks.py"
 
 
@@ -152,7 +152,7 @@ def test_quality_checks_with_pyright_failure_stops_smoke_release(monkeypatch):
 
     def fake_run(cmd, cwd):
         calls.append(cmd)
-        if cmd[0] == "pyright":
+        if cmd[:4] == [module.sys.executable, "-m", "pyright", "-p"]:
             return 7
         return 0
 
@@ -162,7 +162,7 @@ def test_quality_checks_with_pyright_failure_stops_smoke_release(monkeypatch):
     code = module.main(["--with-pyright", "--smoke-release"])
     assert code == 7
     assert len(calls) == 3
-    assert calls[-1][0] == "pyright"
+    assert calls[-1][:4] == [module.sys.executable, "-m", "pyright", "-p"]
 
 
 def test_quality_checks_run_returns_127_when_command_missing(tmp_path):
@@ -179,9 +179,9 @@ def test_run_pyright_falls_back_to_python_module(monkeypatch, tmp_path):
 
     def fake_run(cmd, cwd):
         calls.append(cmd)
-        if cmd == ["pyright", "-p", "."]:
-            return 127
         if cmd[:4] == [sys.executable, "-m", "pyright", "-p"]:
+            return 127 if len(calls) == 1 else 0
+        if cmd == ["pyright", "-p", "."]:
             return 0
         return 1
 
@@ -190,7 +190,7 @@ def test_run_pyright_falls_back_to_python_module(monkeypatch, tmp_path):
     code = module._run_pyright(tmp_path)
 
     assert code == 0
-    assert calls == [["pyright", "-p", "."], [sys.executable, "-m", "pyright", "-p", "."]]
+    assert calls == [[sys.executable, "-m", "pyright", "-p", "."], ["pyright", "-p", "."]]
 
 
 def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path):
@@ -206,4 +206,4 @@ def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path
     code = module._run_pyright(tmp_path)
 
     assert code == 127
-    assert calls == [["pyright", "-p", "."], [sys.executable, "-m", "pyright", "-p", "."]]
+    assert calls == [[sys.executable, "-m", "pyright", "-p", "."], ["pyright", "-p", "."]]

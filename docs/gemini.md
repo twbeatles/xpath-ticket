@@ -67,8 +67,7 @@
 
 3. 인코딩/타입 점검
 - `python scripts/check_encoding_health.py`
-- `pyright -p .`
-- `pyright` 명령이 없으면 `python -m pyright -p .` 사용
+- `python -m pyright -p .`
 
 4. 회귀 테스트
 - `pytest -q`
@@ -104,12 +103,12 @@
 
 ## Git 정리 규칙
 1. `.gitignore`에 로컬 런타임 산출물(`.xpath_explorer/`, `.pytest_tmp/`, `htmlcov/`, PyInstaller 산출물) 누락 여부 점검
-2. `python scripts/check_encoding_health.py` + `pyright -p .` 점검 통과 후 커밋
+2. `python scripts/check_encoding_health.py` + `python -m pyright -p .` 점검 통과 후 커밋
 3. 기본 브랜치(`main`) 푸시 전 테스트/문서 정합성 재확인
 
 ## Pylance/인코딩 고정 설정
 - `.editorconfig`: 저장 인코딩 `utf-8` 강제
 - `.vscode/settings.json`: `files.encoding=utf8`, `files.autoGuessEncoding=false`
-- `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, `.pytest_cache`, `.pytest_tmp`, 빌드 산출물) 고정, repo-local `.venv` 우선 사용, `reportMissingImports = none`
+- `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, `.pytest_cache`, `.pytest_tmp`, 빌드 산출물) 고정, 현재 Python 인터프리터 기준 동작, `reportMissingImports = none`
 - Qt 관련 타입은 `TYPE_CHECKING` import 분리 또는 `xpath_explorer/qt_compat.py`를 사용해 headless CI와 정적 분석을 함께 만족시킴
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리

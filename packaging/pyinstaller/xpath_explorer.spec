@@ -173,7 +173,7 @@ exe = EXE(
 # - 빌드 전 정합성 점검:
 #   python scripts/check_docs_sync.py --strict-warnings
 #   python scripts/check_encoding_health.py
-#   pyright -p .
+#   python -m pyright -p .
 #   python scripts/run_quality_checks.py --strict-doc-warnings
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)

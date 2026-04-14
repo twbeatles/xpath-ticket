@@ -81,14 +81,8 @@ xpath_explorer/
 ```bash
 python scripts/check_docs_sync.py --strict-warnings
 python scripts/check_encoding_health.py
-pyright -p .
-pytest -q
-```
-
-`pyright` 명령이 없으면:
-
-```bash
 python -m pyright -p .
+pytest -q
 ```
 
 ## 6. 스펙 파일 정합성 포인트
@@ -96,7 +90,7 @@ python -m pyright -p .
 - `collect_submodules("xpath_explorer")`를 사용해 분할된 패키지 구조를 빌드 수집합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 설치된 경우에만 hidden import로 포함하며, 릴리즈 스모크에서 import 상태를 점검합니다.
-- spec 주석의 품질 점검 명령도 `pyright -p .` 기준으로 유지합니다.
+- spec 주석의 품질 점검 명령도 `python -m pyright -p .` 기준으로 유지합니다.
 
 ### Qt 테스트 정책
 - Qt 런타임이 필요한 테스트는 `pytest.mark.qt`로 분리됩니다.
@@ -120,7 +114,6 @@ python -m pyright -p .
 - `pyrightconfig.json`
   - include: `xpath_explorer`, `tests`, `scripts`, `xpath 조사기(모든 티켓 사이트).py`
   - exclude: `archive`, `__pycache__`, `.pytest_cache`, `.pytest_tmp`, `build`, `dist`
-  - venv: `.venv`
 - Qt 관련 import는 `TYPE_CHECKING` 분리 또는 `qt_compat.py`를 우선 사용합니다.
 - `typeCheckingMode = basic`, `pythonVersion = 3.10`, `reportMissingImports = none`
 

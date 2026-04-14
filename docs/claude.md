@@ -79,7 +79,7 @@ AI 설정 저장 정책:
 ### 로컬 필수 체크
 1. `python scripts/check_docs_sync.py --strict-warnings`
 2. `python scripts/check_encoding_health.py`
-3. `pyright -p .` (없으면 `python -m pyright -p .`)
+3. `python -m pyright -p .`
 4. `pytest -q`
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 
@@ -119,7 +119,7 @@ AI 설정 저장 정책:
 ## 11. Git 운영 체크
 1. 코드 변경 후 `python scripts/check_docs_sync.py --strict-warnings` 실행
 2. `python scripts/check_encoding_health.py` 실행
-3. `pyright -p .` 실행 (없으면 `python -m pyright -p .`)
+3. `python -m pyright -p .` 실행
 4. `pytest -q` 실행
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
 6. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
@@ -127,7 +127,7 @@ AI 설정 저장 정책:
 ## 12. Pylance/인코딩 운영 기준
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
 - VS Code 고정: `.vscode/settings.json`에서 `files.encoding = utf8`, `files.autoGuessEncoding = false`
-- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`, `venv = .venv`, `reportMissingImports = none`, exclude에 `.pytest_tmp` 포함)
+- pyright 범위/진단: `pyrightconfig.json` 기준(`typeCheckingMode = basic`, `pythonVersion = 3.10`, 현재 Python 인터프리터 기준, `reportMissingImports = none`, exclude에 `.pytest_tmp` 포함)
 - Qt 타입은 `TYPE_CHECKING` 분리 또는 `xpath_explorer/qt_compat.py`를 통해 가져와 headless CI import와 충돌시키지 않습니다.
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
 - 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검

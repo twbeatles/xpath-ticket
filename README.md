@@ -94,7 +94,7 @@ python -m venv .venv
 ```
 
 > 네트워크 분석/Playwright 스캔 기능은 Chromium 설치가 되어 있어야 정상 동작합니다.
-> `pyrightconfig.json`은 repo-local `.venv`를 우선 보며, 외부 GUI/브라우저 패키지 import 진단보다 프로젝트 내부 타입 오류 검출에 집중합니다.
+> `pyrightconfig.json`은 현재 Python 인터프리터 기준으로 동작하며, 외부 GUI/브라우저 패키지 import 진단보다 프로젝트 내부 타입 오류 검출에 집중합니다.
 
 ---
 
@@ -218,11 +218,11 @@ python scripts/check_docs_sync.py
 
 ```bash
 python scripts/check_encoding_health.py
-pyright -p .
+python -m pyright -p .
 pytest -q
 ```
 
-`pyright` 명령이 없으면 `python -m pyright -p .`를 사용하세요.
+`pyright` 실행은 `python -m pyright -p .`를 기준으로 유지합니다.
 
 타입 안정성 규칙:
 - Qt 의존 import는 `xpath_explorer/qt_compat.py` 또는 `TYPE_CHECKING` 분리 패턴을 우선 사용합니다.
