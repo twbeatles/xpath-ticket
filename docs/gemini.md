@@ -8,18 +8,29 @@
 - 패키지 진입점: `xpath_explorer/__main__.py`
 - 메인 조립: `xpath_explorer/main_window.py`
 - Qt 호환 계층: `xpath_explorer/qt_compat.py`
-- Selenium 제어: `xpath_explorer/browser/browser.py`
-- 워커 실행: `xpath_explorer/workers/background.py`
+- Selenium facade: `xpath_explorer/browser/browser.py`
+- Selenium internals: `xpath_explorer/browser/selenium_*.py`
+- Playwright facade: `xpath_explorer/browser/playwright.py`
+- Playwright internals: `xpath_explorer/browser/playwright_*.py`
+- 워커 facade: `xpath_explorer/workers/background.py`
+- 워커 internals: `xpath_explorer/workers/*_worker.py`
+- mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `browser_mixin.py`, `data_mixin.py`, `tools_mixin.py`
+- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+- split mixin contracts/seams: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
 - AI 제안: `xpath_explorer/tools/ai.py`
 - 통계 기록: `xpath_explorer/analysis/statistics.py`
 - 경로 폴백 유틸: `xpath_explorer/core/paths.py`
 
 ## 기능 모듈 책임
-- `browser.py`: 윈도우/프레임 복구, XPath 검증, 세션 캐시(힌트/미스)
-- `background.py`: Validate/Batch/Scenario 워커 및 취소 처리
+- `browser.py`: Selenium facade
+- `selenium_*.py`: 윈도우/프레임 복구, XPath 검증, 세션 캐시(힌트/미스)
+- `background.py`: 워커 facade
+- `*_worker.py`: Validate/Batch/Scenario 워커 및 취소 처리
 - `ai.py`: OpenAI·Gemini provider 선택, 설정 로드/저장
 - `statistics.py`: 비동기 flush 기반 테스트 통계 누적
-- `tools_mixin.py`: DOM export/diff, 배치 리포트, 히스토리 UI 연계
+- `tools_mixin.py`: facade
+- `mixins/tools/`: DOM export/diff, 배치 리포트, 히스토리 UI 연계 세부 구현
+- `mixins/contracts.py`, `mixins/*/deps.py`: split mixin 타입 계약 및 patch seam
 
 ## 팝업/DOM 운영 포인트
 - 항목 스키마는 `found_window`, `found_window_title`, `found_window_url`, `found_frame`를 함께 저장합니다.

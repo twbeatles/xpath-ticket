@@ -128,10 +128,11 @@ pyinstaller packaging/pyinstaller/xpath_explorer.spec
 | `xpath_explorer/__main__.py` | 패키지 진입점 (`python -m xpath_explorer`) |
 | `xpath_explorer/main_window.py` | 메인 윈도우 조합 |
 | `xpath_explorer/qt_compat.py` | headless/CI용 Qt 호환 계층 |
-| `xpath_explorer/mixins/` | UI 조립/브라우저 액션/데이터/도구 Mixin |
-| `xpath_explorer/core/` | 상수, 설정 모델, 성능 로깅 |
-| `xpath_explorer/browser/` | Selenium/Playwright, DOM Export |
-| `xpath_explorer/workers/` | 백그라운드 QThread 워커 |
+| `xpath_explorer/mixins/` | facade mixin + split partial mixin 패키지 |
+| `xpath_explorer/mixins/contracts.py` | split mixin 호스트 Protocol 정의 |
+| `xpath_explorer/core/` | facade 상수 + 분리된 constants 모듈, 설정 모델, 성능 로깅 |
+| `xpath_explorer/browser/` | facade 브라우저 매니저 + split Selenium/Playwright 구현, DOM Export |
+| `xpath_explorer/workers/` | facade 워커 + 개별 QThread 워커 구현 |
 | `xpath_explorer/tools/` | AI, 코드 생성, XPath 최적화 |
 | `xpath_explorer/analysis/` | Diff 분석, 검증 통계 |
 | `xpath_explorer/state/` | Undo/Redo 히스토리 상태 |
@@ -189,24 +190,22 @@ MIT License
   - `xpath_explorer/main_window.py`
 - 런타임 로거 초기화:
   - `xpath_explorer/runtime.py`
-- 기능별 패키지:
-  - `xpath_explorer/core/`
-  - `xpath_explorer/browser/`
-  - `xpath_explorer/workers/`
-  - `xpath_explorer/workers/background.py`
-  - `xpath_explorer/tools/`
-  - `xpath_explorer/analysis/`
-  - `xpath_explorer/state/`
-  - `xpath_explorer/ui/`
-- 기존 단일 클래스 `XPathExplorer` 메서드는 책임별로 분리되었습니다.
-  - `xpath_explorer/mixins/ui_mixin.py`
-  - `xpath_explorer/mixins/browser_mixin.py`
-  - `xpath_explorer/mixins/data_mixin.py`
-  - `xpath_explorer/mixins/tools_mixin.py`
+- 호환 facade와 내부 분할 패키지를 함께 유지합니다.
+  - 상수 facade: `xpath_explorer/core/constants.py`
+  - 상수 내부 모듈: `xpath_explorer/core/app_constants.py`, `browser_constants.py`, `preset_constants.py`, `template_constants.py`, `runtime_constants.py`, `ui_constants.py`
+  - 브라우저 facade: `xpath_explorer/browser/browser.py`, `xpath_explorer/browser/playwright.py`
+  - 브라우저 내부 모듈: `xpath_explorer/browser/selenium_*.py`, `xpath_explorer/browser/playwright_*.py`
+  - 워커 facade: `xpath_explorer/workers/background.py`
+  - 워커 내부 모듈: `xpath_explorer/workers/*_worker.py`, `worker_shared.py`
+  - mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `xpath_explorer/mixins/browser_mixin.py`, `xpath_explorer/mixins/data_mixin.py`, `xpath_explorer/mixins/tools_mixin.py`
+  - mixin 내부 모듈: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+  - split mixin 계약/patch seam: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
+  - 나머지 기능 패키지: `xpath_explorer/tools/`, `analysis/`, `state/`, `ui/`
 
 호환 정책:
 - 기존 실행 명령은 변경하지 않습니다.
 - 기존 JSON 스키마와 사용자 UI 라벨 호환성을 유지합니다.
+- facade 경로를 쓰는 테스트/외부 import는 유지하고, 내부 구현만 세분화합니다.
 
 ## 문서-코드 정합성 체크
 

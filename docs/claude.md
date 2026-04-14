@@ -8,14 +8,18 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 패키지 진입점: `xpath_explorer/__main__.py`
 - UI 조립: `xpath_explorer/main_window.py`
 - Qt 호환 계층: `xpath_explorer/qt_compat.py`
-- UI 동작: `xpath_explorer/mixins/ui_mixin.py`
-- 브라우저 제어: `xpath_explorer/mixins/browser_mixin.py`
-- 데이터/설정 관리: `xpath_explorer/mixins/data_mixin.py`
-- 고급 기능(배치/리포트/도구): `xpath_explorer/mixins/tools_mixin.py`
-- Selenium 핵심 매니저: `xpath_explorer/browser/browser.py`
-- Playwright 매니저: `xpath_explorer/browser/playwright.py`
+- mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `browser_mixin.py`, `data_mixin.py`, `tools_mixin.py`
+- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+- split mixin contracts/seams: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
+- Selenium facade: `xpath_explorer/browser/browser.py`
+- Selenium internals: `xpath_explorer/browser/selenium_*.py`
+- Playwright facade: `xpath_explorer/browser/playwright.py`
+- Playwright internals: `xpath_explorer/browser/playwright_*.py`
 - DOM 리포트 렌더러: `xpath_explorer/browser/dom_export.py`
-- 백그라운드 워커: `xpath_explorer/workers/background.py`
+- 워커 facade: `xpath_explorer/workers/background.py`
+- 워커 internals: `xpath_explorer/workers/*_worker.py`, `worker_shared.py`
+- 상수 facade: `xpath_explorer/core/constants.py`
+- 상수 internals: `xpath_explorer/core/*_constants.py`
 - AI 어시스턴트: `xpath_explorer/tools/ai.py`
 - 통계/분석: `xpath_explorer/analysis/statistics.py`, `xpath_explorer/analysis/diff.py`
 - 런타임 로깅/텔레메트리: `xpath_explorer/runtime.py`
@@ -23,9 +27,13 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 ## 3. 핵심 실행 흐름
 1. `main_window.py`에서 Qt 환경 변수 설정 후 `QApplication` 생성
 2. `XPathExplorer` 초기화 시 Browser/History/Stats/AI 모듈 결합
-3. 사용자 액션에 따라 워커(`background.py`)가 비동기 검증 수행
+3. 사용자 액션에 따라 워커 facade(`background.py`) 아래의 개별 워커가 비동기 검증 수행
 4. 검증 결과를 통계/히스토리/테이블 모델에 반영
 5. 필요 시 DOM export/diff 리포트 생성
+
+하위 호환 원칙:
+- 공개 import 경로는 facade에 남기고, 세부 구현 이동은 내부 모듈에서만 수행합니다.
+- 테스트 monkeypatch가 facade 심볼을 직접 건드리는 경우를 고려해 `deps.py` seam을 유지합니다.
 
 ## 4. 검증 세션/프레임 전략
 - `xpath_explorer/browser/browser.py`의 `begin_validation_session()`은 프레임 목록/힌트/미스 캐시를 세션 단위로 유지합니다.

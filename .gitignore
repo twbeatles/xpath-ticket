@@ -27,6 +27,10 @@ htmlcov/
 build/
 dist/
 *.spec.bak
+*.pyz
+*.pkg
+warn-*.txt
+xref-*.html
 pyright-report*.json
 pyright-scope-report*.json
 

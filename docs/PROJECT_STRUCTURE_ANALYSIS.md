@@ -1,4 +1,4 @@
-# XPath Explorer 프로젝트 구조 분석 (2026-03-12)
+# XPath Explorer 프로젝트 구조 분석 (2026-04-14)
 
 ## 1. 목적
 - 현재 코드베이스의 실제 구조, 실행 경로, 품질 게이트, 배포 경로를 한 문서에서 빠르게 파악하기 위한 요약 문서입니다.
@@ -34,18 +34,33 @@ xpath_explorer/
 ├─ qt_compat.py
 ├─ runtime.py
 ├─ core/
+│  ├─ constants.py
+│  ├─ app_constants.py
+│  ├─ browser_constants.py
+│  ├─ preset_constants.py
+│  ├─ template_constants.py
+│  └─ runtime_constants.py
 ├─ browser/
 │  ├─ browser.py
 │  ├─ playwright.py
+│  ├─ selenium_*.py
+│  ├─ playwright_*.py
 │  └─ dom_export.py
 ├─ workers/
-│  └─ background.py
+│  ├─ background.py
+│  ├─ *_worker.py
+│  └─ worker_shared.py
 ├─ mixins/
 │  ├─ __init__.py
+│  ├─ contracts.py
 │  ├─ ui_mixin.py
 │  ├─ browser_mixin.py
 │  ├─ data_mixin.py
-│  └─ tools_mixin.py
+│  ├─ tools_mixin.py
+│  ├─ ui/
+│  ├─ browser/
+│  ├─ data/
+│  └─ tools/
 ├─ tools/
 │  ├─ ai.py
 │  ├─ codegen.py
@@ -65,13 +80,18 @@ xpath_explorer/
 ## 4. 책임 분리 요약
 - `main_window.py`: `XPathExplorer` 조합, 초기 상태/타이머/모듈 초기화
 - `qt_compat.py`: PyQt6 import와 headless fallback을 분리해 CI 수집 안정성 보장
-- `mixins/ui_mixin.py`: 메뉴/패널/편집기/상태 UI 구성
-- `mixins/browser_mixin.py`: Selenium 브라우저 연결, 창/프레임, popup-aware 검증, current-scope DOM export
-- `mixins/data_mixin.py`: 편집기 데이터 바인딩, 히스토리, import/export, 설정 복원
-- `mixins/tools_mixin.py`: 배치/시나리오/AI/통계/DOM diff/리포트
-- `browser/browser.py`: Selenium 검증 세션, 창 문맥 매핑, 프레임 힌트, miss cache
-- `browser/playwright.py`: Playwright 실행/탐색/활성 page 추적/DOM 수집
-- `workers/background.py`: Validate/Batch/Scenario/AI/QThread 워커
+- `core/constants.py`: 하위 호환 re-export surface
+- `core/*_constants.py`: 앱/브라우저/UI/프리셋/템플릿/런타임 상수 분리
+- `mixins/contracts.py`: split partial mixin이 공유하는 호스트 계약(Protocol)
+- `mixins/*_mixin.py`: 하위 호환 facade
+- `mixins/ui/`, `mixins/browser/`, `mixins/data/`, `mixins/tools/`: 세부 책임별 partial mixin
+- `mixins/*/deps.py`: monkeypatch 안정성을 위한 patch seam
+- `browser/browser.py`: Selenium facade
+- `browser/selenium_*.py`: 창/프레임/검증/피커/DOM 수집 세부 구현
+- `browser/playwright.py`: Playwright facade + `NetworkAnalyzer`
+- `browser/playwright_*.py`: lifecycle/network/storage/scan/dom 세부 구현
+- `workers/background.py`: 워커 re-export surface
+- `workers/*_worker.py`, `worker_shared.py`: Validate/Batch/Scenario/AI/QThread 워커 세부 구현
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
 
 ## 5. 품질 게이트
@@ -96,7 +116,7 @@ pytest -q
 - Qt 런타임이 필요한 테스트는 `pytest.mark.qt`로 분리됩니다.
 - 로컬 GUI/Qt 환경에서는 `pytest -q -m qt`로 별도 확인합니다.
 
-## 6. 배포 스펙 정합성
+## 7. 배포 스펙 정합성
 - `packaging/pyinstaller/xpath_explorer.spec`는 다음 엔트리포인트 후보를 사용합니다.
   - `xpath 조사기(모든 티켓 사이트).py`
   - `xpath_explorer/__main__.py`
@@ -105,7 +125,7 @@ pytest -q
 - `qt_excludes`에는 TLS 관련 라이브러리(`libcrypto`, `libssl`)를 넣지 않습니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 빌드 환경에 설치된 경우에만 hidden import로 추가됩니다.
 
-## 7. 인코딩/Pylance 운영 기준
+## 8. 인코딩/Pylance 운영 기준
 - `.editorconfig`: `charset = utf-8`, `end_of_line = lf`
 - `.vscode/settings.json`
   - `files.encoding = utf8`
@@ -117,7 +137,7 @@ pytest -q
 - Qt 관련 import는 `TYPE_CHECKING` 분리 또는 `qt_compat.py`를 우선 사용합니다.
 - `typeCheckingMode = basic`, `pythonVersion = 3.10`, `reportMissingImports = none`
 
-## 8. 운영 메모
+## 9. 운영 메모
 - `archive/`는 보관 영역이며 정적 분석/기본 점검 대상에서 제외됩니다.
 - 문서와 코드가 어긋나면 `scripts/check_docs_sync.py`를 우선 기준으로 수정합니다.
 - 릴리즈 전에는 `scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행을 권장합니다.

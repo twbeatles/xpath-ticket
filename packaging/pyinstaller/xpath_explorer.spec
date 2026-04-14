@@ -46,6 +46,10 @@ hiddenimports = [
     'xpath_explorer.core.paths',
     'xpath_explorer.qt_compat',
     'xpath_explorer.ui.widgets',
+    'xpath_explorer.mixins.contracts',
+    'xpath_explorer.browser.playwright_deps',
+    'xpath_explorer.browser.playwright_models',
+    'xpath_explorer.workers.worker_shared',
     # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
     'xpath_explorer.browser.browser',
     'xpath_explorer.browser.playwright',
@@ -68,7 +72,11 @@ hiddenimports = [
     'undetected_chromedriver',
 ]
 
-# Project package split support: include all submodules under xpath_explorer/.
+# Project package split support:
+# - public facades stay on the legacy import paths
+# - internal implementations now live in split subpackages/modules
+#   (mixins/*, workers/*_worker.py, browser/selenium_*.py, browser/playwright_*.py)
+# collect_submodules('xpath_explorer') keeps those internal modules bundled.
 hiddenimports += collect_submodules('xpath_explorer')
 # Optional dependencies: include only when available in build environment.
 hiddenimports += _collect_optional_hiddenimports(
@@ -181,5 +189,7 @@ exe = EXE(
 # - repo-local `.venv`를 사용하면 pyright와 빌드 환경 정합성을 맞추기 쉽습니다.
 # - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
 # - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
+# - facade import 경로(`core/constants.py`, `workers/background.py`, `mixins/*_mixin.py`,
+#   `browser/browser.py`, `browser/playwright.py`)는 하위 호환용으로 유지됩니다.
 # ============================================================================
 
