@@ -174,8 +174,8 @@ class _FakeBrowser:
 
 class _Harness(ExplorerBrowserMixin):
     browser: _FakeBrowser
-    combo_windows: _FakeComboBox
-    combo_frames: _FakeComboBox
+    combo_windows: Any
+    combo_frames: Any
     input_name: _FakeLineEdit
     input_xpath: _FakePlainTextEdit
     input_css: _FakeLineEdit
