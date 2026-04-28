@@ -37,6 +37,7 @@ def _collect_optional_hiddenimports(*module_names: str):
 hiddenimports = [
     # 프로젝트 모듈
     'xpath_explorer.tools.ai',
+    'xpath_explorer.tools.xpath_safety',
     'xpath_explorer.analysis.diff',
     'xpath_explorer.state.history',
     'xpath_explorer.tools.optimizer',
@@ -76,6 +77,8 @@ hiddenimports = [
 # - public facades stay on the legacy import paths
 # - internal implementations now live in split subpackages/modules
 #   (mixins/*, workers/*_worker.py, browser/selenium_*.py, browser/playwright_*.py)
+# - safety/diagnostics/export helpers added in tools and mixins/tools are bundled by
+#   collect_submodules, with key dynamic modules also listed explicitly above.
 # collect_submodules('xpath_explorer') keeps those internal modules bundled.
 hiddenimports += collect_submodules('xpath_explorer')
 # Optional dependencies: include only when available in build environment.
@@ -182,6 +185,8 @@ exe = EXE(
 #   python scripts/check_docs_sync.py --strict-warnings
 #   python scripts/check_encoding_health.py
 #   python -m pyright -p .
+#   pytest -q
+#   python scripts/run_release_smoke_checks.py
 #   python scripts/run_quality_checks.py --strict-doc-warnings
 # - UPX 설치: https://upx.github.io (PATH에 추가)
 # - 예상 크기: 40-60MB (UPX 적용)
@@ -189,6 +194,8 @@ exe = EXE(
 # - repo-local `.venv`를 사용하면 pyright와 빌드 환경 정합성을 맞추기 쉽습니다.
 # - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
 # - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
+# - 기능 진단/배치 결과 export 산출물은 .gitignore의 feature_diagnostics_*,
+#   batch_results_* 패턴으로 로컬 산출물만 제외합니다.
 # - facade import 경로(`core/constants.py`, `workers/background.py`, `mixins/*_mixin.py`,
 #   `browser/browser.py`, `browser/playwright.py`)는 하위 호환용으로 유지됩니다.
 # ============================================================================

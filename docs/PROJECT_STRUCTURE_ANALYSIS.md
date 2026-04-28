@@ -64,7 +64,8 @@ xpath_explorer/
 ├─ tools/
 │  ├─ ai.py
 │  ├─ codegen.py
-│  └─ optimizer.py
+│  ├─ optimizer.py
+│  └─ xpath_safety.py
 ├─ analysis/
 │  ├─ diff.py
 │  └─ statistics.py
@@ -92,6 +93,9 @@ xpath_explorer/
 - `browser/playwright_*.py`: lifecycle/network/storage/scan/dom 세부 구현
 - `workers/background.py`: 워커 re-export surface
 - `workers/*_worker.py`, `worker_shared.py`: Validate/Batch/Scenario/AI/QThread 워커 세부 구현
+- `tools/xpath_safety.py`: XPath literal/attribute/text predicate 생성 공통 helper
+- `mixins/tools/inspection_tools.py`: 기능 진단 Markdown 리포트와 운영 점검 UI
+- `mixins/tools/batch_tools.py`: 배치/시나리오 결과 다이얼로그와 CSV/Markdown export
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
 
 ## 5. 품질 게이트
@@ -108,6 +112,7 @@ pytest -q
 ## 6. 스펙 파일 정합성 포인트
 - `packaging/pyinstaller/xpath_explorer.spec`는 `ENTRYPOINT_CANDIDATES`로 래퍼/패키지 엔트리포인트를 모두 지원합니다.
 - `collect_submodules("xpath_explorer")`를 사용해 분할된 패키지 구조를 빌드 수집합니다.
+- `xpath_explorer.tools.xpath_safety`는 동적/간접 import 누락 방지를 위해 hidden import에 명시합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 설치된 경우에만 hidden import로 포함하며, 릴리즈 스모크에서 import 상태를 점검합니다.
 - spec 주석의 품질 점검 명령도 `python -m pyright -p .` 기준으로 유지합니다.
@@ -122,6 +127,7 @@ pytest -q
   - `xpath_explorer/__main__.py`
 - `collect_submodules("xpath_explorer")`로 분할 패키지 구조를 자동 수집합니다.
 - `xpath_explorer.qt_compat`를 hidden import에 명시해 Qt bootstrap 경로 누락을 방지합니다.
+- 기능 진단/배치 export 산출물(`feature_diagnostics_*.md`, `batch_results_*.csv`, `batch_results_*.md`)은 로컬 산출물로 `.gitignore`에서 제외합니다.
 - `qt_excludes`에는 TLS 관련 라이브러리(`libcrypto`, `libssl`)를 넣지 않습니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 빌드 환경에 설치된 경우에만 hidden import로 추가됩니다.
 
@@ -141,3 +147,5 @@ pytest -q
 - `archive/`는 보관 영역이며 정적 분석/기본 점검 대상에서 제외됩니다.
 - 문서와 코드가 어긋나면 `scripts/check_docs_sync.py`를 우선 기준으로 수정합니다.
 - 릴리즈 전에는 `scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행을 권장합니다.
+- 배치/시나리오 워커는 기본적으로 원래 창/프레임 문맥을 복구하며, `leave_context: true` 시에만 마지막 문맥을 유지합니다.
+- Playwright scan은 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임 범위를 지원하고 scan 결과의 창/프레임 출처를 저장합니다.

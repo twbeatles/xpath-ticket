@@ -202,6 +202,10 @@ class ExplorerUIMenuMixin:
         telemetry_action = QAction('🚨 오류 텔레메트리', self)
         telemetry_action.triggered.connect(self._show_error_telemetry)
         tools_menu.addAction(telemetry_action)
+
+        diagnostics_action = QAction('🧭 기능 진단 리포트 저장...', self)
+        diagnostics_action.triggered.connect(self._save_feature_diagnostics_report)
+        tools_menu.addAction(diagnostics_action)
         
         # 보기 메뉴
         view_menu = cast(QMenu, menubar.addMenu('보기(&V)'))

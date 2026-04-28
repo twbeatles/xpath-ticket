@@ -3,6 +3,7 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 import csv
+import io
 import json
 from collections import Counter
 from datetime import datetime
@@ -97,7 +98,10 @@ class ExplorerBatchToolsMixin:
         self.btn_open.setEnabled(False)  # 브라우저 버튼 비활성화
         self.batch_worker = BatchTestWorker(self.browser, list(items_to_test))
         self.batch_worker.progress.connect(self._on_batch_test_progress)
-        self.batch_worker.item_tested.connect(self._on_batch_item_tested)
+        if hasattr(self.batch_worker, "item_validated"):
+            self.batch_worker.item_validated.connect(self._on_batch_item_validated)
+        else:
+            self.batch_worker.item_tested.connect(self._on_batch_item_tested)
         self.batch_worker.completed.connect(self._on_batch_test_completed)
         self.batch_worker.start()
 
@@ -113,6 +117,24 @@ class ExplorerBatchToolsMixin:
             result={
                 'found': success,
                 'msg': msg,
+            },
+        )
+
+    def _on_batch_item_validated(self, name: str, result: Dict[str, Any]):
+        self._record_validation_outcome(
+            name=name,
+            xpath=str(result.get("xpath", "") or ""),
+            success=bool(result.get("success")),
+            result={
+                "found": bool(result.get("success")),
+                "msg": result.get("msg", ""),
+                "frame_path": result.get("frame_path", ""),
+                "window_handle": result.get("window_handle", ""),
+                "window_title": result.get("window_title", ""),
+                "window_url": result.get("window_url", ""),
+                "tag": result.get("tag", ""),
+                "count": result.get("count", 0),
+                "error_type": result.get("error_type", ""),
             },
         )
 
@@ -142,6 +164,7 @@ class ExplorerBatchToolsMixin:
     def _default_scenario_json() -> str:
         sample = {
             "name": "기본 시나리오",
+            "leave_context": False,
             "steps": [
                 {"name": "로그인 ID 확인", "action": "validate_item", "item": "login_id"},
                 {"name": "잠시 대기", "action": "wait", "seconds": 0.5},
@@ -251,7 +274,12 @@ class ExplorerBatchToolsMixin:
                             "found": success,
                             "msg": row.get("msg", ""),
                             "frame_path": row.get("frame_path", ""),
+                            "window_handle": row.get("window_handle", ""),
+                            "window_title": row.get("window_title", ""),
+                            "window_url": row.get("window_url", ""),
+                            "tag": row.get("tag", ""),
                             "count": row.get("count", 0),
+                            "error_type": row.get("error_type", ""),
                         },
                     )
 
@@ -397,6 +425,144 @@ class ExplorerBatchToolsMixin:
             counter[reason] += 1
         return list(counter.most_common(max(1, int(top_n))))
 
+    @staticmethod
+    def _batch_export_columns() -> List[str]:
+        return [
+            "status",
+            "step",
+            "name",
+            "action",
+            "item_name",
+            "xpath",
+            "target",
+            "frame_path",
+            "window_handle",
+            "window_title",
+            "window_url",
+            "tag",
+            "count",
+            "error_type",
+            "msg",
+            "duration_ms",
+            "attempt",
+            "max_attempts",
+            "retry_count",
+        ]
+
+    @classmethod
+    def _batch_export_row(cls, row: Dict[str, Any]) -> Dict[str, Any]:
+        name = str(row.get("name", row.get("item_name", "")) or "")
+        item_name = str(row.get("item_name", "") or "")
+        return {
+            "status": "success" if bool(row.get("success")) else "failure",
+            "step": row.get("step", ""),
+            "name": name or item_name,
+            "action": row.get("action", ""),
+            "item_name": item_name,
+            "xpath": row.get("xpath", ""),
+            "target": row.get("target", ""),
+            "frame_path": row.get("frame_path", ""),
+            "window_handle": row.get("window_handle", ""),
+            "window_title": row.get("window_title", ""),
+            "window_url": row.get("window_url", ""),
+            "tag": row.get("tag", ""),
+            "count": row.get("count", ""),
+            "error_type": row.get("error_type", ""),
+            "msg": row.get("msg", ""),
+            "duration_ms": row.get("duration_ms", ""),
+            "attempt": row.get("attempt", ""),
+            "max_attempts": row.get("max_attempts", ""),
+            "retry_count": row.get("retry_count", ""),
+        }
+
+    @classmethod
+    def _batch_results_to_csv(cls, results: List[Dict[str, Any]]) -> str:
+        output = io.StringIO(newline="")
+        columns = cls._batch_export_columns()
+        writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in results:
+            writer.writerow(cls._batch_export_row(row))
+        return output.getvalue()
+
+    @staticmethod
+    def _escape_markdown_cell(value: Any) -> str:
+        text = str(value if value is not None else "")
+        return text.replace("\\", "\\\\").replace("|", "\\|").replace("\r\n", "<br>").replace("\n", "<br>")
+
+    @classmethod
+    def _batch_results_to_markdown(
+        cls,
+        results: List[Dict[str, Any]],
+        *,
+        title: str = "배치 테스트 결과",
+        cancelled: bool = False,
+        retry_total: Optional[int] = None,
+    ) -> str:
+        total = len(results)
+        success_count = sum(1 for row in results if bool(row.get("success")))
+        retry_sum = retry_total
+        if retry_sum is None:
+            retry_sum = sum(max(0, int(row.get("retry_count", 0) or 0)) for row in results)
+        success_rate = (success_count / total * 100.0) if total else 0.0
+        columns = cls._batch_export_columns()
+        lines = [
+            f"# {title}",
+            "",
+            f"- 상태: {'취소됨' if cancelled else '완료'}",
+            f"- 총 항목: {total}",
+            f"- 성공: {success_count}",
+            f"- 실패: {total - success_count}",
+            f"- 성공률: {success_rate:.1f}%",
+            f"- 총 재시도: {retry_sum}",
+            "",
+            "|" + "|".join(columns) + "|",
+            "|" + "|".join("---" for _ in columns) + "|",
+        ]
+        for row in results:
+            normalized = cls._batch_export_row(row)
+            lines.append("|" + "|".join(cls._escape_markdown_cell(normalized.get(col, "")) for col in columns) + "|")
+        return "\n".join(lines) + "\n"
+
+    def _save_batch_results(
+        self,
+        results: List[Dict[str, Any]],
+        fmt: str,
+        *,
+        cancelled: bool = False,
+        title: str = "배치 테스트 결과",
+        retry_total: Optional[int] = None,
+    ):
+        fmt = fmt.lower().strip()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if fmt == "csv":
+            default_name = f"batch_results_{timestamp}.csv"
+            file_filter = "CSV 파일 (*.csv)"
+            content = self._batch_results_to_csv(results)
+            suffix = ".csv"
+        else:
+            default_name = f"batch_results_{timestamp}.md"
+            file_filter = "Markdown 파일 (*.md)"
+            content = self._batch_results_to_markdown(
+                results,
+                title=title,
+                cancelled=cancelled,
+                retry_total=retry_total,
+            )
+            suffix = ".md"
+
+        fname, _ = QFileDialog.getSaveFileName(self, "결과 저장", default_name, file_filter)
+        if not fname:
+            return
+        if not fname.lower().endswith(suffix):
+            fname += suffix
+        try:
+            with open(fname, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+            self._show_toast(f"결과 저장 완료: {fname}", "success", 4000)
+        except Exception as e:
+            self._show_toast(f"결과 저장 실패: {e}", "error")
+
     def _show_batch_report(
         self,
         results: list,
@@ -427,13 +593,16 @@ class ExplorerBatchToolsMixin:
         layout.addWidget(summary)
 
         table = QTableWidget()
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["상태", "이름", "결과"])
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["상태", "이름", "프레임", "창", "개수", "결과"])
         batch_hh = table.horizontalHeader()
         if batch_hh is not None:
             batch_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
             batch_hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-            batch_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            batch_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            batch_hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            batch_hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            batch_hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
 
         for r in results:
             row = table.rowCount()
@@ -443,7 +612,10 @@ class ExplorerBatchToolsMixin:
             status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             table.setItem(row, 0, status)
             table.setItem(row, 1, QTableWidgetItem(str(r.get("name", r.get("item_name", "-")))))
-            table.setItem(row, 2, QTableWidgetItem(str(r.get("msg", "Found" if success else "Not found"))))
+            table.setItem(row, 2, QTableWidgetItem(str(r.get("frame_path", ""))))
+            table.setItem(row, 3, QTableWidgetItem(str(r.get("window_title", "") or r.get("window_url", "") or r.get("window_handle", ""))))
+            table.setItem(row, 4, QTableWidgetItem(str(r.get("count", ""))))
+            table.setItem(row, 5, QTableWidgetItem(str(r.get("msg", "Found" if success else "Not found"))))
 
         layout.addWidget(table)
 
@@ -481,6 +653,10 @@ class ExplorerBatchToolsMixin:
         layout.addWidget(txt_telemetry)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_csv = btn_box.addButton("CSV 저장", QDialogButtonBox.ButtonRole.ActionRole)
+        btn_md = btn_box.addButton("Markdown 저장", QDialogButtonBox.ButtonRole.ActionRole)
+        btn_csv.clicked.connect(lambda: self._save_batch_results(results, "csv", cancelled=cancelled, title=title, retry_total=retry_total))
+        btn_md.clicked.connect(lambda: self._save_batch_results(results, "md", cancelled=cancelled, title=title, retry_total=retry_total))
         btn_box.rejected.connect(dialog.reject)
         layout.addWidget(btn_box)
 

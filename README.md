@@ -45,6 +45,15 @@
 - **시나리오 팝업 제어**: `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션 추가
 - **수동 프레임 새로고침**: 프레임 스캔 UI에서 `get_all_frames(force_refresh=True)`를 사용해 캐시를 강제 갱신
 
+### 🧩 구현 안정화 및 진단 보강 (2026.04.28)
+- **XPath 안전 생성 공통화**: `xpath_literal`, `xpath_attr_equals`, `xpath_contains_text` 헬퍼를 추가해 AI fallback, Optimizer, Playwright scan, picker 경로에서 따옴표가 섞인 값도 valid XPath로 생성
+- **배치/시나리오 문맥 복구**: 실행 후 기본적으로 원래 창/프레임으로 복구하며, 시나리오 JSON의 `leave_context: true`에서만 마지막 문맥 유지
+- **검증 결과 메타데이터 확장**: 배치/시나리오 결과에 `frame_path`, `window_handle`, `window_title`, `window_url`, `tag`, `count`, `error_type` 포함
+- **Playwright 스캔 범위 확장**: 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임 스캔을 지원하고 scan 결과에 창/프레임 출처 저장
+- **진단/내보내기**: 도구 메뉴의 기능 진단 Markdown 리포트 저장과 배치/시나리오 결과 CSV/Markdown 저장 지원
+- **설정 호환성**: 설정 JSON에 선택 필드 `schema_version`을 저장하고, 로드 시 오래된/잘못된 타입의 선택 필드를 정규화
+- **인코딩 게이트 강화**: `.pytest_tmp`, `htmlcov`는 검사에서 제외하고 Selenium split 파일의 한국어 모지바케 패턴을 감지
+
 ### 🎨 UI/UX 개선 (v4.1)
 - 연결 상태 glow 애니메이션
 - 테이블 선택/hover 효과 강화
@@ -67,7 +76,9 @@
 - 요소 스크린샷
 - XPath 템플릿 라이브러리
 - 배치 시나리오 실행기
+- 배치/시나리오 결과 CSV/Markdown 저장
 - 팝업-aware 검증/하이라이트/스크린샷
+- 기능 진단 Markdown 리포트
 - 현재 창 DOM 추출/DOM 비교 리포트
 
 ---
@@ -232,7 +243,8 @@ pytest -q
 - 브라우저/프레임 복원: `tests/test_browser_frame_hint.py`, `tests/test_selenium_frame_restore.py`
 - DOM Export: `tests/test_browser_dom_export.py`, `tests/test_playwright_dom_export.py`, `tests/test_dom_report_renderer.py`
 - 배치/워커: `tests/test_batch_worker_cancel.py`, `tests/test_batch_scenario_worker.py`, `tests/test_workers_use_validation_session.py`
-- Playwright 어댑터: `tests/test_network_analyzer_adapter.py`
+- Playwright 어댑터/스캔: `tests/test_network_analyzer_adapter.py`, `tests/test_playwright_scan_context.py`
+- XPath 안전 생성/설정/리포트: `tests/test_xpath_safety.py`, `tests/test_config_schema.py`, `tests/test_batch_report_exports.py`, `tests/test_feature_diagnostics.py`
 - 문서 정합성: `tests/test_docs_sync_check.py`
 
 ## 개발 품질 체크 (정합성 + 커버리지)
@@ -267,7 +279,7 @@ python scripts/run_release_smoke_checks.py
 - 테스트는 로컬 또는 필요 시 수동 실행으로 유지합니다.
 ## 구현 점검 반영 (2026-03-27)
 
-- `IMPLEMENTATION_REVIEW_20260327.md`의 실행 계획 항목을 코드에 반영했습니다.
+- 2026-03-27 구현 점검의 실행 계획 항목을 코드에 반영했습니다.
 - 핵심 반영:
   - Playwright 초기화 실패 시 부분 생성 리소스 정리
   - 배치 시나리오 워커 실패 시그널/재시도 메타데이터(`attempt`, `retry_count`, `max_attempts`)
@@ -288,7 +300,7 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 
 ## 구현 점검 반영 (2026-04-14)
 
-- `IMPLEMENTATION_REVIEW_20260414.md` 기준의 팝업/창 문맥 보강 작업을 코드에 반영했습니다.
+- 2026-04-14 구현 점검 기준의 팝업/창 문맥 보강 작업을 코드에 반영했습니다.
 - 핵심 반영:
   - 항목 저장 스키마에 `found_window_title`, `found_window_url` 추가
   - 저장된 창 문맥 우선 재검증/하이라이트/스크린샷 경로 적용
@@ -298,6 +310,20 @@ python scripts/run_quality_checks.py --strict-doc-warnings
   - 시나리오 워커 popup/window 액션(`wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window`) 추가
   - 수동 프레임 스캔에 `force_refresh=True` 적용
   - 관련 회귀 테스트 추가: 창 문맥, current-scope DOM export, popup 시나리오 액션, DOM 리포트 요약
+
+## 구현 점검 반영 (2026-04-28)
+
+- 2026-04-28 구현 점검 기준의 P0-P3 개선과 추가 진단/내보내기 기능을 코드에 반영했습니다.
+- 핵심 반영:
+  - 공통 XPath literal/attribute builder 도입 및 AI/Optimizer/Playwright/picker 생성 경로 적용
+  - Selenium 사용자 노출 메시지와 split 파일 주석/문서 문자열의 한글 모지바케 복구
+  - 배치/시나리오 워커 결과 dict 확장과 기본 창/프레임 문맥 복구
+  - 시나리오 JSON `leave_context` 선택 옵션 추가
+  - Playwright scan 범위 확장 및 `ScannedElement` 창/프레임 문맥 저장
+  - 닫힌 Playwright page fallback 직후 `is_alive()` 재검증
+  - 기능 진단 Markdown 리포트와 배치/시나리오 CSV/Markdown export 추가
+  - 설정 JSON `schema_version` 저장 및 로드 타입 정규화
+  - 인코딩 검사 skip 경로/한국어 모지바케 토큰 감지 확장
 
 ## 배포 스펙 점검 메모
 

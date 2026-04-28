@@ -192,6 +192,36 @@ def test_save_item_rename_keeps_metadata_and_updates_original_name():
     assert host.history_manager.push_calls[0][0] == "rename"
 
 
+def test_save_item_uses_playwright_source_context_without_stale_selenium_frame():
+    host = _DataHost([])
+    host.input_name.setText("from_scan")
+    host.input_xpath.setPlainText("//button")
+    host.browser = SimpleNamespace(
+        current_frame_path="stale_selenium_frame",
+        is_alive=lambda: True,
+        driver=None,
+        get_current_window_metadata=lambda: {
+            "handle": "selenium-window",
+            "title": "Selenium",
+            "url": "https://selenium.example",
+        },
+    )
+    host._editing_source_engine = "playwright"
+    host._editing_source_frame = "pw-frame"
+    host._editing_source_window = "pw-page-2"
+    host._editing_source_window_title = "Playwright Popup"
+    host._editing_source_window_url = "https://popup.example"
+
+    host._save_item()
+
+    item = host.config.get_item("from_scan")
+    assert item is not None
+    assert item.found_frame == "pw-frame"
+    assert item.found_window == "pw-page-2"
+    assert item.found_window_title == "Playwright Popup"
+    assert item.found_window_url == "https://popup.example"
+
+
 def test_export_python_uses_safe_names_and_suffixes(tmp_path, monkeypatch):
     host = _DataHost(
         [

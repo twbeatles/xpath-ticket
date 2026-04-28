@@ -234,7 +234,7 @@ class BrowserWindowMixin:
             for attempt in range (1 ,attempts +1 ):
                 handles =self ._safe_window_handles ()
                 if not handles :
-                    logger .error ("ъ슜 ν븳 덈룄곌 놁뒿덈떎.")
+                    logger .error ("사용 가능한 윈도우가 없습니다.")
                     return False 
 
                 candidates :List [str ]=[]
@@ -273,7 +273,7 @@ class BrowserWindowMixin:
             return False
 
     def get_windows (self )->List [Dict ]:
-        """대┛ 덈룄⑸줉 - 앹뾽 곗꽑 뺣젹고쉶"""
+        """전체 윈도우 목록을 팝업 우선 순서로 반환합니다."""
         with self ._lock :
             if not self .is_alive ():
                 return []
@@ -315,7 +315,7 @@ class BrowserWindowMixin:
                 except Exception as e :
                     logger .error (f"윈도우 정보 조회 실패: {e }")
 
-                    #먮옒 덈룄곕줈 듦
+                    # 원래 윈도우로 복귀
             if current_handle :
                 try :
                     self .driver .switch_to .window (current_handle )
@@ -337,7 +337,7 @@ class BrowserWindowMixin:
             return windows
 
     def switch_window (self ,handle :str )->bool :
-        """덈룄꾪솚 - ㅽ뙣덈룄곕줈 꾪솚"""
+        """윈도우 전환. 실패하면 사용 가능한 윈도우로 복구합니다."""
         with self ._lock :
             if not self .driver :
                 return False 
@@ -360,11 +360,11 @@ class BrowserWindowMixin:
                     if self ._is_invalid_session_error (e ):
                         self ._mark_driver_dead ()
                         return False 
-                    logger .debug ("덈룄꾪솚 ㅽ뙣: %s",self ._short_webdriver_error (e ))
+                    logger .debug ("윈도우 전환 실패: %s",self ._short_webdriver_error (e ))
                 except Exception as e :
-                    logger .debug ("덈룄꾪솚 ㅽ뙣: %s",e )
+                    logger .debug ("윈도우 전환 실패: %s",e )
 
-            logger .warning ("붿껌덈룄꾪솚섏 삵빐 듦뎄섏쟾: %s",handle )
+            logger .warning ("요청한 윈도우로 전환할 수 없어 복구를 시도합니다: %s",handle )
             return self ._recover_to_available_window (preferred_handle =handle )
 
             # -------------------------------------------------------------------------

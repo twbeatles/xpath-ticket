@@ -44,6 +44,7 @@ SKIP_DIRS = {
     ".hg",
     ".svn",
     ".mypy_cache",
+    ".pytest_tmp",
     ".pytest_cache",
     ".ruff_cache",
     ".tox",
@@ -52,6 +53,7 @@ SKIP_DIRS = {
     "__pycache__",
     "build",
     "dist",
+    "htmlcov",
     "archive",
     "node_modules",
 }
@@ -68,6 +70,23 @@ TOKENS = (
 )
 CP1252_HANGULISH = re.compile(r"[\u00ec\u00ed\u00eb\u00ea][^\s]{1,4}")
 QUESTION_MARK_RUN = re.compile(r"\?{2,}")
+KOREAN_MOJIBAKE_TOKENS = tuple(
+    left + right
+    for left, right in (
+        ("뚮", "씪곗"),
+        ("붿", "냼"),
+        ("꾨", "젅"),
+        ("덈", "룄"),
+        ("몄", "뀡"),
+        ("먯", "깋"),
+        ("섑", "솚"),
+        ("ㅽ", "뙣"),
+        ("놁", "쓬"),
+        ("쒕", "씪"),
+        ("앹", "꽦"),
+        ("곌", "껐"),
+    )
+)
 
 
 def iter_candidate_files(root: Path) -> Iterator[Path]:
@@ -87,6 +106,8 @@ def looks_like_mojibake(line: str, include_question_marks: bool = False) -> bool
     if any(token in line for token in TOKENS):
         return True
     if CP1252_HANGULISH.search(line):
+        return True
+    if any(token in line for token in KOREAN_MOJIBAKE_TOKENS):
         return True
     if include_question_marks and QUESTION_MARK_RUN.search(line):
         return True

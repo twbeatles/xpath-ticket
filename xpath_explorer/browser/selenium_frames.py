@@ -80,10 +80,10 @@ except ImportError :
 
 class BrowserFrameMixin:
     def get_all_frames (self ,max_depth :int =MAX_FRAME_DEPTH ,force_refresh :bool =False )->List [tuple ]:
-        """⑤뱺 iframeш곸쑝먯깋 (명꽣뚰겕 묒꺽 iframe"""
+        """모든 iframe을 재귀적으로 스캔합니다."""
         with self ._lock :
             self .ensure_valid_window ()
-            #먯떆 뺤씤
+            # 캐시 확인
             current_time =time .time ()
             if ((not force_refresh )and self .frame_cache and 
             current_time -self .frame_cache_time <self .FRAME_CACHE_DURATION ):
@@ -93,28 +93,28 @@ class BrowserFrameMixin:
             original_handle =self .driver .current_window_handle 
 
             try :
-            #붿씤 ⑦뀗좊줈 덇린
+            # 메인 컨텍스트에서 스캔 시작
                 self .driver .switch_to .default_content ()
                 self ._scan_frames (frames_list ,"",0 ,max_depth )
 
-                #먯떆 낅뜲댄듃
+                # 캐시 업데이트
                 self .frame_cache =frames_list .copy ()
                 self .frame_cache_time =current_time 
 
             except Exception as e :
                 logger .error (f"프레임 스캔 중 오류: {e }")
-                #ㅻ쪟 쒖깮 먯떆 덇린
+                # 오류 발생 시 캐시 초기화
                 self .frame_cache =[]
                 self .frame_cache_time =0 
             finally :
-            #듦뎄
+            # 복구
                 try :
                     self .driver .switch_to .window (original_handle )
                     self .driver .switch_to .default_content ()
-                    self .current_frame_path =""#꾨젅쎈줈 덇린
+                    self .current_frame_path =""# 프레임 경로 초기화
                 except Exception as e :
                     logger .debug (f"프레임 복구 중 오류: {e }")
-                    #듦뎄 ㅽ뙣 먯떆 댄슚꾨젅쎈줈 덇린
+                    # 복구 실패 시 캐시와 프레임 경로 초기화
                     self .frame_cache =[]
                     self .frame_cache_time =0 
                     self .current_frame_path =""
@@ -125,16 +125,16 @@ class BrowserFrameMixin:
         if depth >max_depth :
             return 
 
-            #꾩옱 ⑦뀓ㅽ듃⑤뱺 iframe 얘린
+            # 현재 컨텍스트의 iframe 수집
         try :
             iframes =self .driver .find_elements (By .TAG_NAME ,"iframe")
         except Exception :
-            return #iframe ㅽ뙣
+            return # iframe 조회 실패
 
         for i ,frame in enumerate (iframes ):
             identifier =f"index={i }"
             try :
-            #꾨젅앸퀎(ID > Name > Index)
+            # 프레임 식별자 우선순위: ID > name > index
                 frame_id =frame .get_attribute ("id")
                 frame_name =frame .get_attribute ("name")
 
@@ -146,7 +146,7 @@ class BrowserFrameMixin:
                 #곌낵붽
                 results_list .append ((current_path ,identifier ))
 
-                #대떦 꾨젅꾩쑝꾪솚섏뿬 ш 먯깋
+                # 해당 프레임으로 전환하여 하위 프레임 스캔
                 self .driver .switch_to .frame (frame )
                 self ._scan_frames (results_list ,current_path ,depth +1 ,max_depth )
 
@@ -154,7 +154,7 @@ class BrowserFrameMixin:
                 self .driver .switch_to .parent_frame ()
 
             except StaleElementReferenceException :
-            #꾨젅꾩씠 DOM먯꽌 щ씪
+            # 프레임이 DOM에서 사라짐
                 continue 
             except Exception as e :
                 logger .debug (f"프레임 하위 스캔 실패 ({identifier }): {e }")
@@ -165,7 +165,7 @@ class BrowserFrameMixin:
                     pass
 
     def switch_to_frame_by_path (self ,frame_path :str )->bool :
-        """꾨젅쎈줈꾪솚 ( 'ifrmSeat/ifrmSeatDetail')"""
+        """프레임 경로로 전환합니다. 예: 'ifrmSeat/ifrmSeatDetail'."""
         with self ._lock :
             self .ensure_valid_window ()
             original_frame_path =self .current_frame_path 
@@ -191,7 +191,7 @@ class BrowserFrameMixin:
                         found =True 
                         continue 
                     except (NoSuchFrameException ,Exception ):
-                        pass #ID얘린 ㅽ뙣, ㅼ쓬 ⑸쾿 쒕룄
+                        pass # ID/Name 전환 실패, 다음 방법 시도
 
                         #2. WebElement얘린 (index=N 뺤떇 섎━)
                     if part .startswith ("index="):
@@ -211,7 +211,7 @@ class BrowserFrameMixin:
 
             except Exception as e :
                 logger .error (f"프레임 전환 실패 ({frame_path }): {e }")
-                #ㅽ뙣 곹깭 ㅼ뿼 ⑹: default_content듦뎄, current_frame_path먮옒 좎
+                # 실패 상태 정리: default_content로 복귀하고 current_frame_path는 원래 값 유지
                 try :
                     self .driver .switch_to .default_content ()
                 except Exception :
@@ -220,7 +220,7 @@ class BrowserFrameMixin:
                 return False
 
     def find_element_in_all_frames (self ,xpath :str ,max_depth :int =MAX_FRAME_DEPTH )->Tuple [Optional [Any ],str ]:
-        """⑤뱺 꾨젅꾩뿉붿냼 (element, frame_path) 섑솚. 덉젙깆쓣 꾪빐 iframe먯꽌 쒓껄쎌슦 element섑솚섏 딄퀬(frame ⑦뀓ㅽ듃 욎 딄린 ъ), frame_path섑솚⑸땲 몄텧먮뒗 frame_path꾪솚 ъ“뚰븯⑹떇쇰줈 ъ슜섏꽭"""
+        """모든 프레임에서 XPath를 찾아 발견된 frame_path를 반환합니다."""
         with perf_span ("browser.find_element_in_all_frames"):
             with self ._lock :
                 self .ensure_valid_window ()
@@ -232,7 +232,7 @@ class BrowserFrameMixin:
                 found_path =""
 
                 try :
-                #1. 붿씤 ⑦뀗좎뿉쇱
+                # 1. 메인 컨텍스트에서 먼저 검색
                     self .driver .switch_to .default_content ()
                     try :
                         self .driver .find_element (By .XPATH ,xpath )
@@ -241,16 +241,16 @@ class BrowserFrameMixin:
                     except NoSuchElementException :
                         pass 
 
-                        #2. 꾨젅ш (search ⑥닔긽 parent_frame뺣━
+                        # 2. 프레임 재귀 검색
                     found_path =self ._find_xpath_in_frames (xpath ,"",0 ,max_depth )
                     if found_path :
-                    #element몄텧먭 frame_pathъ“뚰븯꾨줉 좊룄 (⑦뀓ㅽ듃 ㅼ뿼 ⑹)
+                    # 호출자가 frame_path로 다시 전환해 element를 조회하도록 경로만 반환
                         return None ,found_path 
 
                 except Exception as e :
                     logger .error (f"전체 검색 오류: {e }")
                 finally :
-                #긽 먮옒 ⑦뀓ㅽ듃듦뎄
+                # 항상 원래 컨텍스트로 복구
                     try :
                         self .driver .switch_to .window (original_handle )
                     except Exception :
@@ -266,7 +266,7 @@ class BrowserFrameMixin:
                 return found_element ,found_path
 
     def _find_xpath_in_frames (self ,xpath :str ,parent_path :str ="",depth :int =0 ,max_depth :int =MAX_FRAME_DEPTH )->str :
-        """⑤뱺 꾨젅꾩뿉XPath됲븯 쒓껄 frame_path섑솚. (꾨젅ㅽ깮 긽 parent_frame뺣━섎룄ъ꽦)"""
+        """모든 프레임에서 XPath를 찾고 frame_path를 반환합니다."""
         if depth >max_depth :
             return ""
 
@@ -283,14 +283,14 @@ class BrowserFrameMixin:
                 self .driver .switch_to .frame (frame )
                 parent_ok =True 
                 try :
-                #꾩옱 꾨젅꾩뿉쇱
+                # 현재 프레임에서 검색
                     try :
                         self .driver .find_element (By .XPATH ,xpath )
                         return current_path 
                     except NoSuchElementException :
                         pass 
 
-                        #섏쐞 꾨젅ш
+                        # 하위 프레임 검색
                     found =self ._find_xpath_in_frames (xpath ,current_path ,depth +1 ,max_depth )
                     if found :
                         return found 
@@ -298,7 +298,7 @@ class BrowserFrameMixin:
                     try :
                         self .driver .switch_to .parent_frame ()
                     except Exception :
-                    #parent_frame ㅽ뙣 default_content듦뎄(곹깭 ㅼ뿼 ⑹)
+                    # parent_frame 실패 시 default_content로 복구
                         try :
                             self .driver .switch_to .default_content ()
                         except Exception :
@@ -311,7 +311,7 @@ class BrowserFrameMixin:
             except StaleElementReferenceException :
                 continue 
             except Exception :
-            #ㅼ쓬 꾨젅먯깋
+            # 다음 프레임 검색
                 try :
                     self .driver .switch_to .parent_frame ()
                 except Exception :

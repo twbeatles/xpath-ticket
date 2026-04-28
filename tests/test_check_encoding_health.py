@@ -53,3 +53,37 @@ def test_check_file_no_false_positive_on_clean_python(tmp_path):
 
     assert decode_error is None
     assert suspicious == []
+
+
+def test_iter_candidate_files_skips_generated_output_dirs(tmp_path):
+    module = _load_module()
+    good = tmp_path / "src.py"
+    good.write_text("x = 1\n", encoding="utf-8")
+    skipped_dir = tmp_path / ".pytest_tmp"
+    skipped_dir.mkdir()
+    skipped = skipped_dir / "bad.py"
+    qmarks = "?" * 2
+    skipped.write_text(f"# {qmarks}\n", encoding="utf-8")
+    htmlcov_dir = tmp_path / "htmlcov"
+    htmlcov_dir.mkdir()
+    htmlcov = htmlcov_dir / "index.html"
+    htmlcov.write_text("bad \ufffd\n", encoding="utf-8")
+
+    candidates = list(module.iter_candidate_files(tmp_path))
+
+    assert good in candidates
+    assert skipped not in candidates
+    assert htmlcov not in candidates
+
+
+def test_check_file_detects_korean_mojibake_token(tmp_path):
+    module = _load_module()
+    target = tmp_path / "selenium_validation.py"
+    broken = "뚮" + "씪곗" + " " + "곌" + "껐" + " " + "덈" + "맖"
+    target.write_text(f"# {broken}\nx = 1\n", encoding="utf-8")
+
+    decode_error, suspicious = module.check_file(target)
+
+    assert decode_error is None
+    assert suspicious
+    assert suspicious[0][0] == 1

@@ -80,7 +80,7 @@ except ImportError :
 
 class BrowserValidationMixin:
     def begin_validation_session (self )->Dict [str ,Any ]:
-        """몄뀡 쒖옉. 몄뀡 댁뿉꾨젅⑸줉/덊듃 뚰듃/몄뒪 뺣낫ъ궗⑺빐 곗튂 덊븘뷀븳 꾨젅꾩닔 먯깋꾩엯덈떎."""
+        """검증 세션을 시작하고 프레임 목록/힌트/미스 정보를 유지합니다."""
         session :Dict [str ,Any ]={
         "frames":["main"],
         "hints":{},
@@ -91,7 +91,7 @@ class BrowserValidationMixin:
         return session
 
     def end_validation_session (self ,session :Optional [Dict [str ,Any ]]):
-        """몄뀡 낅즺 섏쐞 명솚꾪빐 no-op 좎)."""
+        """검증 세션 종료 훅. 현재는 no-op입니다."""
         _ =session
 
     @staticmethod 
@@ -214,7 +214,7 @@ class BrowserValidationMixin:
         return True
 
     def _try_find_in_frame (self ,xpath :str ,frame_path :str )->Optional [Dict [str ,Any ]]:
-        """뱀젙 꾨젅꾩뿉XPath고쉶섍퀬 깃났 곕낯 곌낵섑솚."""
+        """특정 프레임에서 XPath를 찾고 기본 결과를 반환합니다."""
         try :
             with self .frame_context (frame_path ):
                 element =self .driver .find_element (By .XPATH ,xpath )
@@ -268,7 +268,7 @@ class BrowserValidationMixin:
                         self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
                         return False 
 
-                        #섏씠쇱씠ㅽ뻾
+                        # 하이라이트 실행
                     self .driver .execute_script ("""
                         var el = arguments[0];
                         var original = el.style.outline;
@@ -300,11 +300,11 @@ class BrowserValidationMixin:
     preferred_frame :Optional [str ]=None ,
     session :Optional [Dict [str ,Any ]]=None ,
     )->Dict :
-        """XPath - 몄뀡/꾨젅뚰듃쒖슜묒꺽 iframe 먯깋."""
+        """XPath 검증. 세션/프레임 힌트를 활용해 iframe 탐색 비용을 줄입니다."""
         with perf_span ("browser.validate_xpath"):
             with self .frame_context ():
                 if not self .is_alive ():
-                    return {"found":False ,"msg":"뚮씪곗 곌껐 덈맖"}
+                    return {"found":False ,"msg":"브라우저 연결 안됨","error_type":"browser_not_connected"}
 
                 try :
                     self .driver .find_elements (By .XPATH ,xpath )
@@ -326,12 +326,12 @@ class BrowserValidationMixin:
                 if preferred_frame :
                     candidate_frames .append (preferred_frame )
 
-                    #2) 몄뀡 뚰듃
+                    # 2) 세션 힌트
                 session_hint =self ._session_get_hint (session ,xpath )
                 if session_hint and session_hint not in candidate_frames :
                     candidate_frames .append (session_hint )
 
-                    #3) 꾩뿭 뚰듃
+                    # 3) 전역 힌트
                 global_hint =self ._get_xpath_frame_hint (xpath )
                 if global_hint and global_hint not in candidate_frames :
                     candidate_frames .append (global_hint )
@@ -346,7 +346,7 @@ class BrowserValidationMixin:
                     if found and found .get ("error_type")=="invalid_selector":
                         return found 
 
-                        #4) 몄뀡 꾨젅쒗쉶
+                        # 4) 세션 프레임 순회
                 session_frames =session .get ("frames")if isinstance (session ,dict )else None 
                 if isinstance (session_frames ,list ):
                     for frame_path in session_frames :
@@ -361,29 +361,29 @@ class BrowserValidationMixin:
                         if found and found .get ("error_type")=="invalid_selector":
                             return found 
 
-                            #5) 몄뀡먯꽌 대 miss 섎━XPath꾩닔 먯깋앸왂
+                            # 5) 같은 프레임 시그니처에서 이미 미스 처리된 XPath는 재검색 생략
                 if self ._session_has_miss (session ,xpath ):
-                    return {"found":False ,"msg":"붿냼얠쓣 놁쓬"}
+                    return {"found":False ,"msg":"요소를 찾을 수 없음","error_type":"not_found"}
 
-                    #6) 쒗썑 섎떒: 꾩껜 꾨젅꾩닔 먯깋
+                    # 6) 최후 단계: 전체 프레임 재귀 검색
                 _ ,frame_path =self .find_element_in_all_frames (xpath ,max_depth =MAX_FRAME_DEPTH )
                 if not frame_path :
                     self ._session_add_miss (session ,xpath )
-                    return {"found":False ,"msg":"붿냼얠쓣 놁쓬"}
+                    return {"found":False ,"msg":"요소를 찾을 수 없음","error_type":"not_found"}
 
                 found =self ._try_find_in_frame (xpath ,frame_path )
                 if found and found .get ("error_type")=="invalid_selector":
                     return found 
                 if not found or not bool (found .get ("found")):
                     self ._session_add_miss (session ,xpath )
-                    return {"found":False ,"msg":"붿냼얠쓣 놁쓬"}
+                    return {"found":False ,"msg":"요소를 찾을 수 없음","error_type":"not_found"}
 
                 self ._set_xpath_frame_hint (xpath ,frame_path )
                 self ._session_set_hint (session ,xpath ,frame_path )
                 return found
 
     def _get_xpath_frame_hint (self ,xpath :str )->Optional [str ]:
-        """쒓렐 깃났XPath-꾨젅뚰듃 고쉶 (TTL 곸슜)."""
+        """최근 성공 XPath-프레임 힌트를 조회합니다. TTL을 적용합니다."""
         hint =self ._xpath_frame_hints .get (xpath )
         if not hint :
             return None 
@@ -394,17 +394,17 @@ class BrowserValidationMixin:
         return frame_path
 
     def _set_xpath_frame_hint (self ,xpath :str ,frame_path :str ):
-        """XPath-꾨젅뚰듃"""
+        """XPath-프레임 힌트를 저장합니다."""
         if not xpath or not frame_path :
             return 
         self ._xpath_frame_hints [xpath ]=(frame_path ,time .time ())
 
         # =========================================================================
-        #v4.0 좉퇋: ㅽ겕곗꺑, 붿냼 댁슫 곸꽭 뺣낫
+        # v4.0: 스크린샷, 요소 카운트, 상세 정보
         # =========================================================================
 
     def count_elements (self ,xpath :str ,frame_path :Optional [str ]=None )->int :
-        """XPathㅼ묶섎뒗 ⑤뱺 붿냼 쒖닔 섑솚 (ㅼ떆몃━닿린 Args: xpath: 됲븷 XPath frame_path: 꾨젅쎈줈 (None대㈃ 꾩옱 꾨젅 Returns: ㅼ묶 붿냼 쒖닔 (ㅻ쪟 -1)"""
+        """XPath와 매칭되는 요소 수를 반환합니다. 오류 시 -1을 반환합니다."""
         with self .frame_context ():
             if not self .is_alive ():
                 self ._set_last_error ("브라우저가 연결되지 않았습니다.")
@@ -433,10 +433,10 @@ class BrowserValidationMixin:
     include_attributes :bool =True ,
     session :Optional [Dict [str ,Any ]]=None ,
     )->Optional [Dict ]:
-        """붿냼곸꽭 뺣낫 섑솚 (Diff 꾩꽍 Args: xpath: 붿냼 XPath frame_path: 꾨젅쎈줈 Returns: { 'found': bool, 'tag': str, 'id': str, 'name': str, 'class': str, 'text': str, 'attributes': dict, 'count': int, 'parent_tag': str, 'parent_id': str, 'parent_class': str, 'index': int }"""
+        """요소 상세 정보를 반환합니다. Diff 분석과 스냅샷 저장에 사용됩니다."""
         with self .frame_context ():
             if not self .is_alive ():
-                return {'found':False ,'msg':'뚮씪곗 곌껐 덈맖'}
+                return {'found':False ,'msg':'브라우저 연결 안됨','error_type':'browser_not_connected'}
 
             try :
                 resolved_frame =frame_path 
@@ -455,7 +455,7 @@ class BrowserValidationMixin:
                 try :
                     element =self .driver .find_element (By .XPATH ,xpath )
                 except NoSuchElementException :
-                    return {'found':False ,'msg':'붿냼얠쓣 놁쓬'}
+                    return {'found':False ,'msg':'요소를 찾을 수 없음','error_type':'not_found'}
 
                 info ={
                 'found':True ,
@@ -470,7 +470,7 @@ class BrowserValidationMixin:
                 }
 
                 if include_attributes :
-                #⑤뱺 띿꽦 섏쭛
+                # 모든 속성 수집
                     try :
                         attrs_script ="""
                         var el = arguments[0];
@@ -487,7 +487,7 @@ class BrowserValidationMixin:
                 else :
                     info ['attributes']={}
 
-                    #뺣낫
+                    # 부모 정보
                 try :
                     parent_script ="""
                     var el = arguments[0].parentElement;
@@ -508,7 +508,7 @@ class BrowserValidationMixin:
                     info ['parent_id']=''
                     info ['parent_class']=''
 
-                    #뺤젣 몃뜳
+                    # 형제 기준 인덱스
                 try :
                     index_script ="""
                     var el = arguments[0];
@@ -532,7 +532,7 @@ class BrowserValidationMixin:
                 return {'found':False ,'msg':str (e )}
 
     def screenshot_element (self ,xpath :str ,save_path :str ,frame_path :Optional [str ]=None )->bool :
-        """붿냼 ㅽ겕곗꺑 Args: xpath: 붿냼 XPath save_path: ν븷 쎈줈 (.png) frame_path: 꾨젅쎈줈 Returns: 깃났 щ"""
+        """요소 스크린샷을 저장합니다."""
         with self .frame_context ():
             if not self .is_alive ():
                 self ._set_last_error ("브라우저가 연결되지 않았습니다.")

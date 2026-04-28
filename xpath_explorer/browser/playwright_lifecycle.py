@@ -166,6 +166,11 @@ class PlaywrightLifecycleMixin:
         if page is None:
             page = self._pick_fallback_page()
             self._page = page
+            if page is not None:
+                try:
+                    self._current_frame = getattr(page, "main_frame", None)
+                except Exception:
+                    self._current_frame = None
         return page
 
     @staticmethod
@@ -414,10 +419,24 @@ class PlaywrightLifecycleMixin:
             if page is None:
                 return False
             page.evaluate("() => true")
+            if self._current_frame is None:
+                try:
+                    self._current_frame = getattr(page, "main_frame", None)
+                except Exception:
+                    self._current_frame = None
             return True
         except Exception:
             self._page = self._pick_fallback_page()
-            return False
+            self._current_frame = None
+            fallback = self._page
+            if fallback is None:
+                return False
+            try:
+                fallback.evaluate("() => true")
+                self._current_frame = getattr(fallback, "main_frame", None)
+                return True
+            except Exception:
+                return False
 
     def navigate(
         self,

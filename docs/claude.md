@@ -49,6 +49,16 @@ XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분�
 - 대상 창을 찾지 못하면 다른 창으로 자동 폴백하지 않고 실패시킵니다.
 - 수동 프레임 스캔은 `get_all_frames(force_refresh=True)`로 캐시를 강제 갱신합니다.
 - 시나리오 워커는 `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션을 지원합니다.
+- 배치/시나리오 워커는 기본적으로 실행 전 창/프레임 문맥으로 복구합니다.
+- 시나리오 JSON에서 `leave_context: true`를 지정한 경우에만 마지막 창/프레임 문맥을 유지합니다.
+- 결과 row에는 `frame_path`, `window_handle`, `window_title`, `window_url`, `tag`, `count`, `error_type`을 포함합니다.
+
+## 4-2. XPath 안전 생성/Playwright 스캔
+- XPath 문자열은 `xpath_explorer/tools/xpath_safety.py`의 `xpath_literal`, `xpath_attr_equals`, `xpath_contains_text`를 우선 사용합니다.
+- AI fallback, Optimizer, Playwright scan, Selenium picker는 따옴표가 섞인 id/name/class/data/text 값을 invalid XPath로 만들지 않아야 합니다.
+- Playwright scan 범위는 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임입니다.
+- Playwright scan으로 편집기에 로드한 항목은 Playwright 창/프레임 출처만 저장하고 Selenium의 stale frame으로 덮어쓰지 않습니다.
+- Playwright page close fallback 후 `is_alive()`는 열린 fallback page를 즉시 재검증합니다.
 
 ## 5. 히스토리 정책
 - `HistoryManager`는 Undo/Redo 스냅샷에서 `alternatives`, `screenshot_path`를 보존합니다.
@@ -76,6 +86,8 @@ AI 설정 저장 정책:
 - 세션 미스 오탐: `validate_xpath()`의 TTL/프레임 시그니처 갱신 로직 확인
 - DOM diff 이상: `tools_mixin.py`에서 baseline source 불일치 시 baseline 재설정 동작 확인
 - 저장 실패: `core/paths.py` 폴백 경로와 in-memory 모드 경고 확인
+- Playwright scan 출처 이상: `ScannedElement.frame_path/window_*` 값과 저장 시 `_editing_source_engine` 확인
+- 배치 결과 누락: `BatchTestWorker.item_validated`의 full result dict 전달과 UI `_record_validation_outcome` 입력 확인
 
 ## 8. 배포/품질 절차
 개발 표준 설치:
@@ -139,3 +151,9 @@ AI 설정 저장 정책:
 - Qt 타입은 `TYPE_CHECKING` 분리 또는 `xpath_explorer/qt_compat.py`를 통해 가져와 headless CI import와 충돌시키지 않습니다.
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리합니다.
 - 오염 검사: `scripts/check_encoding_health.py`로 UTF-8 strict decode + 모지바케 패턴 + Python 문자열/주석의 `??` 반복 패턴 점검
+- `.pytest_tmp`, `htmlcov`는 인코딩 검사 제외 대상이며, Selenium split 파일의 한국어 모지바케 토큰은 검사 대상입니다.
+
+## 13. 진단/내보내기
+- 도구 메뉴의 기능 진단 리포트 저장은 Selenium/Playwright 상태, 현재 창/프레임, 저장 항목 문맥, 최근 검증 실패, telemetry 요약을 Markdown으로 저장합니다.
+- 배치/시나리오 결과 다이얼로그는 CSV와 Markdown 저장 버튼을 제공합니다.
+- 설정 JSON은 `schema_version`을 선택적으로 저장하며, 로드 시 오래된/잘못된 타입의 선택 필드를 정규화합니다.

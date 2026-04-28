@@ -138,3 +138,19 @@ def test_current_page_falls_back_to_last_open_page_when_active_page_closes():
     manager._handle_page_closed(popup_page)
 
     assert manager.page is extra_page
+
+
+def test_is_alive_returns_true_after_closed_page_fallback_to_open_page():
+    closed_main = _FakeFrame(name="", url="https://closed.example")
+    open_main = _FakeFrame(name="", url="https://open.example")
+    closed_page = _FakePage("Closed", "https://closed.example", closed_main, closed=True)
+    open_page = _FakePage("Open", "https://open.example", open_main, closed=False)
+
+    manager = PlaywrightManager()
+    manager._is_initialized = True
+    cast(Any, manager)._page = closed_page
+    cast(Any, manager)._context = _FakeContext([closed_page, open_page])
+
+    assert manager.is_alive() is True
+    assert manager.page is open_page
+    assert cast(Any, manager)._current_frame is open_main

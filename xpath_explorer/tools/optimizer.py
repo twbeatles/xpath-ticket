@@ -8,6 +8,13 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 import re
 
+from xpath_explorer.tools.xpath_safety import (
+    is_valid_xpath_attr_name,
+    xpath_attr_contains,
+    xpath_attr_equals,
+    xpath_literal,
+)
+
 
 @dataclass
 class XPathAlternative:
@@ -41,24 +48,7 @@ class XPathOptimizer:
         
         두 종류의 따옴표가 모두 포함된 경우 concat 함수 사용
         """
-        if not text:
-            return '""'
-        
-        if '"' in text and "'" in text:
-            # 둘 다 있으면 concat 사용 (수정된 버전)
-            parts = []
-            for i, segment in enumerate(text.split('"')):
-                if segment:
-                    parts.append(f'"{segment}"')
-                if i < text.count('"'):
-                    parts.append("'\"'")
-            return 'concat(' + ', '.join(parts) + ')'
-        elif '"' in text:
-            # 큰따옴표만 있으면 작은따옴표로 감싸기
-            return f"'{text}'"
-        else:
-            # 기본: 큰따옴표로 감싸기
-            return f'"{text}"'
+        return xpath_literal(text)
     
     def generate_alternatives(self, element_info: Dict) -> List[XPathAlternative]:
         """
@@ -97,14 +87,14 @@ class XPathOptimizer:
         # 1. ID 기반 (가장 안정적)
         if elem_id:
             alternatives.append(XPathAlternative(
-                xpath=f'//{tag}[@id="{elem_id}"]',
+                xpath=f'//{tag}[{xpath_attr_equals("id", elem_id)}]',
                 strategy="id",
                 robustness_score=self.strategy_weights["id"],
                 description=f"ID 속성 사용: {elem_id}"
             ))
             # 축약형 ID
             alternatives.append(XPathAlternative(
-                xpath=f'//*[@id="{elem_id}"]',
+                xpath=f'//*[{xpath_attr_equals("id", elem_id)}]',
                 strategy="id",
                 robustness_score=self.strategy_weights["id"] - 2,
                 description=f"ID만 사용 (태그 무관)"
@@ -112,9 +102,9 @@ class XPathOptimizer:
         
         # 2. data-* 속성 기반
         for attr_name, attr_value in attrs.items():
-            if attr_name.startswith('data-') and attr_value:
+            if attr_name.startswith('data-') and attr_value and is_valid_xpath_attr_name(attr_name):
                 alternatives.append(XPathAlternative(
-                    xpath=f'//{tag}[@{attr_name}="{attr_value}"]',
+                    xpath=f'//{tag}[{xpath_attr_equals(attr_name, attr_value)}]',
                     strategy="data-attr",
                     robustness_score=self.strategy_weights["data-attr"],
                     description=f"data 속성 사용: {attr_name}"
@@ -123,7 +113,7 @@ class XPathOptimizer:
         # 3. name 속성 기반
         if elem_name:
             alternatives.append(XPathAlternative(
-                xpath=f'//{tag}[@name="{elem_name}"]',
+                xpath=f'//{tag}[{xpath_attr_equals("name", elem_name)}]',
                 strategy="name",
                 robustness_score=self.strategy_weights["name"],
                 description=f"name 속성 사용: {elem_name}"
@@ -136,7 +126,7 @@ class XPathOptimizer:
             # 전체 class 일치
             if len(classes) == 1:
                 alternatives.append(XPathAlternative(
-                    xpath=f'//{tag}[@class="{elem_class}"]',
+                    xpath=f'//{tag}[{xpath_attr_equals("class", elem_class)}]',
                     strategy="class",
                     robustness_score=self.strategy_weights["class"],
                     description=f"정확한 class 일치"
@@ -146,7 +136,7 @@ class XPathOptimizer:
             for cls in classes[:3]:  # 처음 3개 클래스만
                 if len(cls) > 3 and not cls.startswith('_'):  # 의미 있는 클래스만
                     alternatives.append(XPathAlternative(
-                        xpath=f'//{tag}[contains(@class, "{cls}")]',
+                        xpath=f'//{tag}[{xpath_attr_contains("class", cls)}]',
                         strategy="class",
                         robustness_score=self.strategy_weights["class"] - 5,
                         description=f"class 포함: {cls}"
@@ -187,7 +177,7 @@ class XPathOptimizer:
         # 6. 부모-자식 관계 (Ancestor) 기반
         if parent_id:
             alternatives.append(XPathAlternative(
-                xpath=f'//*[@id="{parent_id}"]//{tag}',
+                xpath=f'//*[{xpath_attr_equals("id", parent_id)}]//{tag}',
                 strategy="ancestor",
                 robustness_score=self.strategy_weights["ancestor"] + 10,
                 description=f"부모 ID 기준: #{parent_id}"
@@ -196,7 +186,7 @@ class XPathOptimizer:
             if elem_class:
                 first_class = elem_class.split()[0]
                 alternatives.append(XPathAlternative(
-                    xpath=f'//*[@id="{parent_id}"]//{tag}[contains(@class, "{first_class}")]',
+                    xpath=f'//*[{xpath_attr_equals("id", parent_id)}]//{tag}[{xpath_attr_contains("class", first_class)}]',
                     strategy="ancestor",
                     robustness_score=self.strategy_weights["ancestor"] + 5,
                     description=f"부모 ID + class 조합"
@@ -205,7 +195,7 @@ class XPathOptimizer:
         if parent_tag and parent_class:
             first_parent_class = parent_class.split()[0]
             alternatives.append(XPathAlternative(
-                xpath=f'//{parent_tag}[contains(@class, "{first_parent_class}")]//{tag}',
+                xpath=f'//{parent_tag}[{xpath_attr_contains("class", first_parent_class)}]//{tag}',
                 strategy="ancestor",
                 robustness_score=self.strategy_weights["ancestor"],
                 description=f"부모 태그+class 기준"
@@ -219,7 +209,16 @@ class XPathOptimizer:
                               and len(v) < 50}
             
             if len(meaningful_attrs) >= 2:
-                attr_conditions = [f'@{k}="{v}"' for k, v in list(meaningful_attrs.items())[:2]]
+                attr_conditions = [
+                    xpath_attr_equals(k, v)
+                    for k, v in list(meaningful_attrs.items())[:2]
+                    if is_valid_xpath_attr_name(k)
+                ]
+                if len(attr_conditions) < 2:
+                    attr_conditions = []
+            else:
+                attr_conditions = []
+            if attr_conditions:
                 alternatives.append(XPathAlternative(
                     xpath=f'//{tag}[{" and ".join(attr_conditions)}]',
                     strategy="attributes",
@@ -282,12 +281,12 @@ class XPathOptimizer:
         
         # ID가 있으면 가장 간단한 형태로
         if elem_id:
-            return f'//{tag}[@id="{elem_id}"]'
+            return f'//{tag}[{xpath_attr_equals("id", elem_id)}]'
         
         # name이 있으면 그 다음
         elem_name = element_info.get('name', '')
         if elem_name:
-            return f'//{tag}[@name="{elem_name}"]'
+            return f'//{tag}[{xpath_attr_equals("name", elem_name)}]'
         
         return None
     

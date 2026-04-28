@@ -42,6 +42,9 @@ selenium_dom_export_*.htm
 playwright_dom_export_*.htm
 dom_diff_report_*.htm
 error_telemetry_*.md
+feature_diagnostics_*.md
+batch_results_*.csv
+batch_results_*.md
 
 # Project-specific local folders
 backup/

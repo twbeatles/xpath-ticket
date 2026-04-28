@@ -195,11 +195,19 @@ class ExplorerPlaywrightToolsMixin:
         scan_type = self.combo_scan_type.currentData()
         if not isinstance(scan_type, str) or not scan_type:
             scan_type = scan_label
-        self._show_toast(f"{scan_label} 스캔 중...", "info", 2000)
+        scope_combo = getattr(self, "combo_scan_scope", None)
+        scan_scope = "current_frame"
+        scope_label = "현재 프레임"
+        if scope_combo is not None:
+            scope_label = str(scope_combo.currentText() or scope_label)
+            combo_scope = scope_combo.currentData()
+            if isinstance(combo_scope, str) and combo_scope:
+                scan_scope = combo_scope
+        self._show_toast(f"{scan_label} 스캔 중... ({scope_label})", "info", 2000)
         
         try:
             with perf_span("ui.scan_page_elements"):
-                elements = self.pw_manager.scan_elements(scan_type, max_count=50)
+                elements = self.pw_manager.scan_elements(scan_type, max_count=50, scope=scan_scope)
                 
                 self.table_scan_results.setUpdatesEnabled(False)
                 self.table_scan_results.setRowCount(len(elements))
@@ -212,12 +220,19 @@ class ExplorerPlaywrightToolsMixin:
                     self.table_scan_results.setItem(row, 1, QTableWidgetItem(elem.tag))
                     text = elem.text[:30] + "..." if len(elem.text) > 30 else elem.text
                     self.table_scan_results.setItem(row, 2, QTableWidgetItem(text))
+                    frame_item = QTableWidgetItem(elem.frame_path or "main")
+                    frame_item.setToolTip(elem.frame_path or "main")
+                    self.table_scan_results.setItem(row, 3, frame_item)
+                    window_text = elem.window_title or elem.window_url or elem.window_handle
+                    window_item = QTableWidgetItem(window_text)
+                    window_item.setToolTip(elem.window_url or window_text)
+                    self.table_scan_results.setItem(row, 4, window_item)
                     
                     btn_use = QPushButton("사용")
                     btn_use.setObjectName("success")
                     btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
                     btn_use.clicked.connect(lambda checked, e=elem: self._use_scanned_element(e))
-                    self.table_scan_results.setCellWidget(row, 3, btn_use)
+                    self.table_scan_results.setCellWidget(row, 5, btn_use)
 
                 self.table_scan_results.setUpdatesEnabled(True)
                 self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
@@ -275,6 +290,11 @@ class ExplorerPlaywrightToolsMixin:
         """스캔된 요소를 편집기로 로드"""
         self.input_xpath.setPlainText(element.xpath)
         self.input_css.setText(element.css_selector)
+        self._editing_source_engine = "playwright"
+        self._editing_source_frame = str(getattr(element, "frame_path", "") or "main")
+        self._editing_source_window = str(getattr(element, "window_handle", "") or "")
+        self._editing_source_window_title = str(getattr(element, "window_title", "") or "")
+        self._editing_source_window_url = str(getattr(element, "window_url", "") or "")
         
         # 자동 이름 생성 (태그 + ID 또는 이름)
         if element.element_id:
@@ -291,4 +311,7 @@ class ExplorerPlaywrightToolsMixin:
         
         # Playwright에서 하이라이트
         if self.pw_manager and self.pw_manager.is_alive():
+            frame_path = str(getattr(element, "frame_path", "") or "")
+            if frame_path and frame_path != "main":
+                self.pw_manager.switch_to_frame(frame_path)
             self.pw_manager.highlight(element.xpath, 2000)

@@ -4,9 +4,61 @@ XPath Explorer Configuration
 """
 
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from datetime import datetime
 from xpath_explorer.core.constants import SITE_PRESETS
+
+CONFIG_SCHEMA_VERSION = 2
+
+
+def _coerce_str(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes", "y", "on"}:
+            return True
+        if lowered in {"false", "0", "no", "n", "off", ""}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        if isinstance(value, bool):
+            return int(value)
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_str_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_coerce_str(item).strip() for item in value if _coerce_str(item).strip()]
+    if isinstance(value, tuple):
+        return [_coerce_str(item).strip() for item in value if _coerce_str(item).strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return []
+
+
+def _coerce_str_dict(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {_coerce_str(key): _coerce_str(val) for key, val in value.items()}
+
 
 @dataclass
 class XPathItem:
@@ -61,6 +113,7 @@ class SiteConfig:
     url: str
     login_url: str = ""
     description: str = ""
+    schema_version: int = CONFIG_SCHEMA_VERSION
     items: List[XPathItem] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
@@ -74,6 +127,7 @@ class SiteConfig:
     
     def to_dict(self) -> Dict:
         return {
+            'schema_version': CONFIG_SCHEMA_VERSION,
             'name': self.name,
             'url': self.url,
             'login_url': self.login_url,
@@ -102,47 +156,53 @@ class SiteConfig:
         
         try:
             items = []
-            for i, item_data in enumerate(data.get('items', [])):
+            raw_items = data.get('items', [])
+            if not isinstance(raw_items, list):
+                raw_items = []
+            for i, item_data in enumerate(raw_items):
                 if not isinstance(item_data, dict):
                     raise ValueError(f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다")
                 
                 # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
                 item = XPathItem(
-                    name=item_data.get('name', ''),
-                    xpath=item_data.get('xpath', ''),
-                    category=item_data.get('category', 'common'),
-                    description=item_data.get('description', ''),
-                    css_selector=item_data.get('css_selector', ''),
-                    is_verified=item_data.get('is_verified', False),
-                    element_tag=item_data.get('element_tag', ''),
-                    element_text=item_data.get('element_text', ''),
-                    found_window=item_data.get('found_window', ''),
-                    found_window_title=item_data.get('found_window_title', ''),
-                    found_window_url=item_data.get('found_window_url', ''),
-                    found_frame=item_data.get('found_frame', ''),
+                    name=_coerce_str(item_data.get('name', '')),
+                    xpath=_coerce_str(item_data.get('xpath', '')),
+                    category=_coerce_str(item_data.get('category', 'common'), 'common') or 'common',
+                    description=_coerce_str(item_data.get('description', '')),
+                    css_selector=_coerce_str(item_data.get('css_selector', '')),
+                    is_verified=_coerce_bool(item_data.get('is_verified', False)),
+                    element_tag=_coerce_str(item_data.get('element_tag', '')),
+                    element_text=_coerce_str(item_data.get('element_text', '')),
+                    found_window=_coerce_str(item_data.get('found_window', '')),
+                    found_window_title=_coerce_str(item_data.get('found_window_title', '')),
+                    found_window_url=_coerce_str(item_data.get('found_window_url', '')),
+                    found_frame=_coerce_str(item_data.get('found_frame', '')),
                     # v3.3 신규 필드 (기본값 처리)
-                    is_favorite=item_data.get('is_favorite', False),
-                    tags=item_data.get('tags', []),
-                    test_count=item_data.get('test_count', 0),
-                    success_count=item_data.get('success_count', 0),
-                    last_tested=item_data.get('last_tested', ''),
-                    sort_order=item_data.get('sort_order', 0),
+                    is_favorite=_coerce_bool(item_data.get('is_favorite', False)),
+                    tags=_coerce_str_list(item_data.get('tags', [])),
+                    test_count=max(0, _coerce_int(item_data.get('test_count', 0), 0)),
+                    success_count=max(0, _coerce_int(item_data.get('success_count', 0), 0)),
+                    last_tested=_coerce_str(item_data.get('last_tested', '')),
+                    sort_order=_coerce_int(item_data.get('sort_order', 0), 0),
                     # v4.0 신규 필드
-                    alternatives=item_data.get('alternatives', []),
-                    element_attributes=item_data.get('element_attributes', {}),
-                    screenshot_path=item_data.get('screenshot_path', ''),
-                    ai_generated=item_data.get('ai_generated', False)
+                    alternatives=_coerce_str_list(item_data.get('alternatives', [])),
+                    element_attributes=_coerce_str_dict(item_data.get('element_attributes', {})),
+                    screenshot_path=_coerce_str(item_data.get('screenshot_path', '')),
+                    ai_generated=_coerce_bool(item_data.get('ai_generated', False))
                 )
+                if item.success_count > item.test_count:
+                    item.success_count = item.test_count
                 items.append(item)
             
             return cls(
-                name=data.get('name', ''),
-                url=data.get('url', ''),
-                login_url=data.get('login_url', ''),
-                description=data.get('description', ''),
+                name=_coerce_str(data.get('name', '')),
+                url=_coerce_str(data.get('url', '')),
+                login_url=_coerce_str(data.get('login_url', '')),
+                description=_coerce_str(data.get('description', '')),
+                schema_version=_coerce_int(data.get('schema_version', 1), 1),
                 items=items,
-                created_at=data.get('created_at', ''),
-                updated_at=data.get('updated_at', '')
+                created_at=_coerce_str(data.get('created_at', '')),
+                updated_at=_coerce_str(data.get('updated_at', ''))
             )
         except KeyError as e:
             raise ValueError(f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}")

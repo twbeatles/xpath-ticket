@@ -54,6 +54,30 @@ sync_playwright = deps.sync_playwright
 PlaywrightTimeout = deps.PlaywrightTimeout
 
 class PlaywrightDomMixin:
+    def _walk_frame_paths(self, page: Any) -> List[tuple[Any, str]]:
+        targets: List[tuple[Any, str]] = []
+
+        def walk(frame: Any, path: str):
+            targets.append((frame, path or "main"))
+            try:
+                children = list(getattr(frame, "child_frames", []) or [])
+            except Exception:
+                children = []
+            for idx, child in enumerate(children, start=1):
+                try:
+                    child_name = str(getattr(child, "name", "") or "")
+                except Exception:
+                    child_name = ""
+                identifier = child_name or f"index={idx}"
+                child_path = identifier if path in ("", "main") else f"{path}/{identifier}"
+                walk(child, child_path)
+
+        try:
+            walk(page.main_frame, "main")
+        except Exception:
+            return []
+        return targets
+
     def highlight(self, xpath: str, duration_ms: int = 2000) -> bool:
         """요소 하이라이트"""
         if not self.is_alive():
@@ -92,14 +116,22 @@ class PlaywrightDomMixin:
     def validate_xpath(self, xpath: str) -> Dict:
         """XPath 검증"""
         if not self.is_alive():
-            return {"found": False, "msg": "브라우저 연결 안됨"}
+            return {"found": False, "msg": "브라우저 연결 안됨", "error_type": "browser_not_connected"}
             
         try:
             frame = self._get_frame()
             if not frame:
-                return {"found": False, "msg": "브라우저 연결 안됨"}
+                return {"found": False, "msg": "브라우저 연결 안됨", "error_type": "browser_not_connected"}
 
             elements = frame.query_selector_all(f"xpath={xpath}")
+            window_meta = self.get_current_window_metadata()
+            frame_path = "main"
+            page = self._get_current_page()
+            if page is not None:
+                for candidate, candidate_path in self._walk_frame_paths(page):
+                    if candidate is frame:
+                        frame_path = candidate_path
+                        break
             
             if elements:
                 first = elements[0]
@@ -111,13 +143,26 @@ class PlaywrightDomMixin:
                     "count": len(elements),
                     "tag": tag,
                     "text": text,
-                    "visible": first.is_visible()
+                    "visible": first.is_visible(),
+                    "frame_path": frame_path,
+                    "window_handle": str(window_meta.get("handle", "") or ""),
+                    "window_title": str(window_meta.get("title", "") or ""),
+                    "window_url": str(window_meta.get("url", "") or ""),
                 }
             else:
-                return {"found": False, "msg": "요소를 찾을 수 없음"}
+                return {
+                    "found": False,
+                    "msg": "요소를 찾을 수 없음",
+                    "frame_path": frame_path,
+                    "count": 0,
+                    "error_type": "not_found",
+                    "window_handle": str(window_meta.get("handle", "") or ""),
+                    "window_title": str(window_meta.get("title", "") or ""),
+                    "window_url": str(window_meta.get("url", "") or ""),
+                }
                 
         except Exception as e:
-            return {"found": False, "msg": str(e)}
+            return {"found": False, "msg": str(e), "error_type": "exception"}
     
     # =========================================================================
     # 요소 조작
@@ -415,6 +460,12 @@ class PlaywrightDomMixin:
                 # 메인 프레임으로 복귀
                 self._current_frame = page.main_frame
                 return True
+
+            for frame, frame_path in self._walk_frame_paths(page):
+                if frame_path == frame_name:
+                    self._current_frame = frame
+                    logger.debug(f"프레임 전환 성공: {frame_name}")
+                    return True
             
             # 프레임 찾기
             for frame in page.frames:

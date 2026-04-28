@@ -80,7 +80,7 @@ except ImportError :
 
 class BrowserPickerMixin:
     def start_picker (self ,overlay_mode :bool =False ):
-        """붿냼 좏깮 ⑤뱶 쒖옉 - ⑤뱺 덈룄앹뾽 곗꽑) + iframe쇱엯"""
+        """요소 선택 모드를 시작하고 모든 윈도우/iframe에 picker를 주입합니다."""
         with self ._lock :
             self .ensure_valid_window ()
             original_frame_path =self .current_frame_path 
@@ -293,26 +293,26 @@ class BrowserPickerMixin:
         try :
             iframes =self .driver .find_elements (By .TAG_NAME ,"iframe")
         except Exception :
-            return #iframe ㅽ뙣
+            return # iframe 조회 실패
 
         for frame in iframes :
             try :
                 self .driver .switch_to .frame (frame )
                 abort =False 
                 try :
-                #ㅽ겕쏀듃 쇱엯
+                # 스크립트 주입
                     try :
                         self .driver .execute_script (PICKER_SCRIPT )
                     except Exception :
-                        pass #댁븞 쒗븳 깆쑝ㅽ뙣덉쓬
+                        pass # 안전하지 않은 프레임에서는 주입 실패 가능
 
-                        #ш 먯깋
+                        # 하위 프레임 검색
                     self ._inject_to_frames (depth +1 ,max_depth )
                 finally :
                     try :
                         self .driver .switch_to .parent_frame ()
                     except Exception :
-                    #parent_frame ㅽ뙣 ⑦뀓ㅽ듃 ㅼ뿼 ⑹
+                    # parent_frame 실패 시 default_content로 복구
                         try :
                             self .driver .switch_to .default_content ()
                         except Exception :
@@ -378,7 +378,7 @@ class BrowserPickerMixin:
                         self ._recover_to_available_window ()
 
     def _find_picker_result_in_frames (self ,path :str ="",depth :int =0 ,max_depth :int =MAX_FRAME_DEPTH ):
-        """꾨젅꾩쓣 ш곸쑝먯깋섏뿬 picker result얠쓬 (긽 parent_frame 뺣━)"""
+        """프레임을 재귀적으로 검색해 picker result를 찾습니다."""
         if depth >max_depth :
             return None 
 
@@ -403,7 +403,7 @@ class BrowserPickerMixin:
 
                     found =self ._find_picker_result_in_frames (current_path ,depth +1 ,max_depth )
                     if found :
-                    #섏쐞먯꽌 얠 쎌슦 frame 쎈줈 놁쑝닿컯
+                    # 하위 프레임에서 찾은 경우 현재 경로를 보존
                         if isinstance (found ,dict )and 'frame'not in found :
                             found ['frame']=current_path 
                         return found 

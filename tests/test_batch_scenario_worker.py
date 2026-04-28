@@ -16,7 +16,9 @@ class _FakeBrowser:
         self._flaky_calls = 0
         self.current_handle = "root"
         self.current_title = "Root"
+        self.current_frame_path = "original-frame"
         self.window_action_calls = []
+        self.frame_switch_calls = []
 
     def is_alive(self):
         return True
@@ -76,6 +78,18 @@ class _FakeBrowser:
         self.window_action_calls.append(("switch_to_root_window",))
         self.current_handle = "root"
         self.current_title = "Root"
+        return True
+
+    def switch_to_window_context(self, handle="", window_url="", title=""):
+        self.window_action_calls.append(("switch_to_window_context", handle, window_url, title))
+        if handle:
+            self.current_handle = handle
+            self.current_title = "Root" if handle == "root" else "Popup"
+        return True
+
+    def switch_to_frame_by_path(self, frame_path):
+        self.frame_switch_calls.append(frame_path)
+        self.current_frame_path = "" if frame_path == "main" else frame_path
         return True
 
 
@@ -266,3 +280,62 @@ def test_batch_scenario_worker_supports_popup_and_window_switch_actions():
     assert completed["results"][2]["window_title"] == "Popup"
     assert completed["results"][3]["window_handle"] == "root"
     assert completed["results"][3]["window_title"] == "Root"
+
+
+def test_batch_scenario_worker_restores_original_context_by_default():
+    _ensure_qt_app()
+    browser = _FakeBrowser()
+    scenario = {
+        "name": "restore",
+        "steps": [
+            {"name": "switch popup", "action": "switch_latest_popup"},
+        ],
+    }
+
+    completed = {}
+    worker = BatchScenarioWorker(browser, [], scenario)
+    worker.completed.connect(
+        lambda results, cancelled, scenario_name: completed.update(
+            results=results,
+            cancelled=cancelled,
+            scenario_name=scenario_name,
+            final_handle=browser.current_handle,
+            final_frame=browser.current_frame_path,
+        )
+    )
+
+    worker.run()
+
+    assert completed["results"][0]["window_handle"] == "popup"
+    assert completed["final_handle"] == "root"
+    assert completed["final_frame"] == "original-frame"
+
+
+def test_batch_scenario_worker_leave_context_true_keeps_last_context():
+    _ensure_qt_app()
+    browser = _FakeBrowser()
+    scenario = {
+        "name": "leave",
+        "leave_context": True,
+        "steps": [
+            {"name": "switch popup", "action": "switch_latest_popup"},
+        ],
+    }
+
+    completed = {}
+    worker = BatchScenarioWorker(browser, [], scenario)
+    worker.completed.connect(
+        lambda results, cancelled, scenario_name: completed.update(
+            results=results,
+            cancelled=cancelled,
+            scenario_name=scenario_name,
+            final_handle=browser.current_handle,
+            final_frame=browser.current_frame_path,
+        )
+    )
+
+    worker.run()
+
+    assert completed["results"][0]["window_handle"] == "popup"
+    assert completed["final_handle"] == "popup"
+    assert completed["final_frame"] == "original-frame"

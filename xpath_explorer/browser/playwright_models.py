@@ -23,6 +23,9 @@ class ScannedElement:
     is_visible: bool
     is_enabled: bool
     frame_path: str = ""
+    window_handle: str = ""
+    window_title: str = ""
+    window_url: str = ""
 
 @dataclass
 class NetworkRequest:

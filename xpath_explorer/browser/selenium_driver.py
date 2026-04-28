@@ -82,10 +82,10 @@ class BrowserDriverMixin:
     def __init__ (self ):
     # 테스트 더블과 다양한 WebDriver 구현체를 모두 허용한다.
         self .driver :Any =None 
-        self .current_frame_path =""#꾩옱 쒖꽦 꾨젅쎈줈
-        self .frame_cache =[]#먯떆꾨젅⑸줉
-        self .frame_cache_time =0 #먯떆 앹꽦 쒓컙
-        self .FRAME_CACHE_DURATION =FRAME_CACHE_DURATION #먯떆 좏슚 쒓컙 (
+        self .current_frame_path =""# 현재 활성 프레임 경로
+        self .frame_cache =[]# 프레임 캐시 목록
+        self .frame_cache_time =0 # 캐시 생성 시간
+        self .FRAME_CACHE_DURATION =FRAME_CACHE_DURATION # 캐시 유효 시간
         self ._xpath_frame_hints :Dict [str ,Tuple [str ,float ]]={}
         self ._lock =RLock ()#WebDriver 묎렐 곷젹(QThread 쎌웳 ⑹)
         self ._last_alive_error :str =""
@@ -154,7 +154,7 @@ class BrowserDriverMixin:
 
     @contextmanager 
     def frame_context (self ,frame_path :Optional [str ]=None ):
-        """꾨젅⑦뀓ㅽ듃 댁〈/먮났 ⑦뀓ㅽ듃 ㅻ땲. - frame_path None대㈃ "꾨젅꾪솚 놁씠" 꾩옱 ⑦뀓ㅽ듃댁〈/먮났⑸땲 - frame_path "main" 먮뒗 ""대㈃ default_content대룞⑸땲 - frame_path 뺣릺대떦 꾨젅꾩쑝대룞⑸땲 대뼡 덉쇅 섎뜑쇰룄 낅즺 먮옒 꾨젅꾩쑝듦뎄쒕룄섎ŉ, 듦뎄 ㅽ뙣 default_content쒖쥌 ⑹뼱⑸땲"""
+        """프레임 컨텍스트를 임시 전환하고 종료 시 원래 프레임으로 복구합니다."""
         with self ._lock :
             original_frame_path =self .current_frame_path 
             try :
@@ -164,10 +164,10 @@ class BrowserDriverMixin:
                 yield 
             finally :
                 try :
-                #먮옒 꾨젅꾩쑝듦
+                # 원래 프레임으로 복구
                     self .switch_to_frame_by_path (original_frame_path if original_frame_path else "main")
                 except Exception :
-                #쒖쥌 ⑹뼱: default_content
+                # 최종 방어: default_content로 복구
                     try :
                         if self .driver :
                             self .driver .switch_to .default_content ()
@@ -175,18 +175,18 @@ class BrowserDriverMixin:
                         pass
 
     def create_driver (self ,use_undetected :bool =True )->bool :
-        """쒕씪대쾭 앹꽦"""
+        """드라이버 생성."""
         with self ._lock :
             try :
                 self ._clear_last_error ()
-                logger .info ("뚮씪곗 쒕씪대쾭 앹꽦 쒖옉...")
+                logger .info ("브라우저 드라이버 생성 시작...")
                 if use_undetected and UC_AVAILABLE :
                     options =uc .ChromeOptions ()
                     options .add_argument ('--start-maximized')
                     options .add_argument ('--disable-popup-blocking')
                     options .add_argument ('--lang=ko-KR')
                     self .driver =uc .Chrome (options =options ,use_subprocess =True )
-                    logger .info ("Undetected Chrome 쒕씪대쾭 앹꽦 꾨즺")
+                    logger .info ("Undetected Chrome 드라이버 생성 완료")
                 else :
                     options =Options ()
                     options .add_argument ('--start-maximized')
@@ -200,7 +200,7 @@ class BrowserDriverMixin:
                         self .driver =webdriver .Chrome (service =service ,options =options )
                     else :
                         self .driver =webdriver .Chrome (options =options )
-                    logger .info ("쒖 Chrome 쒕씪대쾭 앹꽦 꾨즺")
+                    logger .info ("표준 Chrome 드라이버 생성 완료")
 
                 try :
                     self ._root_window_handle =self .driver .current_window_handle 
@@ -215,7 +215,7 @@ class BrowserDriverMixin:
                 return False
 
     def close (self ):
-        """뚮씪곗 リ린"""
+        """브라우저 종료."""
         with self ._lock :
             if not self .driver :
                 return 
@@ -247,20 +247,20 @@ class BrowserDriverMixin:
             self ._xpath_frame_hints .clear ()
 
     def is_alive (self )->bool :
-        """곌껐 곹깭 뺤씤 - 꾩옱 덈룄곌 ロㅻⅨ 덈룄곕줈 먮룞 꾪솚"""
+        """연결 상태를 확인하고 닫힌 현재 창은 가능한 다른 창으로 복구합니다."""
         with self ._lock :
             if not self .driver :
                 return False 
             try :
-            #꾩옱 덈룄몃뱾 뺤씤 쒕룄
+            # 현재 창 핸들 확인
                 _ =self .driver .current_window_handle 
                 self ._last_alive_error =""
                 return True 
             except NoSuchWindowException :
-                logger .warning ("꾩옱 덈룄곌 ロ듬땲 ㅻⅨ 덈룄곕줈 꾪솚쒕룄⑸땲")
+                logger .warning ("현재 창이 닫혀 다른 창으로 복구를 시도합니다.")
                 return self ._recover_to_available_window ()
             except WebDriverException as e :
-            #invalid session 듦뎄 곸씠 꾨땲됱떆 뺣━댁빞 쎄퀬 ㅽ뙵덉텣
+            # invalid session은 복구 대상이 아니므로 드라이버를 정리한다.
                 if self ._is_invalid_session_error (e ):
                     short =self ._short_webdriver_error (e )
                     if self ._last_alive_error !=short :
@@ -278,18 +278,18 @@ class BrowserDriverMixin:
                 return False
 
     def ensure_valid_window (self ):
-        """좏슚덈룄곹깭 댁옣 (몃먯꽌 몄텧"""
+        """현재 창 상태가 유효한지 보장합니다."""
         with self ._lock :
             if not self .is_alive ():
-                raise Exception ("뚮씪곗 곌껐섏 딆븯듬땲")
+                raise Exception ("브라우저가 연결되지 않았습니다.")
 
     def navigate (self ,url :str ):
-        """URL 대룞"""
+        """URL로 이동."""
         with self ._lock :
             if self .is_alive ():
                 try :
                     self .driver .get (url )
-                    self ._invalidate_frame_cache ()#ㅻ퉬뚯씠먯떆 댄슚
+                    self ._invalidate_frame_cache ()# 네비게이션 후 프레임 캐시 무효화
                 except Exception as e :
                     logger .error (f"이동 실패: {e }")
 

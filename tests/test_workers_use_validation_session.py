@@ -22,6 +22,8 @@ class _SessionBrowser:
         self.validate_sessions = []
         self.preferred_frames = []
         self.switch_context_calls = []
+        self.frame_switch_calls = []
+        self.current_frame_path = "original-frame"
         self.driver = type("Driver", (), {"current_window_handle": "w1"})()
 
     def is_alive(self):
@@ -42,7 +44,16 @@ class _SessionBrowser:
     def validate_xpath(self, xpath, preferred_frame=None, session=None):
         self.validate_sessions.append(session)
         self.preferred_frames.append(preferred_frame)
-        return {"found": True, "msg": "", "frame_path": "main"}
+        return {
+            "found": True,
+            "msg": "",
+            "frame_path": preferred_frame or "main",
+            "window_handle": "w2",
+            "window_title": "Popup",
+            "window_url": "https://popup.example",
+            "tag": "button",
+            "count": 2,
+        }
 
     def switch_window(self, _handle):
         return True
@@ -50,6 +61,14 @@ class _SessionBrowser:
     def switch_to_window_context(self, handle="", window_url="", title=""):
         self.switch_context_calls.append((handle, window_url, title))
         return handle != "missing"
+
+    def switch_to_frame_by_path(self, frame_path):
+        self.frame_switch_calls.append(frame_path)
+        self.current_frame_path = "" if frame_path == "main" else frame_path
+        return True
+
+    def get_current_window_metadata(self):
+        return {"handle": "w1", "title": "Root", "url": "https://root.example"}
 
 
 def test_validate_worker_uses_single_validation_session():
@@ -84,6 +103,28 @@ def test_batch_worker_uses_single_validation_session():
     assert len(browser.validate_sessions) == 2
     assert browser.validate_sessions[0] is browser.validate_sessions[1]
     assert browser.preferred_frames == [None, "f1"]
+    assert browser.frame_switch_calls[-1] == "original-frame"
+
+
+def test_batch_worker_emits_full_result_metadata():
+    _ensure_qt_app()
+    browser = _SessionBrowser()
+    items = [XPathItem(name="a", xpath="//a", category="common", found_frame="f1")]
+    worker = BatchTestWorker(browser, items)
+    rows = []
+    worker.item_validated.connect(lambda name, result: rows.append((name, result)))
+
+    worker.run()
+
+    assert rows[0][0] == "a"
+    result = rows[0][1]
+    assert result["frame_path"] == "f1"
+    assert result["window_handle"] == "w2"
+    assert result["window_title"] == "Popup"
+    assert result["window_url"] == "https://popup.example"
+    assert result["tag"] == "button"
+    assert result["count"] == 2
+    assert result["error_type"] == ""
 
 
 def test_validate_worker_uses_item_window_metadata_and_reports_switch_failures():

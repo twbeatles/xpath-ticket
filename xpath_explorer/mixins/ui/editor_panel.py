@@ -313,6 +313,16 @@ class ExplorerUIEditorPanelMixin:
         self.combo_scan_type.setToolTip("버튼, 링크, 입력 필드 등 상호작용 가능한 요소를 선택해 스캔합니다.")
         type_row.addWidget(self.combo_scan_type, 1)
         scan_settings_layout.addLayout(type_row)
+
+        scope_row = QHBoxLayout()
+        scope_row.addWidget(QLabel("스캔 범위:"))
+        self.combo_scan_scope = NoWheelComboBox()
+        self.combo_scan_scope.addItem("현재 프레임", "current_frame")
+        self.combo_scan_scope.addItem("현재 창 전체 프레임", "current_window_frames")
+        self.combo_scan_scope.addItem("모든 팝업/프레임", "all_pages_frames")
+        self.combo_scan_scope.setToolTip("Playwright 스캔 대상 창과 iframe 범위를 선택합니다.")
+        scope_row.addWidget(self.combo_scan_scope, 1)
+        scan_settings_layout.addLayout(scope_row)
         
         # 스캔 버튼
         self.btn_scan = QPushButton("🔍 페이지 스캔")
@@ -345,14 +355,16 @@ class ExplorerUIEditorPanelMixin:
         results_layout.setContentsMargins(12, 10, 12, 10)
         
         self.table_scan_results = QTableWidget()
-        self.table_scan_results.setColumnCount(4)
-        self.table_scan_results.setHorizontalHeaderLabels(["XPath", "태그", "텍스트", "사용"])
+        self.table_scan_results.setColumnCount(6)
+        self.table_scan_results.setHorizontalHeaderLabels(["XPath", "태그", "텍스트", "프레임", "창", "사용"])
         scan_hh = self.table_scan_results.horizontalHeader()
         if scan_hh is not None:
             scan_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_scan_results.setColumnWidth(1, 60)
         self.table_scan_results.setColumnWidth(2, 120)
-        self.table_scan_results.setColumnWidth(3, 60)
+        self.table_scan_results.setColumnWidth(3, 100)
+        self.table_scan_results.setColumnWidth(4, 120)
+        self.table_scan_results.setColumnWidth(5, 60)
         scan_vh = self.table_scan_results.verticalHeader()
         if scan_vh is not None:
             scan_vh.setVisible(False)

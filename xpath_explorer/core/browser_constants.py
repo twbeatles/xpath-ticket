@@ -140,10 +140,30 @@ PICKER_SCRIPT = '''
         return null;
     }
     
+    function xpathLiteral(value) {
+        var text = String(value == null ? '' : value);
+        if (text.indexOf('"') === -1) return '"' + text + '"';
+        if (text.indexOf("'") === -1) return "'" + text + "'";
+        var tokens = [];
+        var parts = text.split('"');
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) tokens.push('"' + parts[i] + '"');
+            if (i < parts.length - 1) tokens.push("'\"'");
+        }
+        return tokens.length ? 'concat(' + tokens.join(', ') + ')' : '""';
+    }
+
+    function escapeCssIdentifier(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(value);
+        }
+        return String(value || '').replace(/[^a-zA-Z0-9_-]/g, function(ch) { return '\\' + ch; });
+    }
+
     // XPath 생성 함수
     function getXPath(element) {
         if (element.id !== '')
-            return '//*[@id="' + element.id + '"]';
+            return '//*[@id=' + xpathLiteral(element.id) + ']';
         if (element === document.body)
             return '/html/body';
             
@@ -165,7 +185,7 @@ PICKER_SCRIPT = '''
         while (el.nodeType === Node.ELEMENT_NODE) {
             var selector = el.nodeName.toLowerCase();
             if (el.id) {
-                selector += '#' + el.id;
+                selector += '#' + escapeCssIdentifier(el.id);
                 path.unshift(selector);
                 break;
             } else {

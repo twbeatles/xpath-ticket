@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, cast
 
 from xpath_explorer.core.paths import resolve_storage_file
 from xpath_explorer.core.optional_imports import import_optional
+from xpath_explorer.tools.xpath_safety import xpath_literal
 
 logger = logging.getLogger("XPathExplorer")
 
@@ -315,25 +316,7 @@ class XPathAIAssistant:
 
     def _xpath_text_expr(self, text: str) -> str:
         """XPath 문자열 리터럴 표현식 생성 (따옴표 안전)"""
-        if text is None:
-            text = ""
-
-        if '"' in text and "'" in text:
-            parts = text.split('"')
-            tokens = []
-            for idx, part in enumerate(parts):
-                if part:
-                    tokens.append(f'"{part}"')
-                if idx < len(parts) - 1:
-                    tokens.append("'\"'")
-            if not tokens:
-                return '""'
-            return "concat(" + ", ".join(tokens) + ")"
-
-        if '"' in text:
-            return f"'{text}'"
-
-        return f'"{text}"'
+        return xpath_literal(text)
 
     def generate_xpath_from_description(
         self,

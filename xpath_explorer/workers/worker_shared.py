@@ -45,6 +45,37 @@ def _get_browser_window_metadata(browser: Any) -> Dict[str, Any]:
     }
 
 
+def _get_browser_frame_path(browser: Any) -> str:
+    return str(getattr(browser, "current_frame_path", "") or "")
+
+
+def _restore_browser_context(browser: Any, window_handle: str = "", frame_path: str = "") -> bool:
+    ok = True
+    handle = str(window_handle or "")
+    if handle:
+        try:
+            switch_context = getattr(browser, "switch_to_window_context", None)
+            if callable(switch_context):
+                ok = bool(switch_context(handle=handle)) and ok
+            elif hasattr(browser, "switch_window"):
+                ok = bool(browser.switch_window(handle)) and ok
+        except Exception:
+            ok = False
+
+    target_frame = str(frame_path or "main")
+    try:
+        switch_frame_by_path = getattr(browser, "switch_to_frame_by_path", None)
+        if callable(switch_frame_by_path):
+            ok = bool(switch_frame_by_path(target_frame)) and ok
+        else:
+            switch_frame = getattr(browser, "switch_to_frame", None)
+            if callable(switch_frame):
+                ok = bool(switch_frame(target_frame)) and ok
+    except Exception:
+        ok = False
+    return ok
+
+
 def _switch_browser_to_item_window(browser: Any, item: Any) -> tuple[bool, str]:
     context = _window_context_from_item(item)
     handle = context["handle"]

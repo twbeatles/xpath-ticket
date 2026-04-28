@@ -69,6 +69,11 @@ class ExplorerDataEditorMixin:
 
     def _load_to_editor(self, item: XPathItem):
         self._editing_original_name = item.name
+        self._editing_source_engine = ""
+        self._editing_source_frame = ""
+        self._editing_source_window = ""
+        self._editing_source_window_title = ""
+        self._editing_source_window_url = ""
         self.input_name.setText(item.name)
         category_index = self.input_category.findData(item.category)
         if category_index >= 0:
@@ -106,6 +111,11 @@ class ExplorerDataEditorMixin:
 
     def _clear_editor(self):
         self._editing_original_name = ''
+        self._editing_source_engine = ""
+        self._editing_source_frame = ""
+        self._editing_source_window = ""
+        self._editing_source_window_title = ""
+        self._editing_source_window_url = ""
         self.input_name.clear()
         self.input_desc.clear()
         self.input_xpath.clear()
@@ -183,29 +193,39 @@ class ExplorerDataEditorMixin:
             item.screenshot_path = source_item.screenshot_path
             item.ai_generated = source_item.ai_generated
 
-        current_window = None
-        for browser_attr in ("browser", "pw_manager"):
-            browser = getattr(self, browser_attr, None)
-            if browser is not None and hasattr(browser, "get_current_window_metadata"):
+        source_engine = str(getattr(self, "_editing_source_engine", "") or "")
+        if source_engine == "playwright":
+            item.found_window = str(getattr(self, "_editing_source_window", "") or item.found_window or "")
+            item.found_window_title = str(getattr(self, "_editing_source_window_title", "") or item.found_window_title or "")
+            item.found_window_url = str(getattr(self, "_editing_source_window_url", "") or item.found_window_url or "")
+            item.found_frame = str(getattr(self, "_editing_source_frame", "") or item.found_frame or "")
+        else:
+            current_window = None
+            browser = getattr(self, "browser", None)
+            browser_alive = False
+            if browser is not None:
+                try:
+                    is_alive = getattr(browser, "is_alive", None)
+                    browser_alive = bool(is_alive()) if callable(is_alive) else True
+                except Exception:
+                    browser_alive = False
+            if browser_alive and browser is not None and hasattr(browser, "get_current_window_metadata"):
                 try:
                     current_window = browser.get_current_window_metadata()
                 except Exception:
                     current_window = None
-                if isinstance(current_window, dict) and any(
-                    (
-                        current_window.get("handle"),
-                        current_window.get("title"),
-                        current_window.get("url"),
-                    )
-                ):
-                    break
-        if isinstance(current_window, dict):
-            item.found_window = str(current_window.get("handle", "") or item.found_window or "")
-            item.found_window_title = str(current_window.get("title", "") or item.found_window_title or "")
-            item.found_window_url = str(current_window.get("url", "") or item.found_window_url or "")
+            elif source_engine == "playwright":
+                current_window = None
 
-        if self.browser.current_frame_path:
-            item.found_frame = self.browser.current_frame_path
+            if isinstance(current_window, dict):
+                item.found_window = str(current_window.get("handle", "") or item.found_window or "")
+                item.found_window_title = str(current_window.get("title", "") or item.found_window_title or "")
+                item.found_window_url = str(current_window.get("url", "") or item.found_window_url or "")
+
+            if browser_alive and browser is not None:
+                current_frame_path = str(getattr(browser, "current_frame_path", "") or "")
+                if current_frame_path:
+                    item.found_frame = current_frame_path
 
         if original_name and original_name != name and original_item is not None:
             self.config.remove_item(original_name)

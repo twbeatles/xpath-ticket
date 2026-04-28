@@ -39,6 +39,14 @@
 - DOM export는 `전체`, `현재 창`, `현재 창 + iframe` 범위로 분리되어 동작합니다.
 - Playwright는 `_root_page`와 current page를 추적해 popup/page close 이후에도 page-scoped 기능을 복구합니다.
 - 시나리오 워커는 `wait_for_popup`, `switch_latest_popup`, `switch_window_by_title`, `switch_root_window` 액션을 지원합니다.
+- 배치/시나리오 실행 후 기본값은 원래 창/프레임 복구이며, 시나리오 JSON의 `leave_context: true`에서만 마지막 문맥을 유지합니다.
+- 배치/시나리오 결과에는 `frame_path`, `window_handle`, `window_title`, `window_url`, `tag`, `count`, `error_type`을 포함합니다.
+- Playwright scan은 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임 범위를 지원하고 `ScannedElement`에 창/프레임 출처를 기록합니다.
+- scan 결과를 저장할 때는 출처 엔진 기준으로만 문맥을 반영해 Playwright 출처가 Selenium stale frame으로 덮이지 않도록 합니다.
+
+## XPath 안전 생성
+- XPath 생성 시 `xpath_explorer/tools/xpath_safety.py`의 `xpath_literal`, `xpath_attr_equals`, `xpath_contains_text`를 사용합니다.
+- AI fallback, Optimizer, Playwright scan, picker 경로는 id/name/class/data/text 값에 큰따옴표와 작은따옴표가 섞여도 valid XPath를 생성해야 합니다.
 
 ## 최근 운영 정책 반영 사항
 1. Validation miss 캐시
@@ -65,6 +73,8 @@
 ## 디버깅 포인트
 - 반복적인 not found: `browser.py`의 세션 miss TTL/시그니처 갱신 여부 확인
 - 배치 워커 결과 일관성: `background.py`에서 session 재사용 확인
+- 배치 결과 메타데이터 누락: `BatchTestWorker.item_validated` full result dict와 UI 기록 경로 확인
+- Playwright scan 문맥 이상: scan scope, `frame_path`, `window_title/url`, `_editing_source_engine` 저장 경로 확인
 - 로그 파일 미생성: `runtime.py` + `core/paths.py` 폴백 결과 확인
 - AI 설정 저장 누락: `ai.py`에서 저장 경로 resolve 실패 경고 확인
 
@@ -123,3 +133,9 @@
 - `pyrightconfig.json`: 분석 범위(`xpath_explorer/tests/scripts/entrypoint`)와 제외 경로(`archive`, `.pytest_cache`, `.pytest_tmp`, 빌드 산출물) 고정, 현재 Python 인터프리터 기준 동작, `reportMissingImports = none`
 - Qt 관련 타입은 `TYPE_CHECKING` import 분리 또는 `xpath_explorer/qt_compat.py`를 사용해 headless CI와 정적 분석을 함께 만족시킴
 - optional dependency import는 `xpath_explorer/core/optional_imports.py` 헬퍼를 통해 처리
+- `scripts/check_encoding_health.py`는 `.pytest_tmp`, `htmlcov`를 제외하고, Selenium split 파일의 한국어 모지바케 토큰과 Python 문자열/주석의 `??` 반복 패턴을 점검합니다.
+
+## 진단/내보내기
+- 도구 메뉴의 기능 진단 리포트는 Selenium/Playwright 상태, 현재 창/프레임, 저장 항목 문맥, 최근 검증 실패, telemetry 요약을 Markdown으로 저장합니다.
+- 배치/시나리오 결과 다이얼로그는 CSV/Markdown 저장을 지원합니다.
+- 설정 JSON은 `schema_version`을 선택적으로 저장하고, 로드 시 오래된/잘못된 선택 필드 타입을 정규화합니다.
