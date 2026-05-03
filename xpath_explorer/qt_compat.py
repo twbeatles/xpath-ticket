@@ -12,7 +12,13 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import (
         QEasingCurve,
         QMimeData,
+        QAbstractTableModel,
+        QEvent,
+        QModelIndex,
+        QObject,
+        QPoint,
         QPropertyAnimation,
+        QSortFilterProxyModel,
         QSettings,
         QSize,
         Qt,
@@ -20,7 +26,7 @@ if TYPE_CHECKING:
         QTimer,
         pyqtSignal,
     )
-    from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap
+    from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
     from PyQt6.QtWidgets import (
         QApplication,
         QAbstractItemView,
@@ -31,6 +37,8 @@ if TYPE_CHECKING:
         QFileDialog,
         QFormLayout,
         QFrame,
+        QGraphicsDropShadowEffect,
+        QGraphicsOpacityEffect,
         QGridLayout,
         QGroupBox,
         QHBoxLayout,
@@ -48,6 +56,7 @@ if TYPE_CHECKING:
         QProgressBar,
         QPushButton,
         QScrollArea,
+        QDoubleSpinBox,
         QSizePolicy,
         QSpinBox,
         QSplitter,
@@ -69,7 +78,13 @@ else:
         from PyQt6.QtCore import (
             QEasingCurve,
             QMimeData,
+            QAbstractTableModel,
+            QEvent,
+            QModelIndex,
+            QObject,
+            QPoint,
             QPropertyAnimation,
+            QSortFilterProxyModel,
             QSettings,
             QSize,
             Qt,
@@ -77,7 +92,7 @@ else:
             QTimer,
             pyqtSignal,
         )
-        from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap
+        from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
         from PyQt6.QtWidgets import (
             QApplication,
             QAbstractItemView,
@@ -88,6 +103,8 @@ else:
             QFileDialog,
             QFormLayout,
             QFrame,
+            QGraphicsDropShadowEffect,
+            QGraphicsOpacityEffect,
             QGridLayout,
             QGroupBox,
             QHBoxLayout,
@@ -105,6 +122,7 @@ else:
             QProgressBar,
             QPushButton,
             QScrollArea,
+            QDoubleSpinBox,
             QSizePolicy,
             QSpinBox,
             QSplitter,
@@ -248,10 +266,12 @@ if not QT_AVAILABLE:
         class ScrollBarPolicy:
             ScrollBarAlwaysOff = 0
 
-    QEasingCurve = QMimeData = QPropertyAnimation = QSettings = QSize = QThread = QTimer = _QtStub
-    QAction = QColor = QDrag = QFont = QIcon = QKeySequence = QPalette = QPixmap = _QtStub
+    QEasingCurve = QMimeData = QAbstractTableModel = QEvent = QModelIndex = QObject = QPoint = _QtStub
+    QPropertyAnimation = QSortFilterProxyModel = QSettings = QSize = QThread = QTimer = _QtStub
+    QAction = QColor = QDrag = QFont = QIcon = QKeySequence = QPalette = QPixmap = QWheelEvent = _QtStub
     QAbstractItemView = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = _QtStub
-    QGridLayout = QGroupBox = QHBoxLayout = QLabel = QLineEdit = QListWidget = _QtStub
+    QGridLayout = QGroupBox = QGraphicsDropShadowEffect = QGraphicsOpacityEffect = _QtStub
+    QHBoxLayout = QLabel = QLineEdit = QListWidget = QDoubleSpinBox = _QtStub
     QListWidgetItem = QInputDialog = QMainWindow = QMenu = QMenuBar = QPlainTextEdit = _QtStub
     QProgressBar = QPushButton = QScrollArea = QSizePolicy = QSpinBox = _QtStub
     QSplitter = QStackedWidget = QTableView = QTableWidget = QTableWidgetItem = _QtStub

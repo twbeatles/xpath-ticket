@@ -97,6 +97,7 @@ xpath_explorer/
 - `mixins/tools/inspection_tools.py`: 기능 진단 Markdown 리포트와 운영 점검 UI
 - `mixins/tools/batch_tools.py`: 배치/시나리오 결과 다이얼로그와 CSV/Markdown export
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
+- `core/paths.py`: 저장 경로 폴백과 `atomic_write_json()` 기반 JSON 저장 안정성 제공
 
 ## 5. 품질 게이트
 
@@ -128,6 +129,7 @@ pytest -q
 - `collect_submodules("xpath_explorer")`로 분할 패키지 구조를 자동 수집합니다.
 - `xpath_explorer.qt_compat`를 hidden import에 명시해 Qt bootstrap 경로 누락을 방지합니다.
 - 기능 진단/배치 export 산출물(`feature_diagnostics_*.md`, `batch_results_*.csv`, `batch_results_*.md`)은 로컬 산출물로 `.gitignore`에서 제외합니다.
+- atomic JSON 저장 중 생성될 수 있는 백업/임시 파일(`*.json.bak`, `.*.tmp`)은 로컬 산출물로 `.gitignore`에서 제외합니다.
 - `qt_excludes`에는 TLS 관련 라이브러리(`libcrypto`, `libssl`)를 넣지 않습니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 빌드 환경에 설치된 경우에만 hidden import로 추가됩니다.
 
@@ -149,3 +151,5 @@ pytest -q
 - 릴리즈 전에는 `scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행을 권장합니다.
 - 배치/시나리오 워커는 기본적으로 원래 창/프레임 문맥을 복구하며, `leave_context: true` 시에만 마지막 문맥을 유지합니다.
 - Playwright scan은 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임 범위를 지원하고 scan 결과의 창/프레임 출처를 저장합니다.
+- 2026-05-03 이후 `XPathItem.source_engine`으로 Playwright 스캔 출처를 저장하고, Playwright page 문맥은 세션 내 안정적인 `pw-page-N` 형식을 사용합니다.
+- 임시 구현 리스크 점검 문서는 삭제하고 README/docs 운영 문서에 최종 반영 내용만 유지합니다.

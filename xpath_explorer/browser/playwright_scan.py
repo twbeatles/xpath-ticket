@@ -56,8 +56,7 @@ PlaywrightTimeout = deps.PlaywrightTimeout
 
 class PlaywrightScanMixin:
     def _scan_page_metadata(self, page: Any) -> Dict[str, str]:
-        pages = self._get_open_pages()
-        handle = f"page-{pages.index(page) + 1}" if page in pages else ""
+        handle = self._stable_page_handle(page)
         try:
             title = str(page.title() or "")
         except Exception:

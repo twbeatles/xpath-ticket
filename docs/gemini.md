@@ -123,7 +123,7 @@
 - docs sync 경고도 릴리즈 전 반드시 해소
 
 ## Git 정리 규칙
-1. `.gitignore`에 로컬 런타임 산출물(`.xpath_explorer/`, `.pytest_tmp/`, `htmlcov/`, PyInstaller 산출물) 누락 여부 점검
+1. `.gitignore`에 로컬 런타임 산출물(`.xpath_explorer/`, `.pytest_tmp/`, `htmlcov/`, PyInstaller 산출물, atomic 저장 백업/임시 파일 `*.json.bak`, `.*.tmp`) 누락 여부 점검
 2. `python scripts/check_encoding_health.py` + `python -m pyright -p .` 점검 통과 후 커밋
 3. 기본 브랜치(`main`) 푸시 전 테스트/문서 정합성 재확인
 
@@ -139,3 +139,8 @@
 - 도구 메뉴의 기능 진단 리포트는 Selenium/Playwright 상태, 현재 창/프레임, 저장 항목 문맥, 최근 검증 실패, telemetry 요약을 Markdown으로 저장합니다.
 - 배치/시나리오 결과 다이얼로그는 CSV/Markdown 저장을 지원합니다.
 - 설정 JSON은 `schema_version`을 선택적으로 저장하고, 로드 시 오래된/잘못된 선택 필드 타입을 정규화합니다.
+- 2026-05-03 이후 설정 JSON import는 중복 이름, 빈 이름, 빈 XPath를 거부합니다.
+- `XPathItem.source_engine`으로 Playwright 스캔 출처를 보존하며, Playwright page handle은 세션 내 안정적인 `pw-page-N` 형식을 사용합니다.
+- 설정/통계/AI 설정 저장은 `atomic_write_json()` 기반으로 부분 기록을 방지합니다.
+- CI pytest 추가는 보류하며, 회귀 테스트는 로컬 품질 절차에서 `pytest -q`로 확인합니다.
+- 임시 구현 리스크 점검 문서는 삭제하고 README/docs 운영 문서에 최종 정책만 유지합니다.

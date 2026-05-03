@@ -325,6 +325,19 @@ python scripts/run_quality_checks.py --strict-doc-warnings
   - 설정 JSON `schema_version` 저장 및 로드 타입 정규화
   - 인코딩 검사 skip 경로/한국어 모지바케 토큰 감지 확장
 
+## 구현 점검 반영 (2026-05-03)
+
+- 2026-05-03 구현 리스크 점검의 개선 항목을 코드와 운영 문서에 반영했습니다.
+- 핵심 반영:
+  - 전체 검증/live preview의 창·프레임 문맥 복구 보강
+  - 설정 JSON 중복 이름/빈 이름/빈 XPath import 거부
+  - `XPathItem.source_engine` 추가로 Playwright 스캔 출처 보존
+  - 설정/통계/AI 설정 저장을 atomic JSON write 방식으로 전환
+  - Playwright page handle을 세션 내 안정적인 `pw-page-N` 형식으로 전환
+  - 워커 계층의 Qt import를 `qt_compat` 경유로 정리하고 headless-safe import 테스트 추가
+  - CI pytest 추가는 보류하고 로컬 품질 절차(`pytest -q`, `pyright`, docs sync)를 유지
+  - 임시 점검 문서는 정리하고 README/docs 운영 문서에 최종 정책만 남김
+
 ## 배포 스펙 점검 메모
 
 - 현재 배포 스펙 파일은 `packaging/pyinstaller/xpath_explorer.spec`입니다.
@@ -332,5 +345,7 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 - 실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
 - `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.
 - `xpath_explorer.qt_compat`는 hidden import에 명시되어 headless-safe Qt bootstrap 경로를 유지합니다.
+- `xpath_explorer.core.paths`는 `atomic_write_json()`을 포함하므로 hidden import에 명시되어 저장 안정성 경로를 유지합니다.
 - `openai`/`google.genai`/`playwright`는 빌드 환경에 설치된 경우에만 `hiddenimports`로 포함됩니다.
 - 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.
+- atomic 저장 중 생성되는 `*.json.bak`, `.*.tmp` 로컬 산출물은 `.gitignore`에서 제외합니다.

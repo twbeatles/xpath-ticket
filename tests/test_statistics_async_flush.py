@@ -57,3 +57,25 @@ def test_statistics_falls_back_to_in_memory_when_storage_unavailable(monkeypatch
     assert summary["total_tests"] == 1
     assert summary["total_success"] == 1
 
+
+def test_statistics_save_uses_atomic_json_writer(monkeypatch, tmp_path):
+    path = tmp_path / "stats.json"
+    calls = []
+
+    def fake_atomic_write_json(target, payload):
+        calls.append((target, payload))
+        target.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "xpath_explorer.analysis.statistics.atomic_write_json",
+        fake_atomic_write_json,
+    )
+
+    manager = StatisticsManager(storage_path=path)
+    manager.record_test("item_x", "//x", True, frame_path="main")
+    manager.save()
+    manager.shutdown(timeout=2.0)
+
+    assert calls
+    assert calls[0][0] == path
+

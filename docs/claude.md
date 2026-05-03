@@ -143,6 +143,7 @@ AI 설정 저장 정책:
 4. `pytest -q` 실행
 5. `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행
 6. `.gitignore`에 신규 생성 산출물(로그/리포트/빌드 캐시) 누락이 없는지 확인
+   - atomic JSON 저장 백업/임시 파일(`*.json.bak`, `.*.tmp`)은 로컬 산출물로 제외합니다.
 
 ## 12. Pylance/인코딩 운영 기준
 - 인코딩 강제: `.editorconfig`에서 `charset = utf-8`
@@ -157,3 +158,12 @@ AI 설정 저장 정책:
 - 도구 메뉴의 기능 진단 리포트 저장은 Selenium/Playwright 상태, 현재 창/프레임, 저장 항목 문맥, 최근 검증 실패, telemetry 요약을 Markdown으로 저장합니다.
 - 배치/시나리오 결과 다이얼로그는 CSV와 Markdown 저장 버튼을 제공합니다.
 - 설정 JSON은 `schema_version`을 선택적으로 저장하며, 로드 시 오래된/잘못된 타입의 선택 필드를 정규화합니다.
+
+## 14. 2026-05-03 구현 리스크 반영
+- 전체 검증과 live preview는 실행 전 창/프레임 문맥을 저장하고 종료 시 복구해야 합니다.
+- 설정 JSON import는 중복 이름, 빈 이름, 빈 XPath를 거부합니다.
+- `XPathItem.source_engine`은 Playwright 스캔 출처를 보존하는 선택 필드입니다.
+- 설정/통계/AI 설정 저장은 `atomic_write_json()` 기반으로 부분 기록을 방지합니다.
+- Playwright page handle은 세션 내 안정적인 `pw-page-N` 형식을 사용하며, Selenium 검증에서는 Playwright pseudo handle을 직접 Selenium handle로 취급하지 않습니다.
+- GitHub Actions의 pytest 추가는 보류하며, 로컬 품질 절차에서 `pytest -q`, `python -m pyright -p .`, docs sync를 실행합니다.
+- 임시 구현 리스크 점검 문서는 삭제하고 README/docs 운영 문서에 최종 정책만 유지합니다.

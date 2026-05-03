@@ -96,6 +96,8 @@ class ExplorerDataEditorMixin:
             meta += f'창 핸들: {item.found_window}\n'
         if item.found_frame:
             meta += f'프레임: {item.found_frame}\n'
+        if item.source_engine == "playwright":
+            meta += "출처: Playwright 스캔 (Selenium 검증 시 창 제목/URL 기준으로 재탐색)\n"
         if item.test_count > 0:
             meta += f'테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n'
         if item.last_tested:
@@ -192,9 +194,11 @@ class ExplorerDataEditorMixin:
             item.element_attributes = dict(source_item.element_attributes or {})
             item.screenshot_path = source_item.screenshot_path
             item.ai_generated = source_item.ai_generated
+            item.source_engine = source_item.source_engine
 
         source_engine = str(getattr(self, "_editing_source_engine", "") or "")
         if source_engine == "playwright":
+            item.source_engine = "playwright"
             item.found_window = str(getattr(self, "_editing_source_window", "") or item.found_window or "")
             item.found_window_title = str(getattr(self, "_editing_source_window_title", "") or item.found_window_title or "")
             item.found_window_url = str(getattr(self, "_editing_source_window_url", "") or item.found_window_url or "")

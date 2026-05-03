@@ -26,6 +26,7 @@ class ScannedElement:
     window_handle: str = ""
     window_title: str = ""
     window_url: str = ""
+    source_engine: str = "playwright"
 
 @dataclass
 class NetworkRequest:

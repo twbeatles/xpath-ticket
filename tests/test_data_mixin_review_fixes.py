@@ -220,6 +220,7 @@ def test_save_item_uses_playwright_source_context_without_stale_selenium_frame()
     assert item.found_window == "pw-page-2"
     assert item.found_window_title == "Playwright Popup"
     assert item.found_window_url == "https://popup.example"
+    assert item.source_engine == "playwright"
 
 
 def test_export_python_uses_safe_names_and_suffixes(tmp_path, monkeypatch):

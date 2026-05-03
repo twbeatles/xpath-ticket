@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from PyQt6.QtCore import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, pyqtSignal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -81,6 +81,8 @@ def _switch_browser_to_item_window(browser: Any, item: Any) -> tuple[bool, str]:
     handle = context["handle"]
     title = context["title"]
     url = context["url"]
+    if str(getattr(item, "source_engine", "") or "").lower() == "playwright":
+        handle = ""
     if not any((handle, title, url)):
         return True, ""
 

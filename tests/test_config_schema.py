@@ -1,3 +1,5 @@
+import pytest
+
 from xpath_explorer.core.config import CONFIG_SCHEMA_VERSION, SiteConfig
 
 
@@ -47,4 +49,58 @@ def test_site_config_from_dict_normalizes_old_and_bad_optional_types():
     assert item.alternatives == ["1", "//a"]
     assert item.element_attributes == {"id": "7"}
     assert item.ai_generated is True
+    assert item.source_engine == ""
+
+
+def test_site_config_from_dict_rejects_duplicate_item_names():
+    with pytest.raises(ValueError, match="Duplicate item name"):
+        SiteConfig.from_dict(
+            {
+                "name": "site",
+                "url": "https://example.com",
+                "items": [
+                    {"name": "dup", "xpath": "//a", "category": "common"},
+                    {"name": "dup", "xpath": "//b", "category": "common"},
+                ],
+            }
+        )
+
+
+def test_site_config_from_dict_rejects_empty_name_or_xpath():
+    with pytest.raises(ValueError, match="name is required"):
+        SiteConfig.from_dict(
+            {
+                "name": "site",
+                "url": "https://example.com",
+                "items": [{"name": "", "xpath": "//a", "category": "common"}],
+            }
+        )
+
+    with pytest.raises(ValueError, match="xpath is required"):
+        SiteConfig.from_dict(
+            {
+                "name": "site",
+                "url": "https://example.com",
+                "items": [{"name": "empty_xpath", "xpath": "", "category": "common"}],
+            }
+        )
+
+
+def test_site_config_from_dict_preserves_source_engine():
+    config = SiteConfig.from_dict(
+        {
+            "name": "site",
+            "url": "https://example.com",
+            "items": [
+                {
+                    "name": "pw",
+                    "xpath": "//button",
+                    "category": "common",
+                    "source_engine": "playwright",
+                }
+            ],
+        }
+    )
+
+    assert config.items[0].source_engine == "playwright"
 

@@ -27,6 +27,8 @@ htmlcov/
 build/
 dist/
 *.spec.bak
+*.json.bak
+.*.tmp
 *.pyz
 *.pkg
 warn-*.txt

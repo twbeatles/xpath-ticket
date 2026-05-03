@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from PyQt6.QtCore import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, pyqtSignal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -16,7 +16,9 @@ from xpath_explorer.core.perf import perf_span
 logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
+    _get_browser_frame_path,
     _get_browser_window_metadata,
+    _restore_browser_context,
     _switch_browser_to_item_window,
     _window_context_from_item,
 )
@@ -43,6 +45,7 @@ class ValidateWorker(QThread):
             return
 
         original_window: Optional[str] = None
+        original_frame = _get_browser_frame_path(self.browser)
         try:
             driver = getattr(self.browser, "driver", None)
             handle = getattr(driver, "current_window_handle", None)
@@ -116,7 +119,8 @@ class ValidateWorker(QThread):
                     pass
             self._stop_event.clear()
             if original_window is not None:
-                try:
-                    self.browser.switch_window(original_window)
-                except Exception as e:
-                    logger.debug(f"원래 윈도우 복귀 실패 (무시): {e}")
+                _restore_browser_context(
+                    self.browser,
+                    window_handle=original_window,
+                    frame_path=original_frame,
+                )

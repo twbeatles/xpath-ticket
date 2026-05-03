@@ -194,6 +194,11 @@ exe = EXE(
 # - repo-local `.venv`를 사용하면 pyright와 빌드 환경 정합성을 맞추기 쉽습니다.
 # - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
 # - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
+# - core.paths는 atomic_write_json() 저장 경로를 포함하므로 hidden import로 유지합니다.
+# - 설정/통계/AI 설정 atomic 저장의 로컬 백업/임시 파일(`*.json.bak`, `.*.tmp`)은
+#   .gitignore에서 제외합니다.
+# - XPathItem.source_engine과 Playwright `pw-page-N` 문맥 메타데이터는 config JSON
+#   스키마에 포함되며 collect_submodules("xpath_explorer")로 패키징됩니다.
 # - 기능 진단/배치 결과 export 산출물은 .gitignore의 feature_diagnostics_*,
 #   batch_results_* 패턴으로 로컬 산출물만 제외합니다.
 # - facade import 경로(`core/constants.py`, `workers/background.py`, `mixins/*_mixin.py`,
