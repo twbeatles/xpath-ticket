@@ -6,6 +6,7 @@ import csv
 import json
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from xpath_explorer.qt_compat import (
@@ -27,6 +28,7 @@ from xpath_explorer.qt_compat import (
 from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_label, category_to_value
 from xpath_explorer.core.config import XPathItem, SiteConfig
 from xpath_explorer.core.perf import perf_span
+from xpath_explorer.core.paths import atomic_write_json
 
 
 class ExplorerDataFilesMixin:
@@ -60,9 +62,8 @@ class ExplorerDataFilesMixin:
         fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{self.config.name}.json", 'JSON 파일 (*.json)')
         if fname:
             try:
-                with open(fname, 'w', encoding='utf-8') as f:
-                    json.dump(self.config.to_dict(), f, indent=2, ensure_ascii=False)
-                    self._show_toast("저장되었습니다.", "success")
+                atomic_write_json(Path(fname), self.config.to_dict())
+                self._show_toast("저장되었습니다.", "success")
             except Exception as e:
                 self._show_toast(f"저장 실패: {e}", "error")
 
@@ -79,8 +80,7 @@ class ExplorerDataFilesMixin:
         try:
             if fmt == 'json':
                 data = [item.to_dict() for item in self.config.items]
-                with open(fname, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
+                atomic_write_json(Path(fname), data)
             elif fmt == 'csv':
                 with open(fname, 'w', encoding='utf-8', newline='') as f:
                     writer = csv.writer(f)

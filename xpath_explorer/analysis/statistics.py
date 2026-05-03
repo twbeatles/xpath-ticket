@@ -12,7 +12,7 @@ from threading import Event, Lock, Thread
 from typing import Dict, List, Optional
 
 from xpath_explorer.core.constants import STATISTICS_SAVE_INTERVAL
-from xpath_explorer.core.paths import resolve_storage_file
+from xpath_explorer.core.paths import atomic_write_json, resolve_storage_file
 from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger("XPathExplorer")
@@ -148,8 +148,7 @@ class StatisticsManager:
             return
         try:
             data = self._serialize()
-            with open(self.storage_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            atomic_write_json(self.storage_path, data)
             with self._lock:
                 self._dirty = False
         except Exception as e:

@@ -82,12 +82,49 @@ class ExplorerBrowserPreviewMixin:
 
             from xpath_explorer.mixins import browser_mixin as browser_mixin_module
 
-            worker = browser_mixin_module.LivePreviewWorker(
-                self.browser,
-                xpath,
-                request_id,
-                frame_path=self._resolve_active_frame_path(),
-            )
+            window_context: Dict[str, str] = {}
+            source_engine = str(getattr(self, "_editing_source_engine", "") or "")
+            if source_engine == "playwright":
+                window_context = {
+                    "handle": "",
+                    "title": str(getattr(self, "_editing_source_window_title", "") or ""),
+                    "url": str(getattr(self, "_editing_source_window_url", "") or ""),
+                }
+            else:
+                item = None
+                original_name = str(getattr(self, "_editing_original_name", "") or "")
+                if original_name:
+                    item = self.config.get_item(original_name)
+                if item is None:
+                    try:
+                        item = self._get_current_table_item()
+                    except Exception:
+                        item = None
+                if item is not None:
+                    window_context = {
+                        "handle": str(getattr(item, "found_window", "") or ""),
+                        "title": str(getattr(item, "found_window_title", "") or ""),
+                        "url": str(getattr(item, "found_window_url", "") or ""),
+                    }
+                    if str(getattr(item, "source_engine", "") or "").lower() == "playwright":
+                        window_context["handle"] = ""
+
+            frame_path = self._resolve_active_frame_path()
+            try:
+                worker = browser_mixin_module.LivePreviewWorker(
+                    self.browser,
+                    xpath,
+                    request_id,
+                    frame_path=frame_path,
+                    window_context=window_context,
+                )
+            except TypeError:
+                worker = browser_mixin_module.LivePreviewWorker(
+                    self.browser,
+                    xpath,
+                    request_id,
+                    frame_path=frame_path,
+                )
             worker.counted.connect(self._on_live_preview_counted)
             worker.failed.connect(self._on_live_preview_failed)
             worker.finished.connect(lambda w=worker: self._on_live_preview_worker_finished(w))

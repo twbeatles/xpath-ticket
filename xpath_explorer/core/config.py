@@ -8,7 +8,7 @@ from typing import Any, List, Dict, Optional
 from datetime import datetime
 from xpath_explorer.core.constants import SITE_PRESETS
 
-CONFIG_SCHEMA_VERSION = 2
+CONFIG_SCHEMA_VERSION = 3
 
 
 def _coerce_str(value: Any, default: str = "") -> str:
@@ -87,6 +87,7 @@ class XPathItem:
     element_attributes: Dict[str, str] = field(default_factory=dict)  # 저장된 속성
     screenshot_path: str = ""                    # 스크린샷 경로
     ai_generated: bool = False                   # AI 생성 여부
+    source_engine: str = ""
     
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -156,17 +157,28 @@ class SiteConfig:
         
         try:
             items = []
+            seen_names = set()
             raw_items = data.get('items', [])
             if not isinstance(raw_items, list):
                 raw_items = []
             for i, item_data in enumerate(raw_items):
                 if not isinstance(item_data, dict):
                     raise ValueError(f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다")
+
+                item_name = _coerce_str(item_data.get('name', '')).strip()
+                item_xpath = _coerce_str(item_data.get('xpath', '')).strip()
+                if not item_name:
+                    raise ValueError(f"Item {i}: name is required")
+                if not item_xpath:
+                    raise ValueError(f"Item {i} ({item_name}): xpath is required")
+                if item_name in seen_names:
+                    raise ValueError(f"Duplicate item name in config: {item_name}")
+                seen_names.add(item_name)
                 
                 # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
                 item = XPathItem(
-                    name=_coerce_str(item_data.get('name', '')),
-                    xpath=_coerce_str(item_data.get('xpath', '')),
+                    name=item_name,
+                    xpath=item_xpath,
                     category=_coerce_str(item_data.get('category', 'common'), 'common') or 'common',
                     description=_coerce_str(item_data.get('description', '')),
                     css_selector=_coerce_str(item_data.get('css_selector', '')),
@@ -188,7 +200,8 @@ class SiteConfig:
                     alternatives=_coerce_str_list(item_data.get('alternatives', [])),
                     element_attributes=_coerce_str_dict(item_data.get('element_attributes', {})),
                     screenshot_path=_coerce_str(item_data.get('screenshot_path', '')),
-                    ai_generated=_coerce_bool(item_data.get('ai_generated', False))
+                    ai_generated=_coerce_bool(item_data.get('ai_generated', False)),
+                    source_engine=_coerce_str(item_data.get('source_engine', '')),
                 )
                 if item.success_count > item.test_count:
                     item.success_count = item.test_count

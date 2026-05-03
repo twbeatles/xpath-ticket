@@ -70,6 +70,8 @@ class PlaywrightLifecycleMixin:
         self._response_handler = None
         self._headless = False
         self.last_error: str = ""
+        self._page_ids: Dict[int, str] = {}
+        self._page_id_counter = 0
 
     @property
     def is_available(self) -> bool:
@@ -94,7 +96,20 @@ class PlaywrightLifecycleMixin:
             self._current_frame = getattr(page, "main_frame", None)
         except Exception:
             self._current_frame = None
+        self._stable_page_handle(page)
         self._attach_page_close_handler(page)
+
+    def _stable_page_handle(self, page: Optional[PlaywrightPageType]) -> str:
+        if page is None:
+            return ""
+        key = id(page)
+        handle = self._page_ids.get(key)
+        if handle:
+            return handle
+        self._page_id_counter += 1
+        handle = f"pw-page-{self._page_id_counter}"
+        self._page_ids[key] = handle
+        return handle
 
     def _attach_page_close_handler(self, page: Optional[PlaywrightPageType]):
         if page is None or not hasattr(page, "on"):
@@ -109,6 +124,7 @@ class PlaywrightLifecycleMixin:
             return
         if self._root_page is closed_page:
             self._root_page = None
+        self._page_ids.pop(id(closed_page), None)
         if self._page is not closed_page:
             return
         self._page = self._pick_fallback_page()
@@ -409,6 +425,8 @@ class PlaywrightLifecycleMixin:
         self._is_initialized = False
         self._network_requests = []
         self._current_frame = None
+        self._page_ids = {}
+        self._page_id_counter = 0
 
     def is_alive(self) -> bool:
         """연결 상태 확인"""
@@ -493,10 +511,7 @@ class PlaywrightLifecycleMixin:
             url = str(page.url or "")
         except Exception:
             url = ""
-        pages = self._get_open_pages()
-        handle = ""
-        if page in pages:
-            handle = f"page-{pages.index(page) + 1}"
+        handle = self._stable_page_handle(page)
         root_page = self._root_page or page
         return {
             "handle": handle,

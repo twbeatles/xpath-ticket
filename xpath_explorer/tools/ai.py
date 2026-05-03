@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, cast
 
-from xpath_explorer.core.paths import resolve_storage_file
+from xpath_explorer.core.paths import atomic_write_json, resolve_storage_file
 from xpath_explorer.core.optional_imports import import_optional
 from xpath_explorer.tools.xpath_safety import xpath_literal
 
@@ -176,8 +176,7 @@ class XPathAIAssistant:
             )
 
         try:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(self._config, f, ensure_ascii=False, indent=2)
+            atomic_write_json(config_path, self._config)
             return AIConfigResult(
                 ok=True,
                 config_saved=True,

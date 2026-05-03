@@ -70,6 +70,25 @@ def test_configure_reports_saved_result_and_persists(monkeypatch, tmp_path):
     assert saved["openai_api_key"] == "sk-valid-test-key"
 
 
+def test_configure_uses_atomic_json_writer(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+    calls = []
+
+    def fake_atomic_write_json(path, payload):
+        calls.append((path, payload))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(ai_module, "atomic_write_json", fake_atomic_write_json)
+
+    assistant = XPathAIAssistant()
+    result = assistant.configure("sk-valid-test-key", provider="openai")
+
+    assert result.config_saved is True
+    assert calls
+    assert calls[0][0].name == "ai_config.json"
+
+
 def test_configure_reports_runtime_only_when_storage_unavailable(monkeypatch):
     monkeypatch.setattr(ai_module, "resolve_storage_file", lambda _filename: (None, "memory"))
 

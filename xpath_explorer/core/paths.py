@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 APP_STORAGE_DIRNAME = ".xpath_explorer"
 
@@ -44,3 +47,31 @@ def resolve_storage_file(filename: str) -> Tuple[Optional[Path], str]:
         return None, source
     return base_dir / filename, source
 
+
+def atomic_write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
+    """Write JSON without leaving a partially-written target behind."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    backup_path = target.with_suffix(f"{target.suffix}.bak")
+
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=indent)
+            f.flush()
+            os.fsync(f.fileno())
+
+        if target.exists():
+            try:
+                shutil.copy2(target, backup_path)
+            except Exception:
+                # The backup is best-effort; the atomic replace below still
+                # protects the existing target from partial writes.
+                pass
+        tmp_path.replace(target)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass

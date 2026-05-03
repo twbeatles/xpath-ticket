@@ -83,5 +83,6 @@ def test_playwright_scan_all_pages_includes_popup_frames():
     elements = manager.scan_elements("button", scope="all_pages_frames")
 
     assert [element.window_title for element in elements] == ["Root", "Popup"]
-    assert [element.window_handle for element in elements] == ["page-1", "page-2"]
+    assert [element.window_handle for element in elements] == ["pw-page-1", "pw-page-2"]
+    assert [element.source_engine for element in elements] == ["playwright", "playwright"]
 

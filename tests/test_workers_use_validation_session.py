@@ -86,6 +86,7 @@ def test_validate_worker_uses_single_validation_session():
     assert len(browser.validate_sessions) == 2
     assert browser.validate_sessions[0] is browser.validate_sessions[1]
     assert browser.preferred_frames == [None, "f1"]
+    assert browser.frame_switch_calls[-1] == "original-frame"
 
 
 def test_batch_worker_uses_single_validation_session():
@@ -157,10 +158,32 @@ def test_validate_worker_uses_item_window_metadata_and_reports_switch_failures()
     assert browser.switch_context_calls == [
         ("w2", "https://popup.example", "Popup"),
         ("missing", "https://missing.example", "Missing Popup"),
+        ("w1", "", ""),
     ]
     assert validated["popup_ok"]["found"] is True
     assert validated["popup_missing"]["found"] is False
     assert validated["popup_missing"]["window_handle"] == "missing"
     assert validated["popup_missing"]["window_title"] == "Missing Popup"
     assert validated["popup_missing"]["window_url"] == "https://missing.example"
+
+
+def test_validate_worker_ignores_playwright_pseudo_handle_for_selenium_switch():
+    _ensure_qt_app()
+    browser = _SessionBrowser()
+    items = [
+        XPathItem(
+            name="pw_scan",
+            xpath="//a",
+            category="common",
+            found_window="pw-page-2",
+            found_window_title="Popup",
+            found_window_url="https://popup.example",
+            source_engine="playwright",
+        )
+    ]
+    worker = ValidateWorker(browser, items, handles=["w1"])
+
+    worker.run()
+
+    assert browser.switch_context_calls[0] == ("", "https://popup.example", "Popup")
 

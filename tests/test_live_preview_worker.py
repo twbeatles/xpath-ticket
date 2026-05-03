@@ -14,10 +14,29 @@ class FakeBrowser:
             "//second": 2,
         }
         self.calls = []
+        self.current_frame_path = "original-frame"
+        self.window_context_calls = []
+        self.frame_switch_calls = []
+        self.last_error = ""
 
     def count_elements(self, xpath, frame_path=None):
         self.calls.append((xpath, frame_path))
         return self._counts.get(xpath, -1)
+
+    def get_current_window_metadata(self):
+        return {"handle": "root", "title": "Root", "url": "https://root.example"}
+
+    def switch_to_window_context(self, handle="", window_url="", title=""):
+        self.window_context_calls.append((handle, window_url, title))
+        if handle == "missing":
+            self.last_error = "target window missing"
+            return False
+        return True
+
+    def switch_to_frame_by_path(self, frame_path):
+        self.frame_switch_calls.append(frame_path)
+        self.current_frame_path = "" if frame_path == "main" else frame_path
+        return True
 
 
 def _ensure_qt_app():
@@ -70,3 +89,43 @@ def test_live_preview_worker_passes_frame_path():
     worker.run()
 
     assert browser.calls[-1] == ("//first", "frame://seat")
+
+
+def test_live_preview_worker_uses_window_context_and_restores_context():
+    _ensure_qt_app()
+    browser = FakeBrowser()
+
+    worker = LivePreviewWorker(
+        browser,
+        "//first",
+        404,
+        frame_path="frame://seat",
+        window_context={"handle": "popup", "title": "Popup", "url": "https://popup.example"},
+    )
+    worker.run()
+
+    assert browser.window_context_calls == [
+        ("popup", "https://popup.example", "Popup"),
+        ("root", "", ""),
+    ]
+    assert browser.frame_switch_calls[-1] == "original-frame"
+    assert browser.calls[-1] == ("//first", "frame://seat")
+
+
+def test_live_preview_worker_reports_negative_count_on_window_switch_failure():
+    _ensure_qt_app()
+    browser = FakeBrowser()
+    got = {}
+
+    worker = LivePreviewWorker(
+        browser,
+        "//first",
+        505,
+        window_context={"handle": "missing", "title": "Missing", "url": "https://missing.example"},
+    )
+    worker.counted.connect(lambda req_id, count: got.update(req_id=req_id, count=count))
+    worker.run()
+
+    assert got == {"req_id": 505, "count": -1}
+    assert browser.calls == []
+    assert browser.last_error == "target window missing"
