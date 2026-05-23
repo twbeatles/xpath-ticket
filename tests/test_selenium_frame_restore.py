@@ -145,3 +145,16 @@ def test_get_picker_result_restores_original_frame_and_sets_frame_path():
     assert bm.current_frame_path == "f1"
     assert bm.driver._frame_stack == ["f1"]
 
+
+def test_get_all_frames_restores_original_frame_context():
+    bm = BrowserManager()
+    bm.driver = FakeDriver()
+
+    assert bm.switch_to_frame_by_path("f1")
+
+    frames = bm.get_all_frames(force_refresh=True)
+
+    assert frames == [("f1", "f1")]
+    assert bm.current_frame_path == "f1"
+    assert bm.driver._frame_stack == ["f1"]
+

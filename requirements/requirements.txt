@@ -1,4 +1,4 @@
-PyQt6
-selenium
-undetected-chromedriver
-webdriver-manager
+PyQt6>=6.6,<7
+selenium>=4.18,<5
+undetected-chromedriver>=3.5,<4
+webdriver-manager>=4,<5

@@ -280,6 +280,7 @@ class BrowserWindowMixin:
 
             windows =[]
             current_handle =""
+            original_frame_path =self .current_frame_path
             try :
                 current_handle =self .driver .current_window_handle 
             except Exception as e :
@@ -319,6 +320,10 @@ class BrowserWindowMixin:
             if current_handle :
                 try :
                     self .driver .switch_to .window (current_handle )
+                    if original_frame_path :
+                        if not self .switch_to_frame_by_path (original_frame_path ):
+                            self .driver .switch_to .default_content ()
+                            self .current_frame_path =""
                 except Exception as e :
                     logger .debug (f"원래 윈도우 복귀 실패: {e }")
                     self ._recover_to_available_window (preferred_handle =current_handle )

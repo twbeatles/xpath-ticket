@@ -87,6 +87,7 @@ hiddenimports += _collect_optional_hiddenimports(
     'google.genai',
     'google.genai.types',
     'playwright',
+    'playwright.__main__',
     'playwright.sync_api',
     'playwright._impl',
     'pyee',

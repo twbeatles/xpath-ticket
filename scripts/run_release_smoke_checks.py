@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -121,7 +122,35 @@ def check_optional_imports() -> Dict[str, bool]:
     return results
 
 
-def run_checks(repo_root: Path, strict_optional_imports: bool = False) -> List[SmokeResult]:
+def run_pyinstaller_build_smoke(repo_root: Path, timeout_seconds: float = 900.0) -> SmokeResult:
+    spec_path = repo_root / "packaging" / "pyinstaller" / "xpath_explorer.spec"
+    cmd = [sys.executable, "-m", "PyInstaller", str(spec_path)]
+    try:
+        completed = subprocess.run(
+            cmd,
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return SmokeResult("pyinstaller_build", False, "PyInstaller build timed out.")
+    except Exception as e:
+        return SmokeResult("pyinstaller_build", False, f"PyInstaller build failed to start: {e}")
+
+    if completed.returncode == 0:
+        return SmokeResult("pyinstaller_build", True, "PyInstaller build completed.")
+    detail = (completed.stderr or completed.stdout or "").strip().splitlines()
+    tail = " | ".join(detail[-5:]) if detail else f"exit code {completed.returncode}"
+    return SmokeResult("pyinstaller_build", False, tail)
+
+
+def run_checks(
+    repo_root: Path,
+    strict_optional_imports: bool = False,
+    build_exe: bool = False,
+) -> List[SmokeResult]:
     results: List[SmokeResult] = []
 
     spec_path = repo_root / "packaging" / "pyinstaller" / "xpath_explorer.spec"
@@ -163,6 +192,9 @@ def run_checks(repo_root: Path, strict_optional_imports: bool = False) -> List[S
             detail = f"missing optional dependencies (non-fatal): {', '.join(missing)}"
         results.append(SmokeResult("optional_imports", True, detail))
 
+    if build_exe:
+        results.append(run_pyinstaller_build_smoke(repo_root))
+
     return results
 
 
@@ -173,10 +205,19 @@ def main(argv: List[str] | None = None) -> int:
         action="store_true",
         help="Treat optional dependency import misses as failures.",
     )
+    parser.add_argument(
+        "--build-exe",
+        action="store_true",
+        help="Run a real PyInstaller build smoke. This is slower and writes build/dist artifacts.",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
-    results = run_checks(repo_root, strict_optional_imports=args.strict_optional_imports)
+    results = run_checks(
+        repo_root,
+        strict_optional_imports=args.strict_optional_imports,
+        build_exe=args.build_exe,
+    )
 
     failed = [r for r in results if not r.success]
     for result in results:

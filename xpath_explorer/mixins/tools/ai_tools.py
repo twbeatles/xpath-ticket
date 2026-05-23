@@ -276,7 +276,7 @@ class ExplorerAIToolsMixin:
 
             if result.config_saved:
                 self._show_toast(
-                    f"{provider} 설정이 저장되었습니다. ({result.storage_source})",
+                    result.message or f"{provider} 설정이 저장되었습니다. ({result.storage_source})",
                     "success",
                 )
             else:

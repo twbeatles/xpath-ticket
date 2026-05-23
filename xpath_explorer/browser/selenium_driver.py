@@ -87,7 +87,7 @@ class BrowserDriverMixin:
         self .frame_cache_time =0 # 캐시 생성 시간
         self .FRAME_CACHE_DURATION =FRAME_CACHE_DURATION # 캐시 유효 시간
         self ._xpath_frame_hints :Dict [str ,Tuple [str ,float ]]={}
-        self ._lock =RLock ()#WebDriver 묎렐 곷젹(QThread 쎌웳 ⑹)
+        self ._lock =RLock ()# WebDriver 동시 접근 보호(QThread 경합 방지)
         self ._last_alive_error :str =""
         self .last_error :str =""
         self ._root_window_handle :str =""
@@ -185,9 +185,14 @@ class BrowserDriverMixin:
                     options .add_argument ('--start-maximized')
                     options .add_argument ('--disable-popup-blocking')
                     options .add_argument ('--lang=ko-KR')
-                    self .driver =uc .Chrome (options =options ,use_subprocess =True )
-                    logger .info ("Undetected Chrome 드라이버 생성 완료")
-                else :
+                    try :
+                        self .driver =uc .Chrome (options =options ,use_subprocess =True )
+                        logger .info ("Undetected Chrome 드라이버 생성 완료")
+                    except Exception as e :
+                        logger .warning (f"Undetected Chrome 드라이버 생성 실패, 표준 Chrome으로 폴백: {e }")
+                        self .driver =None
+
+                if self .driver is None :
                     options =Options ()
                     options .add_argument ('--start-maximized')
                     options .add_argument ('--disable-popup-blocking')

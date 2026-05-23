@@ -62,6 +62,9 @@
 - 2순위: 시스템 TEMP
 - 실패 시: in-memory only (예외 없이 동작)
 - AI 설정 저장은 `ok/config_saved/storage_source/message` 결과로 노출되며, 세션 전용 적용과 디스크 저장 성공을 구분합니다.
+- 새 AI 설정 저장 시 API 키는 기본적으로 평문 JSON에 쓰지 않고 `keyring` 안전 저장소를 우선 사용합니다.
+- `XPATH_EXPLORER_AI_KEY_STORAGE=session|env|keyring|plain`으로 키 저장 방식을 제어합니다.
+- AI HTML 컨텍스트는 민감 속성 값을 제거한 뒤 전송하며, `XPATH_EXPLORER_AI_ALLOW_PAGE_CONTEXT=0`으로 전송을 비활성화할 수 있습니다.
 - OpenAI 앱 기본 모델은 `gpt-5.4`, Gemini 기본 모델은 `gemini-flash-latest`입니다.
 
 4. DOM diff 안전성
@@ -97,15 +100,16 @@
 5. 릴리즈 사전 점검
 - `python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release`
 - 내부적으로 `scripts/run_release_smoke_checks.py`를 호출
+- 풀 기능 배포에서는 `--strict-optional-imports`를 추가해 optional dependency 누락을 실패로 처리합니다.
+- 실제 EXE 빌드까지 확인하려면 `--build-exe`를 추가합니다.
 - `pytest-cov`가 없으면 plain `pytest`로 자동 폴백합니다.
 - 커버리지를 강제로 끄려면 `python scripts/run_quality_checks.py --no-cov`
 
 6. CI 게이트 확인
 - 워크플로: `.github/workflows/quality.yml`
-- 순서: `check_encoding_health` -> `pyright`
+- 순서: `check_encoding_health` -> `check_docs_sync --strict-warnings` -> `pyright` -> `pytest -q`
 - 트리거: PR, `main`/`master` push
-- GitHub Actions에서는 `pytest`를 실행하지 않음
-- 테스트는 로컬/GUI 환경에서 별도 확인
+- headless-safe 회귀 테스트는 CI에서 실행하고, GUI/실브라우저 확인은 로컬에서 보완합니다.
 
 ## 배포 체크리스트
 - `packaging/pyinstaller/xpath_explorer.spec`에서 TLS 관련 exclude 회귀 확인
@@ -138,9 +142,22 @@
 ## 진단/내보내기
 - 도구 메뉴의 기능 진단 리포트는 Selenium/Playwright 상태, 현재 창/프레임, 저장 항목 문맥, 최근 검증 실패, telemetry 요약을 Markdown으로 저장합니다.
 - 배치/시나리오 결과 다이얼로그는 CSV/Markdown 저장을 지원합니다.
+- CSV export는 spreadsheet formula injection 방어를 적용합니다.
 - 설정 JSON은 `schema_version`을 선택적으로 저장하고, 로드 시 오래된/잘못된 선택 필드 타입을 정규화합니다.
 - 2026-05-03 이후 설정 JSON import는 중복 이름, 빈 이름, 빈 XPath를 거부합니다.
 - `XPathItem.source_engine`으로 Playwright 스캔 출처를 보존하며, Playwright page handle은 세션 내 안정적인 `pw-page-N` 형식을 사용합니다.
 - 설정/통계/AI 설정 저장은 `atomic_write_json()` 기반으로 부분 기록을 방지합니다.
-- CI pytest 추가는 보류하며, 회귀 테스트는 로컬 품질 절차에서 `pytest -q`로 확인합니다.
+- 2026-05-23 이후 CI에서도 headless-safe `pytest -q`를 실행합니다.
 - 임시 구현 리스크 점검 문서는 삭제하고 README/docs 운영 문서에 최종 정책만 유지합니다.
+
+## 2026-05-23 구현 리스크 반영
+- Playwright Chromium 설치 경로를 외부 CLI, 현재 Python 모듈, frozen `playwright.__main__` 순서로 보강했습니다.
+- 설치 워커 cancel event를 installer에 전달해 subprocess 취소를 지원합니다.
+- Selenium 창/프레임 스캔 후 원래 문맥을 복구합니다.
+- UC 드라이버 생성 실패 시 표준 Selenium Chrome 드라이버로 폴백합니다.
+- AI 키 저장은 기본적으로 keyring/session/env 기반이며, plain JSON 저장은 명시적 opt-in입니다.
+- AI HTML 컨텍스트는 민감 속성 값을 제거하고 환경변수로 전송을 끌 수 있습니다.
+- Selenium/Playwright codegen은 저장된 창/프레임 문맥을 생성 코드에 포함합니다.
+- CSV export formula injection 방어와 인코딩 모지바케 토큰 확장을 적용했습니다.
+- CI에 docs sync와 pytest를 추가하고, release smoke에 `--strict-optional-imports`, `--build-exe` 옵션을 추가했습니다.
+- 주요 requirements에 버전 범위를 명시했습니다.

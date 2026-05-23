@@ -269,6 +269,22 @@ def test_export_python_compile_failure_aborts_write(tmp_path, monkeypatch):
     assert any(toast_type == "error" for _, toast_type, _ in host.toasts)
 
 
+def test_export_csv_sanitizes_formula_prefixes(tmp_path, monkeypatch):
+    host = _DataHost([_item("=cmd", "+xpath")])
+    target = tmp_path / "export.csv"
+
+    monkeypatch.setattr(
+        "xpath_explorer.mixins.data_mixin.QFileDialog.getSaveFileName",
+        lambda *_args, **_kwargs: (str(target), ""),
+    )
+
+    host._export("csv")
+
+    content = target.read_text(encoding="utf-8")
+    assert "'=cmd" in content
+    assert "'+xpath" in content
+
+
 def test_load_xpath_history_data_normalizes_types():
     host = _DataHost([])
     host.settings = _FakeSettings(["bad", {"xpath": "//a"}, 3, {"xpath": "//b"}])

@@ -104,7 +104,8 @@ class CodeGenerator:
 
     def _generate_selenium(self, items: List, actions: Optional[List[ActionStep]] = None) -> str:
         """Selenium Python 코드 생성"""
-        xpath_name_map = self._build_xpath_name_map(items)
+        item_constants = self._build_item_constants(items)
+        xpath_name_map = self._build_xpath_name_map_from_constants(item_constants)
 
         code = '''# -*- coding: utf-8 -*-
 """
@@ -123,11 +124,17 @@ import time
 class XPathConstants:
     """XPath 상수 정의"""
 '''
-        for item in items:
-            safe_name = self._safe_var_name(getattr(item, "name", "unnamed"))
+        for item, safe_name in item_constants:
             xpath_literal = self._python_literal(getattr(item, "xpath", ""))
             comment = self._sanitize_comment(getattr(item, "description", ""))
             code += f"{self.indent}{safe_name} = {xpath_literal}  # {comment}\n"
+
+        code += "\n"
+        code += f"{self.indent}ITEM_CONTEXTS = {{\n"
+        for item, safe_name in item_constants:
+            context_literal = self._python_literal_dict(self._item_context(item))
+            code += f"{self.indent * 2}{self._python_literal(safe_name)}: {context_literal},\n"
+        code += f"{self.indent}}}\n"
 
         code += '''
 
@@ -138,26 +145,58 @@ class AutomationScript:
         self.driver = driver or webdriver.Chrome()
         self.wait = WebDriverWait(self.driver, 10)
 
-    def find_element(self, xpath: str, timeout: int = 10):
+    def _switch_window_context(self, context: dict):
+        title = context.get("window_title") or ""
+        url = context.get("window_url") or ""
+        if not title and not url:
+            return
+        original = self.driver.current_window_handle
+        for handle in self.driver.window_handles:
+            self.driver.switch_to.window(handle)
+            if (title and self.driver.title == title) or (url and self.driver.current_url == url):
+                return
+        self.driver.switch_to.window(original)
+
+    def _switch_frame_context(self, context: dict):
+        frame_path = context.get("frame_path") or ""
+        self.driver.switch_to.default_content()
+        if not frame_path or frame_path == "main":
+            return
+        for part in frame_path.split("/"):
+            if part.startswith("index="):
+                index = int(part.split("=", 1)[1])
+                frames = self.driver.find_elements(By.TAG_NAME, "iframe")
+                self.driver.switch_to.frame(frames[index])
+            else:
+                self.driver.switch_to.frame(part)
+
+    def _apply_context(self, context: dict | None):
+        if not context:
+            return
+        self._switch_window_context(context)
+        self._switch_frame_context(context)
+
+    def find_element(self, xpath: str, timeout: int = 10, context: dict | None = None):
         """요소 찾기 (대기 포함)"""
         try:
+            self._apply_context(context)
             return self.wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
         except TimeoutException:
             print("요소를 찾을 수 없습니다: %s" % xpath)
             return None
 
-    def click_element(self, xpath: str):
+    def click_element(self, xpath: str, context: dict | None = None):
         """요소 클릭"""
-        elem = self.find_element(xpath)
+        elem = self.find_element(xpath, context=context)
         if elem:
             elem.click()
             time.sleep(0.5)
             return True
         return False
 
-    def type_text(self, xpath: str, text: str):
+    def type_text(self, xpath: str, text: str, context: dict | None = None):
         """텍스트 입력"""
-        elem = self.find_element(xpath)
+        elem = self.find_element(xpath, context=context)
         if elem:
             elem.clear()
             elem.send_keys(text)
@@ -178,7 +217,8 @@ if __name__ == "__main__":
 
     def _generate_playwright(self, items: List, actions: Optional[List[ActionStep]] = None) -> str:
         """Playwright Python 코드 생성"""
-        xpath_name_map = self._build_xpath_name_map(items)
+        item_constants = self._build_item_constants(items)
+        xpath_name_map = self._build_xpath_name_map_from_constants(item_constants)
 
         code = '''# -*- coding: utf-8 -*-
 """
@@ -193,11 +233,17 @@ import time
 class XPathConstants:
     """XPath 상수 정의"""
 '''
-        for item in items:
-            safe_name = self._safe_var_name(getattr(item, "name", "unnamed"))
+        for item, safe_name in item_constants:
             xpath_literal = self._python_literal(getattr(item, "xpath", ""))
             comment = self._sanitize_comment(getattr(item, "description", ""))
             code += f"{self.indent}{safe_name} = {xpath_literal}  # {comment}\n"
+
+        code += "\n"
+        code += f"{self.indent}ITEM_CONTEXTS = {{\n"
+        for item, safe_name in item_constants:
+            context_literal = self._python_literal_dict(self._item_context(item))
+            code += f"{self.indent * 2}{self._python_literal(safe_name)}: {context_literal},\n"
+        code += f"{self.indent}}}\n"
 
         code += '''
 
@@ -223,19 +269,51 @@ class AutomationScript:
         if self.playwright:
             self.playwright.stop()
 
-    def click_element(self, xpath: str, timeout: int = 10000):
+    def _select_context(self, context: dict | None):
+        if not context:
+            return self.page
+        target = self.page
+        title = context.get("window_title") or ""
+        url = context.get("window_url") or ""
+        if title or url:
+            for candidate in self.page.context.pages:
+                if (title and candidate.title() == title) or (url and candidate.url == url):
+                    target = candidate
+                    break
+        frame_path = context.get("frame_path") or ""
+        if not frame_path or frame_path == "main":
+            return target
+        frame = target.main_frame
+        for part in frame_path.split("/"):
+            children = list(frame.child_frames)
+            if part.startswith("index="):
+                frame = children[int(part.split("=", 1)[1])]
+                continue
+            match = None
+            for child in children:
+                if child.name == part or part in child.url:
+                    match = child
+                    break
+            if match is None:
+                raise RuntimeError("프레임을 찾을 수 없습니다: %s" % part)
+            frame = match
+        return frame
+
+    def click_element(self, xpath: str, timeout: int = 10000, context: dict | None = None):
         """요소 클릭"""
         try:
-            self.page.locator(f"xpath={xpath}").click(timeout=timeout)
+            target = self._select_context(context)
+            target.locator(f"xpath={xpath}").click(timeout=timeout)
             return True
         except Exception as e:
             print("클릭 실패: %s" % e)
             return False
 
-    def fill_text(self, xpath: str, text: str):
+    def fill_text(self, xpath: str, text: str, context: dict | None = None):
         """텍스트 입력"""
         try:
-            self.page.locator(f"xpath={xpath}").fill(text)
+            target = self._select_context(context)
+            target.locator(f"xpath={xpath}").fill(text)
             return True
         except Exception as e:
             print("입력 실패: %s" % e)
@@ -332,14 +410,17 @@ if __name__ == "__main__":
 
             if action == "click":
                 lines.append(f"{self.indent * 2}# {comment}")
-                lines.append(f"{self.indent * 2}self.click_element({target_expr})")
+                context_expr = self._resolve_python_context_expr(step.xpath, xpath_name_map)
+                lines.append(f"{self.indent * 2}self.click_element({target_expr}, context={context_expr})")
             elif action == "type":
                 value_literal = self._python_literal(step.value)
                 lines.append(f"{self.indent * 2}# {comment}")
                 if for_playwright:
-                    lines.append(f"{self.indent * 2}self.fill_text({target_expr}, {value_literal})")
+                    context_expr = self._resolve_python_context_expr(step.xpath, xpath_name_map)
+                    lines.append(f"{self.indent * 2}self.fill_text({target_expr}, {value_literal}, context={context_expr})")
                 else:
-                    lines.append(f"{self.indent * 2}self.type_text({target_expr}, {value_literal})")
+                    context_expr = self._resolve_python_context_expr(step.xpath, xpath_name_map)
+                    lines.append(f"{self.indent * 2}self.type_text({target_expr}, {value_literal}, context={context_expr})")
             elif action == "wait":
                 lines.append(f"{self.indent * 2}# {comment}")
                 lines.append(f"{self.indent * 2}time.sleep({max(0.0, float(step.wait_time))})")
@@ -348,19 +429,47 @@ if __name__ == "__main__":
             return f"{self.indent * 2}# 여기에 자동화 로직을 작성하세요\n{self.indent * 2}pass\n"
         return "\n".join(lines) + "\n"
 
-    def _build_xpath_name_map(self, items: List) -> Dict[str, str]:
-        mapping: Dict[str, str] = {}
+    def _build_item_constants(self, items: List) -> List[tuple[object, str]]:
+        constants = []
+        used_names: Dict[str, int] = {}
         for item in items:
+            raw_safe_name = self._safe_var_name(getattr(item, "name", "unnamed"))
+            suffix = used_names.get(raw_safe_name, 0)
+            used_names[raw_safe_name] = suffix + 1
+            safe_name = raw_safe_name if suffix == 0 else f"{raw_safe_name}_{suffix + 1}"
+            constants.append((item, safe_name))
+        return constants
+
+    def _build_xpath_name_map_from_constants(self, item_constants: List[tuple[object, str]]) -> Dict[str, str]:
+        mapping: Dict[str, str] = {}
+        for item, safe_name in item_constants:
             xpath = getattr(item, "xpath", "")
             if xpath and xpath not in mapping:
-                mapping[xpath] = self._safe_var_name(getattr(item, "name", "unnamed"))
+                mapping[xpath] = safe_name
         return mapping
+
+    def _build_xpath_name_map(self, items: List) -> Dict[str, str]:
+        return self._build_xpath_name_map_from_constants(self._build_item_constants(items))
 
     def _resolve_python_xpath_expr(self, xpath: str, xpath_name_map: Dict[str, str]) -> str:
         const_name = xpath_name_map.get(xpath or "")
         if const_name:
             return f"XPathConstants.{const_name}"
         return self._python_literal(xpath or "")
+
+    def _resolve_python_context_expr(self, xpath: str, xpath_name_map: Dict[str, str]) -> str:
+        const_name = xpath_name_map.get(xpath or "")
+        if const_name:
+            return f"XPathConstants.ITEM_CONTEXTS.get({self._python_literal(const_name)})"
+        return "None"
+
+    def _item_context(self, item) -> Dict[str, str]:
+        return {
+            "frame_path": str(getattr(item, "found_frame", "") or ""),
+            "window_title": str(getattr(item, "found_window_title", "") or ""),
+            "window_url": str(getattr(item, "found_window_url", "") or ""),
+            "source_engine": str(getattr(item, "source_engine", "") or ""),
+        }
 
     def _timestamp(self) -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -370,6 +479,9 @@ if __name__ == "__main__":
 
     def _python_literal(self, value: str) -> str:
         return json.dumps(value or "", ensure_ascii=False)
+
+    def _python_literal_dict(self, value: Dict[str, str]) -> str:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
     def _safe_var_name(self, name: str) -> str:
         """안전한 변수명으로 변환"""

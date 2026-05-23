@@ -29,6 +29,7 @@ from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_l
 from xpath_explorer.core.config import XPathItem, SiteConfig
 from xpath_explorer.core.perf import perf_span
 from xpath_explorer.core.paths import atomic_write_json
+from xpath_explorer.tools.csv_safety import sanitize_csv_cell
 
 
 class ExplorerDataFilesMixin:
@@ -86,7 +87,14 @@ class ExplorerDataFilesMixin:
                     writer = csv.writer(f)
                     writer.writerow(['이름', 'XPath', '카테고리', '설명'])
                     for item in self.config.items:
-                        writer.writerow([item.name, item.xpath, item.category, item.description])
+                        writer.writerow(
+                            [
+                                sanitize_csv_cell(item.name),
+                                sanitize_csv_cell(item.xpath),
+                                sanitize_csv_cell(item.category),
+                                sanitize_csv_cell(item.description),
+                            ]
+                        )
             elif fmt == 'python':
                 content = '# Selenium XPaths\n\nclass XPaths:\n'
                 used_names: Dict[str, int] = {}

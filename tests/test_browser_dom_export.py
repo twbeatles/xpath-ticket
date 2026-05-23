@@ -163,3 +163,20 @@ def test_collect_dom_snapshots_current_scope_without_frames_limits_to_current_ma
     assert browser.driver.current_window_handle == "popup"
     assert browser.driver._frame_stack == ["popf"]
     assert browser.current_frame_path == "popf"
+
+
+def test_get_windows_restores_original_frame_context():
+    browser = BrowserManager()
+    browser.driver = _FakeDriver()
+    browser._root_window_handle = "main"
+
+    browser.driver.switch_to.window("popup")
+    browser.driver.switch_to.frame("popf")
+    browser.current_frame_path = "popf"
+
+    windows = browser.get_windows()
+
+    assert {window["handle"] for window in windows} == {"main", "popup"}
+    assert browser.driver.current_window_handle == "popup"
+    assert browser.driver._frame_stack == ["popf"]
+    assert browser.current_frame_path == "popf"

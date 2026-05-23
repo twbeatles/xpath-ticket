@@ -1,7 +1,7 @@
 import ast
 
 from xpath_explorer.tools.codegen import ActionStep, CodeGenerator, CodeTemplate
-from xpath_explorer.core.config import SiteConfig
+from xpath_explorer.core.config import SiteConfig, XPathItem
 
 
 def test_codegen_all_templates_generate_without_error():
@@ -42,3 +42,28 @@ def test_codegen_actions_use_xpath_mapping_and_safe_literals():
     ast.parse(code)
     assert "XPathConstants." in code
     assert "//input[@name=\\\"q\\\"]" in code
+
+
+def test_codegen_includes_window_and_frame_context_metadata():
+    item = XPathItem(
+        name="seat button",
+        xpath="//button[@id='seat']",
+        category="ticket",
+        found_frame="ifrmSeat/index=0",
+        found_window_title="예매 팝업",
+        found_window_url="https://ticket.example/popup",
+        source_engine="playwright",
+    )
+    generator = CodeGenerator()
+    actions = [ActionStep(action="click", xpath=item.xpath, description="좌석 클릭")]
+
+    selenium_code = generator.generate([item], CodeTemplate.SELENIUM_PYTHON, actions)
+    playwright_code = generator.generate([item], CodeTemplate.PLAYWRIGHT_PYTHON, actions)
+
+    ast.parse(selenium_code)
+    ast.parse(playwright_code)
+    assert "ITEM_CONTEXTS" in selenium_code
+    assert "ifrmSeat/index=0" in selenium_code
+    assert "예매 팝업" in selenium_code
+    assert "context=XPathConstants.ITEM_CONTEXTS.get" in selenium_code
+    assert "context=XPathConstants.ITEM_CONTEXTS.get" in playwright_code

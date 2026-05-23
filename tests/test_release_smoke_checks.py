@@ -73,6 +73,20 @@ def test_run_checks_strict_optional_imports_marks_missing_as_failure(monkeypatch
     assert "playwright" in optional.detail
 
 
+def test_run_checks_can_include_pyinstaller_build_smoke(monkeypatch):
+    module = _load_release_smoke_module()
+    root = Path(__file__).resolve().parent.parent
+
+    monkeypatch.setattr(module, "run_https_smoke", lambda *args, **kwargs: (True, "ok"))
+    monkeypatch.setattr(module, "run_dom_report_smoke", lambda: (True, "ok"))
+    monkeypatch.setattr(module, "check_optional_imports", lambda: {"openai": True, "google-genai": True, "playwright": True})
+    monkeypatch.setattr(module, "run_pyinstaller_build_smoke", lambda repo_root: module.SmokeResult("pyinstaller_build", True, str(repo_root)))
+
+    results = module.run_checks(root, build_exe=True)
+
+    assert any(result.name == "pyinstaller_build" and result.success for result in results)
+
+
 def test_run_dom_report_smoke_passes():
     module = _load_release_smoke_module()
     ok, detail = module.run_dom_report_smoke()

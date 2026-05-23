@@ -55,6 +55,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Run release smoke checks after docs/tests",
     )
     parser.add_argument(
+        "--strict-optional-imports",
+        action="store_true",
+        help="Treat optional dependency misses as release smoke failures.",
+    )
+    parser.add_argument(
+        "--build-exe",
+        action="store_true",
+        help="Forward --build-exe to release smoke checks.",
+    )
+    parser.add_argument(
         "--with-pyright",
         action="store_true",
         help="Run pyright type checks after docs/tests",
@@ -106,6 +116,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.smoke_release:
         smoke_cmd = [sys.executable, "scripts/run_release_smoke_checks.py"]
+        if args.strict_optional_imports:
+            smoke_cmd.append("--strict-optional-imports")
+        if args.build_exe:
+            smoke_cmd.append("--build-exe")
         code = _run(smoke_cmd, repo_root)
         if code != 0:
             return code

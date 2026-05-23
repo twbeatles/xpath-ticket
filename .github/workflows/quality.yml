@@ -28,5 +28,11 @@ jobs:
       - name: Encoding health
         run: python scripts/check_encoding_health.py
 
+      - name: Docs sync
+        run: python scripts/check_docs_sync.py --strict-warnings
+
       - name: Pyright
         run: python -m pyright -p .
+
+      - name: Tests
+        run: pytest -q

@@ -55,23 +55,69 @@ def test_google_api_key_is_respected_for_gemini(monkeypatch, tmp_path):
 
 def test_configure_reports_saved_result_and_persists(monkeypatch, tmp_path):
     _patch_home(monkeypatch, tmp_path)
+    monkeypatch.delenv(ai_module.AI_KEY_STORAGE_ENV, raising=False)
+    monkeypatch.setattr(ai_module, "import_optional", lambda _name: None)
 
     assistant = XPathAIAssistant()
     result = assistant.configure("sk-valid-test-key", provider="openai")
 
     assert result.ok is True
     assert result.config_saved is True
+    assert result.secret_saved is False
+    assert result.secret_storage == "session"
     assert result.storage_source == "home"
     assert assistant._model == ai_module.DEFAULT_OPENAI_MODEL
+    assert assistant._api_key == "sk-valid-test-key"
 
     saved = json.loads((tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8"))
     assert saved["provider"] == "openai"
     assert saved["model"] == ai_module.DEFAULT_OPENAI_MODEL
+    assert "openai_api_key" not in saved
+
+
+def test_configure_plain_key_storage_is_explicit_opt_in(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv(ai_module.AI_KEY_STORAGE_ENV, "plain")
+
+    assistant = XPathAIAssistant()
+    result = assistant.configure("sk-valid-test-key", provider="openai")
+
+    assert result.secret_saved is True
+    assert result.secret_storage == "plain-json"
+
+    saved = json.loads((tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8"))
     assert saved["openai_api_key"] == "sk-valid-test-key"
+
+
+def test_configure_uses_keyring_when_available(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+    saved_secrets = {}
+
+    class _Keyring:
+        @staticmethod
+        def get_password(_service, _key):
+            return None
+
+        @staticmethod
+        def set_password(service, key, value):
+            saved_secrets[(service, key)] = value
+
+    monkeypatch.setattr(ai_module, "import_optional", lambda name: _Keyring if name == "keyring" else None)
+
+    assistant = XPathAIAssistant()
+    result = assistant.configure("sk-valid-test-key", provider="openai")
+
+    assert result.secret_saved is True
+    assert result.secret_storage == "keyring"
+    assert saved_secrets[(ai_module.AI_KEYRING_SERVICE, "openai_api_key")] == "sk-valid-test-key"
+
+    saved = json.loads((tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8"))
+    assert "openai_api_key" not in saved
 
 
 def test_configure_uses_atomic_json_writer(monkeypatch, tmp_path):
     _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv(ai_module.AI_KEY_STORAGE_ENV, "session")
     calls = []
 
     def fake_atomic_write_json(path, payload):
@@ -90,6 +136,7 @@ def test_configure_uses_atomic_json_writer(monkeypatch, tmp_path):
 
 
 def test_configure_reports_runtime_only_when_storage_unavailable(monkeypatch):
+    monkeypatch.setenv(ai_module.AI_KEY_STORAGE_ENV, "session")
     monkeypatch.setattr(ai_module, "resolve_storage_file", lambda _filename: (None, "memory"))
 
     assistant = XPathAIAssistant()

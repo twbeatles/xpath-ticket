@@ -3,6 +3,7 @@
 
 import time
 import logging
+import inspect
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
 from xpath_explorer.qt_compat import QThread, pyqtSignal
@@ -52,7 +53,16 @@ class InstallChromiumWorker(QThread):
                 return
 
         try:
-            ok = bool(install_fn())
+            try:
+                parameters = inspect.signature(install_fn).parameters
+                accepts_cancel_event = len(parameters) > 0
+            except Exception:
+                accepts_cancel_event = False
+
+            if accepts_cancel_event:
+                ok = bool(install_fn(self._stop_event))
+            else:
+                ok = bool(install_fn())
             if self._stop_event.is_set():
                 self.completed.emit(False, "cancelled")
             elif ok:

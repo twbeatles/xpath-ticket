@@ -32,6 +32,44 @@ def test_quality_checks_smoke_release_runs_without_pytest_when_skip_tests(monkey
     assert calls[1][1] == "scripts/run_release_smoke_checks.py"
 
 
+def test_quality_checks_forwards_strict_optional_imports_to_smoke(monkeypatch):
+    module = _load_quality_module()
+    calls = []
+
+    def fake_run(cmd, cwd):
+        calls.append(cmd)
+        return 0
+
+    monkeypatch.setattr(module, "_run", fake_run)
+
+    code = module.main(["--skip-tests", "--smoke-release", "--strict-optional-imports"])
+    assert code == 0
+    assert calls[-1] == [
+        module.sys.executable,
+        "scripts/run_release_smoke_checks.py",
+        "--strict-optional-imports",
+    ]
+
+
+def test_quality_checks_forwards_build_exe_to_smoke(monkeypatch):
+    module = _load_quality_module()
+    calls = []
+
+    def fake_run(cmd, cwd):
+        calls.append(cmd)
+        return 0
+
+    monkeypatch.setattr(module, "_run", fake_run)
+
+    code = module.main(["--skip-tests", "--smoke-release", "--build-exe"])
+    assert code == 0
+    assert calls[-1] == [
+        module.sys.executable,
+        "scripts/run_release_smoke_checks.py",
+        "--build-exe",
+    ]
+
+
 def test_quality_checks_smoke_release_runs_after_pytest(monkeypatch):
     module = _load_quality_module()
     calls = []

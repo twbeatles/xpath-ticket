@@ -87,3 +87,16 @@ def test_check_file_detects_korean_mojibake_token(tmp_path):
     assert decode_error is None
     assert suspicious
     assert suspicious[0][0] == 1
+
+
+def test_check_file_detects_remaining_selenium_comment_mojibake(tmp_path):
+    module = _load_module()
+    target = tmp_path / "selenium_frames.py"
+    broken = "묎" + "렐" + " " + "곷" + "젹" + " " + "쎈" + "줈"
+    target.write_text(f"# {broken}\nx = 1\n", encoding="utf-8")
+
+    decode_error, suspicious = module.check_file(target)
+
+    assert decode_error is None
+    assert suspicious
+    assert suspicious[0][0] == 1

@@ -65,6 +65,8 @@
 ## 🤖 AI XPath 어시스턴트
 - **OpenAI & Gemini 연동**: 자연어로 XPath 자동 생성
 - **멀티 모델 지원**: 앱 기본 OpenAI 모델 `gpt-5.4`, Gemini Flash Latest 등
+- **키 저장 안전화**: 새 AI 설정 저장 시 기본적으로 API 키를 평문 JSON에 쓰지 않고 `keyring` 안전 저장소를 우선 사용합니다. `XPATH_EXPLORER_AI_KEY_STORAGE=plain`을 명시한 경우에만 평문 저장합니다.
+- **컨텍스트 최소화**: AI에 페이지 컨텍스트를 보낼 때 민감 속성 값을 제거하며, `XPATH_EXPLORER_AI_ALLOW_PAGE_CONTEXT=0`으로 HTML 컨텍스트 전송을 비활성화할 수 있습니다.
 
 ## 🔄 히스토리 & 안전 장치
 - **Undo/Redo**: 기본 50개 히스토리(`HISTORY_MAX_SIZE`, 조정 가능)
@@ -77,6 +79,7 @@
 - XPath 템플릿 라이브러리
 - 배치 시나리오 실행기
 - 배치/시나리오 결과 CSV/Markdown 저장
+- CSV export formula injection 방어
 - 팝업-aware 검증/하이라이트/스크린샷
 - 기능 진단 Markdown 리포트
 - 현재 창 DOM 추출/DOM 비교 리포트
@@ -252,6 +255,7 @@ pytest -q
 ```bash
 python scripts/run_quality_checks.py
 python scripts/run_quality_checks.py --with-pyright
+python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release --strict-optional-imports
 ```
 
 - `pytest`는 기본적으로 repo-local temp 경로(`.pytest_tmp/`)를 사용합니다.
@@ -262,21 +266,26 @@ python scripts/run_quality_checks.py --with-pyright
 
 ```bash
 python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
+# 풀 기능 배포에서 선택 의존성을 필수로 볼 때
+python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release --strict-optional-imports
+# 실제 PyInstaller 빌드까지 확인할 때(느리고 build/dist 산출물 생성)
+python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release --build-exe
 ```
 
 단독 스모크 실행:
 
 ```bash
 python scripts/run_release_smoke_checks.py
+python scripts/run_release_smoke_checks.py --strict-optional-imports
+python scripts/run_release_smoke_checks.py --build-exe
 ```
 
 ## CI 품질 게이트
 
 - 워크플로: `.github/workflows/quality.yml`
 - 실행 대상: PR, `main`/`master` push
-- 고정 순서: `check_encoding_health` -> `pyright`
-- GitHub Actions에서는 `pytest`를 실행하지 않습니다.
-- 테스트는 로컬 또는 필요 시 수동 실행으로 유지합니다.
+- 고정 순서: `check_encoding_health` -> `check_docs_sync --strict-warnings` -> `pyright` -> `pytest -q`
+- headless-safe 회귀 테스트는 GitHub Actions에서 실행합니다.
 ## 구현 점검 반영 (2026-03-27)
 
 - 2026-03-27 구현 점검의 실행 계획 항목을 코드에 반영했습니다.
@@ -335,8 +344,23 @@ python scripts/run_quality_checks.py --strict-doc-warnings
   - 설정/통계/AI 설정 저장을 atomic JSON write 방식으로 전환
   - Playwright page handle을 세션 내 안정적인 `pw-page-N` 형식으로 전환
   - 워커 계층의 Qt import를 `qt_compat` 경유로 정리하고 headless-safe import 테스트 추가
-  - CI pytest 추가는 보류하고 로컬 품질 절차(`pytest -q`, `pyright`, docs sync)를 유지
+  - 2026-05-23 이후 CI에서도 headless-safe `pytest -q`를 실행
   - 임시 점검 문서는 정리하고 README/docs 운영 문서에 최종 정책만 남김
+
+## 구현 점검 반영 (2026-05-23)
+
+- 2026-05-23 구현 리스크 점검 항목을 코드와 테스트에 반영했습니다.
+- 핵심 반영:
+  - Playwright Chromium 설치 경로를 CLI/current Python/frozen `playwright.__main__` 순서로 보강하고 설치 취소 시 subprocess를 종료하도록 개선
+  - Selenium `get_all_frames()`/`get_windows()`가 기존 창·프레임 문맥을 복구하도록 보강
+  - AI API 키는 기본적으로 평문 JSON 저장을 피하고 `keyring`/환경변수/세션 전용 모드를 지원
+  - AI 페이지 컨텍스트 전송 전 민감 속성 값 제거 및 전송 비활성화 환경변수 지원
+  - CSV export formula injection 방어 추가
+  - Selenium/Playwright codegen에 저장된 창/프레임 문맥 반영
+  - UC 드라이버 생성 실패 시 표준 Selenium 드라이버로 폴백
+  - 인코딩 게이트의 한글 모지바케 탐지 토큰 확장 및 남은 깨진 주석 복구
+  - CI에 docs sync와 pytest 추가, release smoke에 `--strict-optional-imports`/`--build-exe` 옵션 추가
+  - requirements 범위를 주요 런타임/개발 의존성에 명시
 
 ## 배포 스펙 점검 메모
 

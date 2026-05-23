@@ -11,6 +11,8 @@ import asyncio
 import random
 import json
 import re
+import runpy
+import shutil
 import subprocess
 import sys
 from typing import List, Dict, Optional, Any, Callable, Union, TypeAlias, Literal, Sequence, cast
@@ -227,28 +229,102 @@ class PlaywrightLifecycleMixin:
         return random.choice(USER_AGENTS)
 
     @staticmethod
-    def install_chromium() -> bool:
+    def _run_playwright_subprocess(
+        cmd: Sequence[str],
+        *,
+        cancel_event: Optional[Any] = None,
+        timeout_seconds: float = 600.0,
+    ) -> bool:
+        try:
+            process = subprocess.Popen(
+                list(cmd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except Exception as e:
+            logger.error(f"Chromium 설치 프로세스 시작 실패: {e}")
+            return False
+
+        try:
+            while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except Exception:
+                        process.kill()
+                    logger.warning("Chromium 설치가 취소되었습니다.")
+                    return False
+
+                try:
+                    stdout, stderr = process.communicate(timeout=0.25)
+                    if process.returncode == 0:
+                        return True
+                    detail = (stderr or stdout or "").strip()
+                    logger.error(f"Chromium 설치 실패: {detail}")
+                    return False
+                except subprocess.TimeoutExpired:
+                    timeout_seconds -= 0.25
+                    if timeout_seconds <= 0:
+                        process.kill()
+                        logger.error("Chromium 설치 시간이 초과되었습니다.")
+                        return False
+        finally:
+            if process.poll() is None:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _run_playwright_main_install() -> bool:
+        old_argv = sys.argv[:]
+        sys.argv = ["playwright", "install", "chromium"]
+        try:
+            runpy.run_module("playwright.__main__", run_name="__main__", alter_sys=True)
+            return True
+        except SystemExit as e:
+            return e.code in (0, None)
+        except Exception as e:
+            logger.debug(f"playwright.__main__ 설치 경로 실패: {e}")
+            return False
+        finally:
+            sys.argv = old_argv
+
+    @staticmethod
+    def install_chromium(cancel_event: Optional[Any] = None) -> bool:
         """
         Playwright Chromium 브라우저 설치를 시도합니다.
 
         EXE 배포 환경에서도 사용자가 별도 명령을 치지 않아도 되도록,
-        가능한 경우 playwright.__main__ 엔트리포인트를 호출하고,
-        실패하면 subprocess로 폴백합니다.
+        가능한 경우 외부 CLI/현재 Python 모듈/번들된 playwright.__main__ 순서로
+        설치 경로를 시도합니다.
         """
-        try:
-            completed = subprocess.run(
-                [sys.executable, "-m", "playwright", "install", "chromium"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if completed.returncode == 0:
+        if cancel_event is not None and cancel_event.is_set():
+            logger.warning("Chromium 설치가 시작 전에 취소되었습니다.")
+            return False
+
+        cli = shutil.which("playwright")
+        if cli:
+            if PlaywrightLifecycleMixin._run_playwright_subprocess(
+                [cli, "install", "chromium"],
+                cancel_event=cancel_event,
+            ):
                 return True
-            logger.error(f"Chromium 설치 실패: {completed.stderr.strip() or completed.stdout.strip()}")
+
+        if not getattr(sys, "frozen", False):
+            if PlaywrightLifecycleMixin._run_playwright_subprocess(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                cancel_event=cancel_event,
+            ):
+                return True
+
+        if cancel_event is not None and cancel_event.is_set():
+            logger.warning("Chromium 설치가 취소되었습니다.")
             return False
-        except Exception as e:
-            logger.error(f"Chromium 설치 실패(예외): {e}")
-            return False
+
+        return PlaywrightLifecycleMixin._run_playwright_main_install()
 
     def launch(self, headless: bool = False, stealth: bool = True) -> bool:
         """

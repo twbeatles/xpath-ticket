@@ -64,6 +64,7 @@ xpath_explorer/
 ├─ tools/
 │  ├─ ai.py
 │  ├─ codegen.py
+│  ├─ csv_safety.py
 │  ├─ optimizer.py
 │  └─ xpath_safety.py
 ├─ analysis/
@@ -94,6 +95,7 @@ xpath_explorer/
 - `workers/background.py`: 워커 re-export surface
 - `workers/*_worker.py`, `worker_shared.py`: Validate/Batch/Scenario/AI/QThread 워커 세부 구현
 - `tools/xpath_safety.py`: XPath literal/attribute/text predicate 생성 공통 helper
+- `tools/csv_safety.py`: CSV formula injection 방어 helper
 - `mixins/tools/inspection_tools.py`: 기능 진단 Markdown 리포트와 운영 점검 UI
 - `mixins/tools/batch_tools.py`: 배치/시나리오 결과 다이얼로그와 CSV/Markdown export
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
@@ -116,6 +118,7 @@ pytest -q
 - `xpath_explorer.tools.xpath_safety`는 동적/간접 import 누락 방지를 위해 hidden import에 명시합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 설치된 경우에만 hidden import로 포함하며, 릴리즈 스모크에서 import 상태를 점검합니다.
+- `playwright.__main__`은 frozen 환경의 Chromium 설치 fallback을 위해 optional hidden import에 포함합니다.
 - spec 주석의 품질 점검 명령도 `python -m pyright -p .` 기준으로 유지합니다.
 
 ### Qt 테스트 정책
@@ -149,7 +152,9 @@ pytest -q
 - `archive/`는 보관 영역이며 정적 분석/기본 점검 대상에서 제외됩니다.
 - 문서와 코드가 어긋나면 `scripts/check_docs_sync.py`를 우선 기준으로 수정합니다.
 - 릴리즈 전에는 `scripts/run_quality_checks.py --strict-doc-warnings --smoke-release` 실행을 권장합니다.
+- 풀 기능 배포에서는 `--strict-optional-imports`, 실제 EXE 빌드 확인에는 `--build-exe`를 추가합니다.
 - 배치/시나리오 워커는 기본적으로 원래 창/프레임 문맥을 복구하며, `leave_context: true` 시에만 마지막 문맥을 유지합니다.
 - Playwright scan은 현재 프레임, 현재 창 전체 프레임, 모든 팝업/프레임 범위를 지원하고 scan 결과의 창/프레임 출처를 저장합니다.
 - 2026-05-03 이후 `XPathItem.source_engine`으로 Playwright 스캔 출처를 저장하고, Playwright page 문맥은 세션 내 안정적인 `pw-page-N` 형식을 사용합니다.
+- 2026-05-23 이후 Selenium 창/프레임 스캔은 기존 문맥을 복구하고, codegen/export/AI 저장 보안/CI 게이트 보강 정책을 반영합니다.
 - 임시 구현 리스크 점검 문서는 삭제하고 README/docs 운영 문서에 최종 반영 내용만 유지합니다.

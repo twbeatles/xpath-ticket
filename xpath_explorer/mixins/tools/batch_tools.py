@@ -61,6 +61,7 @@ from xpath_explorer.workers.background import (
 )
 from xpath_explorer.core.perf import perf_span, log_perf_summary
 from xpath_explorer.tools.codegen import CodeTemplate, XPathTemplate
+from xpath_explorer.tools.csv_safety import sanitize_csv_cell
 from xpath_explorer.browser.dom_export import (
     render_dom_report_htm,
     render_dom_diff_report_htm,
@@ -450,10 +451,10 @@ class ExplorerBatchToolsMixin:
         ]
 
     @classmethod
-    def _batch_export_row(cls, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _batch_export_row(cls, row: Dict[str, Any], *, sanitize_for_csv: bool = False) -> Dict[str, Any]:
         name = str(row.get("name", row.get("item_name", "")) or "")
         item_name = str(row.get("item_name", "") or "")
-        return {
+        normalized = {
             "status": "success" if bool(row.get("success")) else "failure",
             "step": row.get("step", ""),
             "name": name or item_name,
@@ -474,6 +475,9 @@ class ExplorerBatchToolsMixin:
             "max_attempts": row.get("max_attempts", ""),
             "retry_count": row.get("retry_count", ""),
         }
+        if sanitize_for_csv:
+            return {key: sanitize_csv_cell(value) for key, value in normalized.items()}
+        return normalized
 
     @classmethod
     def _batch_results_to_csv(cls, results: List[Dict[str, Any]]) -> str:
@@ -482,7 +486,7 @@ class ExplorerBatchToolsMixin:
         writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         for row in results:
-            writer.writerow(cls._batch_export_row(row))
+            writer.writerow(cls._batch_export_row(row, sanitize_for_csv=True))
         return output.getvalue()
 
     @staticmethod

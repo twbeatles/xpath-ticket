@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, cast
 
@@ -21,6 +22,16 @@ logger = logging.getLogger("XPathExplorer")
 DEFAULT_OPENAI_MODEL = "gpt-5.4"
 DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
 SUPPORTED_PROVIDERS = {"openai", "gemini"}
+AI_KEY_STORAGE_ENV = "XPATH_EXPLORER_AI_KEY_STORAGE"
+AI_ALLOW_PAGE_CONTEXT_ENV = "XPATH_EXPLORER_AI_ALLOW_PAGE_CONTEXT"
+AI_KEYRING_SERVICE = "XPathExplorer"
+SENSITIVE_CONTEXT_RE = re.compile(
+    r"""(?ix)
+    \b(value|password|passwd|token|api[-_]?key|authorization|cookie|session|secret)
+    \s*=\s*
+    (["']).*?\2
+    """
+)
 
 
 @dataclass
@@ -41,6 +52,8 @@ class AIConfigResult:
     config_saved: bool
     storage_source: str
     message: str
+    secret_saved: bool = False
+    secret_storage: str = "session"
 
 
 class XPathAIAssistant:
@@ -65,7 +78,64 @@ class XPathAIAssistant:
             default=self._default_model_for_provider(self._provider),
         )
 
-        self._api_key = api_key or self._config.get(f"{self._provider}_api_key")
+        self._api_key = api_key or self._config.get(self._api_key_field(self._provider))
+
+    @staticmethod
+    def _api_key_field(provider: str) -> str:
+        return f"{provider}_api_key"
+
+    @staticmethod
+    def _key_storage_mode() -> str:
+        mode = os.environ.get(AI_KEY_STORAGE_ENV, "keyring").strip().lower()
+        if mode in {"keyring", "plain", "env", "session"}:
+            return mode
+        return "keyring"
+
+    @staticmethod
+    def _page_context_allowed() -> bool:
+        value = os.environ.get(AI_ALLOW_PAGE_CONTEXT_ENV, "1").strip().lower()
+        return value not in {"0", "false", "no", "off"}
+
+    @staticmethod
+    def _load_api_key_from_keyring(provider: str) -> Optional[str]:
+        keyring_module = import_optional("keyring")
+        if keyring_module is None:
+            return None
+        try:
+            value = keyring_module.get_password(AI_KEYRING_SERVICE, XPathAIAssistant._api_key_field(provider))
+        except Exception as e:
+            logger.debug("AI keyring load failed for %s: %s", provider, e)
+            return None
+        return value if isinstance(value, str) and value else None
+
+    @staticmethod
+    def _save_api_key_to_keyring(provider: str, api_key: str) -> bool:
+        if not api_key:
+            return False
+        keyring_module = import_optional("keyring")
+        if keyring_module is None:
+            return False
+        try:
+            keyring_module.set_password(AI_KEYRING_SERVICE, XPathAIAssistant._api_key_field(provider), api_key)
+            return True
+        except Exception as e:
+            logger.warning("AI keyring save failed for %s: %s", provider, e)
+            return False
+
+    @staticmethod
+    def _without_plain_api_keys(config: Dict[str, Any]) -> Dict[str, Any]:
+        sanitized = dict(config)
+        for provider in SUPPORTED_PROVIDERS:
+            sanitized.pop(XPathAIAssistant._api_key_field(provider), None)
+        return sanitized
+
+    @staticmethod
+    def _sanitize_external_context(text: str, *, max_chars: int) -> str:
+        if not text:
+            return ""
+        normalized = str(text).replace("\x00", "")
+        redacted = SENSITIVE_CONTEXT_RE.sub(lambda m: f'{m.group(1)}="[REDACTED]"', normalized)
+        return redacted[:max(0, int(max_chars))]
 
     @staticmethod
     def _default_model_for_provider(provider: str) -> str:
@@ -92,6 +162,13 @@ class XPathAIAssistant:
                     config.update(file_config)
             except Exception as e:
                 logger.warning("AI config load failed from %s storage: %s", source, e)
+
+        for provider in SUPPORTED_PROVIDERS:
+            key_field = self._api_key_field(provider)
+            if not config.get(key_field):
+                keyring_key = self._load_api_key_from_keyring(provider)
+                if keyring_key:
+                    config[key_field] = keyring_key
 
         return config
 
@@ -148,20 +225,44 @@ class XPathAIAssistant:
 
         self._config["provider"] = provider
         self._config["model"] = self._model
-        self._config[f"{provider}_api_key"] = api_key
+        self._config[self._api_key_field(provider)] = api_key
 
         return self._save_config()
 
     def _save_config(self) -> AIConfigResult:
         config_path, source = resolve_storage_file("ai_config.json")
+        mode = self._key_storage_mode()
+        api_key = self._coerce_text(self._api_key or self._config.get(self._api_key_field(self._provider), ""))
+        secret_saved = False
+        secret_storage = "session"
+
+        if mode == "plain":
+            persisted_config = dict(self._config)
+            secret_saved = bool(api_key)
+            secret_storage = "plain-json"
+        else:
+            persisted_config = self._without_plain_api_keys(self._config)
+            if mode == "env":
+                secret_storage = "env"
+            elif mode == "session":
+                secret_storage = "session"
+            else:
+                secret_saved = self._save_api_key_to_keyring(self._provider, api_key)
+                secret_storage = "keyring" if secret_saved else "session"
+
         if config_path is None:
-            message = "설정은 적용되었지만 저장 가능한 경로가 없어 현재 세션에만 유지됩니다."
+            if secret_saved:
+                message = "API 키는 안전 저장소에 저장되었지만 설정 파일 저장 경로가 없어 나머지 설정은 현재 세션에만 유지됩니다."
+            else:
+                message = "설정은 적용되었지만 저장 가능한 경로가 없어 현재 세션에만 유지됩니다."
             logger.warning("AI config save skipped: no writable storage path.")
             return AIConfigResult(
                 ok=True,
                 config_saved=False,
                 storage_source=source,
                 message=message,
+                secret_saved=secret_saved,
+                secret_storage=secret_storage,
             )
 
         try:
@@ -173,15 +274,25 @@ class XPathAIAssistant:
                 config_saved=False,
                 storage_source=source,
                 message="설정은 적용되었지만 저장 디렉터리를 준비하지 못해 현재 세션에만 유지됩니다.",
+                secret_saved=secret_saved,
+                secret_storage=secret_storage,
             )
 
         try:
-            atomic_write_json(config_path, self._config)
+            atomic_write_json(config_path, persisted_config)
+            if secret_saved:
+                message = f"설정이 {source} 저장소에 저장되었고 API 키는 {secret_storage}에 저장되었습니다."
+            elif mode == "plain":
+                message = f"설정이 {source} 저장소에 저장되었습니다. API 키가 평문 JSON에 저장됩니다."
+            else:
+                message = f"설정이 {source} 저장소에 저장되었습니다. API 키는 현재 세션에만 유지됩니다."
             return AIConfigResult(
                 ok=True,
                 config_saved=True,
                 storage_source=source,
-                message=f"설정이 {source} 저장소에 저장되었습니다.",
+                message=message,
+                secret_saved=secret_saved,
+                secret_storage=secret_storage,
             )
         except Exception as e:
             logger.warning("AI config save failed (%s): %s", source, e)
@@ -190,6 +301,8 @@ class XPathAIAssistant:
                 config_saved=False,
                 storage_source=source,
                 message="설정은 적용되었지만 디스크 저장에 실패해 현재 세션에만 유지됩니다.",
+                secret_saved=secret_saved,
+                secret_storage=secret_storage,
             )
 
     def is_available(self) -> bool:
@@ -359,7 +472,11 @@ XPath 생성 시 고려사항:
         user_prompt = f"다음 요소에 대한 XPath를 생성해주세요: {description}"
 
         if page_context:
-            user_prompt += f"\n\n페이지 컨텍스트:\n{page_context[:2000]}"
+            if self._page_context_allowed():
+                safe_context = self._sanitize_external_context(page_context, max_chars=2000)
+                user_prompt += f"\n\n페이지 컨텍스트(민감 속성 값은 제거됨):\n{safe_context}"
+            else:
+                user_prompt += "\n\n페이지 컨텍스트: 전송 비활성화됨"
 
         if existing_xpaths:
             user_prompt += "\n\n이미 존재하는 XPath (중복 방지):\n" + "\n".join(existing_xpaths[:10])
@@ -510,11 +627,16 @@ XPath 생성 시 고려사항:
     ]
 }"""
 
+        if self._page_context_allowed():
+            safe_html = self._sanitize_external_context(page_html, max_chars=8000)
+        else:
+            safe_html = ""
+
         user_prompt = f"""다음 HTML에서 {', '.join(target_types)} 요소들을 분석해주세요.
 중요한 상호작용 요소만 추출하고, 각각에 대해 안정적인 XPath를 생성해주세요.
 
 HTML:
-{page_html[:8000]}"""
+{safe_html}"""
 
         try:
             if self._provider == "gemini":

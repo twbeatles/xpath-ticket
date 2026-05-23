@@ -91,6 +91,7 @@ class BrowserFrameMixin:
 
             frames_list =[]
             original_handle =self .driver .current_window_handle 
+            original_frame_path =self .current_frame_path
 
             try :
             # 메인 컨텍스트에서 스캔 시작
@@ -107,11 +108,16 @@ class BrowserFrameMixin:
                 self .frame_cache =[]
                 self .frame_cache_time =0 
             finally :
-            # 복구
+            # 원래 창/프레임 컨텍스트로 복구
                 try :
                     self .driver .switch_to .window (original_handle )
-                    self .driver .switch_to .default_content ()
-                    self .current_frame_path =""# 프레임 경로 초기화
+                    if original_frame_path :
+                        if not self .switch_to_frame_by_path (original_frame_path ):
+                            self .driver .switch_to .default_content ()
+                            self .current_frame_path =""
+                    else :
+                        self .driver .switch_to .default_content ()
+                        self .current_frame_path =""
                 except Exception as e :
                     logger .debug (f"프레임 복구 중 오류: {e }")
                     # 복구 실패 시 캐시와 프레임 경로 초기화
@@ -140,17 +146,17 @@ class BrowserFrameMixin:
 
                 identifier =frame_id if frame_id else (frame_name if frame_name else f"index={i }")
 
-                #쎈줈 ъ꽦
+                # 경로 구성
                 current_path =f"{parent_path }/{identifier }"if parent_path else identifier 
 
-                #곌낵붽
+                # 결과 추가
                 results_list .append ((current_path ,identifier ))
 
                 # 해당 프레임으로 전환하여 하위 프레임 스캔
                 self .driver .switch_to .frame (frame )
                 self ._scan_frames (results_list ,current_path ,depth +1 ,max_depth )
 
-                #곸쐞듦
+                # 상위 프레임으로 복귀
                 self .driver .switch_to .parent_frame ()
 
             except StaleElementReferenceException :
@@ -185,7 +191,7 @@ class BrowserFrameMixin:
 
                 for part in parts :
                     found =False 
-                    #1. ID/Name얘린
+                    # 1. ID/Name 전환
                     try :
                         self .driver .switch_to .frame (part )
                         found =True 
@@ -193,7 +199,7 @@ class BrowserFrameMixin:
                     except (NoSuchFrameException ,Exception ):
                         pass # ID/Name 전환 실패, 다음 방법 시도
 
-                        #2. WebElement얘린 (index=N 뺤떇 섎━)
+                        # 2. WebElement 전환 (index=N 형식 처리)
                     if part .startswith ("index="):
                         idx =int (part .split ("=")[1 ])
                         frames =self .driver .find_elements (By .TAG_NAME ,"iframe")
@@ -205,7 +211,7 @@ class BrowserFrameMixin:
                     if not found :
                         raise Exception (f"프레임을 찾을 수 없음: {part }")
 
-                        #깃났 쒖뿉곹깭 낅뜲댄듃
+                        # 최종 프레임 상태 업데이트
                 self .current_frame_path =frame_path 
                 return True 
 
