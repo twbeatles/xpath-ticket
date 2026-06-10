@@ -1,4 +1,4 @@
-﻿# Gemini 운영 가이드 (XPath Explorer)
+# Gemini 운영 가이드 (XPath Explorer)
 
 ## 목적
 이 문서는 Gemini 기반 보조 자동화를 포함한 XPath Explorer 운영·유지보수 기준을 정의합니다.
@@ -6,18 +6,21 @@
 
 ## 아키텍처 요약
 - 패키지 진입점: `xpath_explorer/__main__.py`
-- 메인 조립: `xpath_explorer/main_window.py`
+- 메인 조립 facade: `xpath_explorer/main_window.py`
+- 메인 조립 구현: `xpath_explorer/app/main_window.py`
 - Qt 호환 계층: `xpath_explorer/qt_compat.py`
 - Selenium facade: `xpath_explorer/browser/browser.py`
-- Selenium internals: `xpath_explorer/browser/selenium_*.py`
+- Selenium internals: `xpath_explorer/browser/selenium_*.py`, `xpath_explorer/browser/selenium_validation_parts/`
 - Playwright facade: `xpath_explorer/browser/playwright.py`
-- Playwright internals: `xpath_explorer/browser/playwright_*.py`
+- Playwright internals: `xpath_explorer/browser/playwright_*.py`, `xpath_explorer/browser/playwright_parts/`
 - 워커 facade: `xpath_explorer/workers/background.py`
 - 워커 internals: `xpath_explorer/workers/*_worker.py`
 - mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `browser_mixin.py`, `data_mixin.py`, `tools_mixin.py`
-- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`, `tools/batch/`, `tools/inspection/`
 - split mixin contracts/seams: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
-- AI 제안: `xpath_explorer/tools/ai.py`
+- AI facade: `xpath_explorer/tools/ai.py`
+- AI internals: `xpath_explorer/ai/`
+- UI internals: `xpath_explorer/ui/components/`, `xpath_explorer/ui/theme/`
 - 통계 기록: `xpath_explorer/analysis/statistics.py`
 - 경로 폴백 유틸: `xpath_explorer/core/paths.py`
 
@@ -26,10 +29,12 @@
 - `selenium_*.py`: 윈도우/프레임 복구, XPath 검증, 세션 캐시(힌트/미스)
 - `background.py`: 워커 facade
 - `*_worker.py`: Validate/Batch/Scenario 워커 및 취소 처리
-- `ai.py`: OpenAI·Gemini provider 선택, 설정 로드/저장
+- `tools/ai.py`: AI 호환 facade
+- `ai/`: OpenAI·Gemini provider 선택, 설정 로드/저장, fallback/model helper
 - `statistics.py`: 비동기 flush 기반 테스트 통계 누적
 - `tools_mixin.py`: facade
-- `mixins/tools/`: DOM export/diff, 배치 리포트, 히스토리 UI 연계 세부 구현
+- `mixins/tools/`: DOM export/diff, 배치 리포트, 히스토리 UI 연계 facade
+- `mixins/tools/batch/`, `mixins/tools/inspection/`: 배치 runner/report와 진단/통계/DOM diff 세부 구현
 - `mixins/contracts.py`, `mixins/*/deps.py`: split mixin 타입 계약 및 patch seam
 
 ## 팝업/DOM 운영 포인트
@@ -112,6 +117,7 @@
 - 엔트리포인트 후보(`xpath 조사기(모든 티켓 사이트).py`, `xpath_explorer/__main__.py`) 유지 확인
 - `collect_submodules("xpath_explorer")` 기반 수집 확인
 - `xpath_explorer.qt_compat` hidden import 포함 확인
+- split internals(`app/`, `ai/`, `ui/components/`, `ui/theme/`, `core/browser_assets/`, `browser/playwright_parts/`, `browser/selenium_validation_parts/`, `mixins/tools/batch/`, `mixins/tools/inspection/`) 명시 hidden import와 `collect_submodules` 수집 확인
 - `openai`/`google.genai`/`playwright` optional hidden import는 설치된 환경에서만 포함되는지 확인
 - HTTPS smoke 성공 확인
 - DOM report/diff 렌더 smoke 성공 확인

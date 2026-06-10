@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compatibility facade for the application stylesheet."""
+"""UI theme assets."""
 
 from xpath_explorer.ui.theme.style_sheet import STYLE
 

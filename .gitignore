@@ -49,6 +49,7 @@ batch_results_*.csv
 batch_results_*.md
 
 # Project-specific local folders
+.codegraph/
 backup/
 backups/
 

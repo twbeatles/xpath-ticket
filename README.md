@@ -1,4 +1,4 @@
-﻿# 🔍 XPath Explorer v4.2
+# 🔍 XPath Explorer v4.2
 
 티켓 사이트 및 웹 자동화를 위한 강력한 XPath 요소 탐색, 분석, 관리 도구
 
@@ -137,17 +137,19 @@ pyinstaller packaging/pyinstaller/xpath_explorer.spec
 |------|------|
 | `xpath 조사기(모든 티켓 사이트).py` | 레거시 진입점 래퍼 |
 | `xpath_explorer/__main__.py` | 패키지 진입점 (`python -m xpath_explorer`) |
-| `xpath_explorer/main_window.py` | 메인 윈도우 조합 |
+| `xpath_explorer/main_window.py` | 메인 윈도우 호환 facade |
+| `xpath_explorer/app/` | 실제 앱 조립, Qt bootstrap, `XPathExplorer` 구현 |
 | `xpath_explorer/qt_compat.py` | headless/CI용 Qt 호환 계층 |
 | `xpath_explorer/mixins/` | facade mixin + split partial mixin 패키지 |
 | `xpath_explorer/mixins/contracts.py` | split mixin 호스트 Protocol 정의 |
-| `xpath_explorer/core/` | facade 상수 + 분리된 constants 모듈, 설정 모델, 성능 로깅 |
+| `xpath_explorer/core/` | facade 상수 + constants/asset 모듈, 설정 모델, 성능 로깅 |
 | `xpath_explorer/browser/` | facade 브라우저 매니저 + split Selenium/Playwright 구현, DOM Export |
 | `xpath_explorer/workers/` | facade 워커 + 개별 QThread 워커 구현 |
-| `xpath_explorer/tools/` | AI, 코드 생성, XPath 최적화 |
+| `xpath_explorer/ai/` | AI assistant 내부 구현, 모델, provider/config helper |
+| `xpath_explorer/tools/` | AI facade, 코드 생성, XPath 최적화 |
 | `xpath_explorer/analysis/` | Diff 분석, 검증 통계 |
 | `xpath_explorer/state/` | Undo/Redo 히스토리 상태 |
-| `xpath_explorer/ui/` | 스타일, 위젯, 테이블 모델/프록시 |
+| `xpath_explorer/ui/` | 스타일/widget facade, 컴포넌트, 테이블 모델/프록시 |
 | `docs/` | 운영/분석 문서 (`claude.md`, `gemini.md`, 구조 분석) |
 | `requirements/` | 환경별 의존성 목록 |
 | `packaging/pyinstaller/` | 배포 스펙 파일 |
@@ -198,19 +200,22 @@ MIT License
 - 하위 호환을 위해 레거시 진입점 파일을 유지합니다.
   - `xpath 조사기(모든 티켓 사이트).py`는 새 앱 패키지를 import 후 실행합니다.
 - 메인 윈도우 조합 로직:
-  - `xpath_explorer/main_window.py`
+  - facade: `xpath_explorer/main_window.py`
+  - 구현: `xpath_explorer/app/main_window.py`
 - 런타임 로거 초기화:
   - `xpath_explorer/runtime.py`
 - 호환 facade와 내부 분할 패키지를 함께 유지합니다.
   - 상수 facade: `xpath_explorer/core/constants.py`
-  - 상수 내부 모듈: `xpath_explorer/core/app_constants.py`, `browser_constants.py`, `preset_constants.py`, `template_constants.py`, `runtime_constants.py`, `ui_constants.py`
+  - 상수 내부 모듈: `xpath_explorer/core/app_constants.py`, `browser_constants.py`, `xpath_explorer/core/browser_assets/`, `preset_constants.py`, `template_constants.py`, `runtime_constants.py`, `ui_constants.py`
   - 브라우저 facade: `xpath_explorer/browser/browser.py`, `xpath_explorer/browser/playwright.py`
-  - 브라우저 내부 모듈: `xpath_explorer/browser/selenium_*.py`, `xpath_explorer/browser/playwright_*.py`
+  - 브라우저 내부 모듈: `xpath_explorer/browser/selenium_*.py`, `selenium_validation_parts/`, `playwright_*.py`, `playwright_parts/`
   - 워커 facade: `xpath_explorer/workers/background.py`
   - 워커 내부 모듈: `xpath_explorer/workers/*_worker.py`, `worker_shared.py`
   - mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `xpath_explorer/mixins/browser_mixin.py`, `xpath_explorer/mixins/data_mixin.py`, `xpath_explorer/mixins/tools_mixin.py`
-  - mixin 내부 모듈: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+  - mixin 내부 모듈: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`, `tools/batch/`, `tools/inspection/`
   - split mixin 계약/patch seam: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
+  - AI 내부 구현: `xpath_explorer/ai/`, facade: `xpath_explorer/tools/ai.py`
+  - UI 내부 구현: `xpath_explorer/ui/components/`, `xpath_explorer/ui/theme/`, facade: `widgets.py`, `styles.py`
   - 나머지 기능 패키지: `xpath_explorer/tools/`, `analysis/`, `state/`, `ui/`
 
 호환 정책:
@@ -344,8 +349,10 @@ python scripts/run_quality_checks.py --strict-doc-warnings
 - 엔트리포인트 후보는 레거시 래퍼(`xpath 조사기(모든 티켓 사이트).py`)와 패키지 엔트리포인트(`xpath_explorer/__main__.py`)입니다.
 - 실제 앱 로직은 `xpath_explorer/` 패키지 기준으로 수집됩니다.
 - `collect_submodules("xpath_explorer")`를 사용하므로 패키지 분할 구조에 맞게 빌드됩니다.
+- `app/`, `ai/`, `ui/components/`, `ui/theme/`, `core/browser_assets/`, `browser/playwright_parts/`, `browser/selenium_validation_parts/`, `mixins/tools/batch/`, `mixins/tools/inspection/`는 spec의 명시 hidden import와 `collect_submodules`로 함께 수집됩니다.
 - `xpath_explorer.qt_compat`는 hidden import에 명시되어 headless-safe Qt bootstrap 경로를 유지합니다.
 - `xpath_explorer.core.paths`는 `atomic_write_json()`을 포함하므로 hidden import에 명시되어 저장 안정성 경로를 유지합니다.
 - `openai`/`google.genai`/`playwright`는 빌드 환경에 설치된 경우에만 `hiddenimports`로 포함됩니다.
 - 선택 기능까지 포함한 EXE가 필요하면 `requirements/requirements-full.txt` 설치 후 빌드합니다.
 - atomic 저장 중 생성되는 `*.json.bak`, `.*.tmp` 로컬 산출물은 `.gitignore`에서 제외합니다.
+- `.codegraph/`는 로컬 코드 인덱스 산출물이므로 `.gitignore`에서 제외합니다.

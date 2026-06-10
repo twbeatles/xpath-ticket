@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Compatibility aggregate for split PlaywrightDomMixin."""
+"""Split internals for PlaywrightDomMixin."""
 
 from xpath_explorer.browser.playwright_parts.dom.actions import PlaywrightDomActionsMixin
 from xpath_explorer.browser.playwright_parts.dom.snapshots import PlaywrightDomSnapshotMixin
 from xpath_explorer.browser.playwright_parts.dom.frames import PlaywrightDomFrameMixin
 
-
-class PlaywrightDomMixin(
-    PlaywrightDomActionsMixin,
-    PlaywrightDomSnapshotMixin,
-    PlaywrightDomFrameMixin,
-):
-    """Aggregate mixin preserving the legacy PlaywrightDomMixin import path."""
+__all__ = [
+    "PlaywrightDomActionsMixin",
+    "PlaywrightDomSnapshotMixin",
+    "PlaywrightDomFrameMixin",
+]

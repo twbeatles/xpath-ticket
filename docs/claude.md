@@ -1,31 +1,35 @@
-﻿# Claude 운영 가이드 (XPath Explorer)
+# Claude 운영 가이드 (XPath Explorer)
 
 ## 1. 프로젝트 개요
 XPath Explorer는 Selenium/Playwright 기반으로 XPath를 수집·검증·분석하는 데스크톱 도구입니다.
-핵심 실행 진입점은 `xpath_explorer/main_window.py`이며, 화면/브라우저/데이터/도구 책임을 mixin으로 분리했습니다.
+호환 실행 진입점은 `xpath_explorer/main_window.py`이고 실제 앱 조립은 `xpath_explorer/app/main_window.py`에서 수행합니다.
 
 ## 2. 현재 코드 구조
 - 패키지 진입점: `xpath_explorer/__main__.py`
-- UI 조립: `xpath_explorer/main_window.py`
+- UI 조립 facade: `xpath_explorer/main_window.py`
+- UI 조립 구현: `xpath_explorer/app/main_window.py`
 - Qt 호환 계층: `xpath_explorer/qt_compat.py`
 - mixin facade: `xpath_explorer/mixins/ui_mixin.py`, `browser_mixin.py`, `data_mixin.py`, `tools_mixin.py`
-- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`
+- split mixin internals: `xpath_explorer/mixins/ui/`, `browser/`, `data/`, `tools/`, `tools/batch/`, `tools/inspection/`
 - split mixin contracts/seams: `xpath_explorer/mixins/contracts.py`, `xpath_explorer/mixins/*/deps.py`
 - Selenium facade: `xpath_explorer/browser/browser.py`
-- Selenium internals: `xpath_explorer/browser/selenium_*.py`
+- Selenium internals: `xpath_explorer/browser/selenium_*.py`, `xpath_explorer/browser/selenium_validation_parts/`
 - Playwright facade: `xpath_explorer/browser/playwright.py`
-- Playwright internals: `xpath_explorer/browser/playwright_*.py`
+- Playwright internals: `xpath_explorer/browser/playwright_*.py`, `xpath_explorer/browser/playwright_parts/`
 - DOM 리포트 렌더러: `xpath_explorer/browser/dom_export.py`
 - 워커 facade: `xpath_explorer/workers/background.py`
 - 워커 internals: `xpath_explorer/workers/*_worker.py`, `worker_shared.py`
 - 상수 facade: `xpath_explorer/core/constants.py`
-- 상수 internals: `xpath_explorer/core/*_constants.py`
-- AI 어시스턴트: `xpath_explorer/tools/ai.py`
+- 상수 internals: `xpath_explorer/core/*_constants.py`, `xpath_explorer/core/browser_assets/`
+- AI facade: `xpath_explorer/tools/ai.py`
+- AI internals: `xpath_explorer/ai/`
+- UI facade: `xpath_explorer/ui/widgets.py`, `xpath_explorer/ui/styles.py`
+- UI internals: `xpath_explorer/ui/components/`, `xpath_explorer/ui/theme/`
 - 통계/분석: `xpath_explorer/analysis/statistics.py`, `xpath_explorer/analysis/diff.py`
 - 런타임 로깅/텔레메트리: `xpath_explorer/runtime.py`
 
 ## 3. 핵심 실행 흐름
-1. `main_window.py`에서 Qt 환경 변수 설정 후 `QApplication` 생성
+1. `app/main_window.py`에서 Qt 환경 변수 설정 후 `QApplication` 생성
 2. `XPathExplorer` 초기화 시 Browser/History/Stats/AI 모듈 결합
 3. 사용자 액션에 따라 워커 facade(`background.py`) 아래의 개별 워커가 비동기 검증 수행
 4. 검증 결과를 통계/히스토리/테이블 모델에 반영
@@ -129,11 +133,13 @@ AI 설정 저장 정책:
 - 변경 후 반드시 release smoke 스크립트로 회귀 확인합니다.
 - `hiddenimports`는 `collect_submodules("xpath_explorer")` 기반으로 수집합니다.
 - `xpath_explorer.qt_compat`는 PyInstaller hidden import에 명시해 headless-safe bootstrap 경로를 유지합니다.
+- split internals(`app/`, `ai/`, `ui/components/`, `ui/theme/`, `core/browser_assets/`, `browser/playwright_parts/`, `browser/selenium_validation_parts/`, `mixins/tools/batch/`, `mixins/tools/inspection/`)는 spec의 명시 hidden import와 `collect_submodules`로 함께 수집합니다.
 - `openai`/`google.genai`/`playwright` 계열은 빌드 환경에 설치된 경우에만 포함됩니다.
 
 ## 10. 문서 동기화 원칙
 - 구조/명칭은 실제 코드 경로 기준으로 작성
 - 새 모듈/스크립트가 추가되면 `README.md`, `docs/claude.md`, `docs/gemini.md`를 함께 갱신
+- 로컬 인덱스 `.codegraph/`는 `.gitignore`에 남겨 publish 대상에서 제외
 - docs sync 실패를 릴리즈 차단 신호로 취급
 
 ## 11. Git 운영 체크

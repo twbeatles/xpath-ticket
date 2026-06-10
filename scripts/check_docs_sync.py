@@ -14,22 +14,35 @@ REQUIRED_DOC_FILES: Tuple[str, ...] = (
     "README.md",
     "docs/claude.md",
     "docs/gemini.md",
+    "docs/PROJECT_STRUCTURE_ANALYSIS.md",
 )
 
 REQUIRED_CODE_FILES: Tuple[str, ...] = (
     "xpath_explorer/main_window.py",
+    "xpath_explorer/app/main_window.py",
     "xpath_explorer/mixins/ui_mixin.py",
     "xpath_explorer/mixins/browser_mixin.py",
     "xpath_explorer/mixins/data_mixin.py",
     "xpath_explorer/mixins/tools_mixin.py",
+    "xpath_explorer/mixins/tools/batch/reports.py",
+    "xpath_explorer/mixins/tools/inspection/diagnostics.py",
     "xpath_explorer/ui/table_model.py",
     "xpath_explorer/ui/filter_proxy.py",
+    "xpath_explorer/ui/components/inputs.py",
+    "xpath_explorer/ui/theme/style_sheet.py",
     "xpath_explorer/browser/dom_export.py",
     "xpath_explorer/browser/browser.py",
     "xpath_explorer/browser/playwright.py",
+    "xpath_explorer/browser/playwright_parts/lifecycle/state.py",
+    "xpath_explorer/browser/playwright_parts/dom/actions.py",
+    "xpath_explorer/browser/selenium_validation_parts/session.py",
     "xpath_explorer/tools/ai.py",
+    "xpath_explorer/ai/assistant.py",
+    "xpath_explorer/ai/models.py",
+    "xpath_explorer/core/browser_assets/picker.py",
     "xpath_explorer/workers/background.py",
     "xpath_explorer/runtime.py",
+    "packaging/pyinstaller/xpath_explorer.spec",
 )
 
 REQUIRED_TEST_FILES: Tuple[str, ...] = (
@@ -40,25 +53,41 @@ REQUIRED_TEST_FILES: Tuple[str, ...] = (
 
 README_REQUIRED_TOKENS: Tuple[str, ...] = (
     "xpath_explorer/main_window.py",
+    "xpath_explorer/app/main_window.py",
+    "xpath_explorer/ai/",
     "xpath_explorer/mixins/ui_mixin.py",
     "xpath_explorer/mixins/browser_mixin.py",
     "xpath_explorer/mixins/data_mixin.py",
     "xpath_explorer/mixins/tools_mixin.py",
     "xpath_explorer/ui/",
+    "xpath_explorer/ui/components/",
+    "xpath_explorer/core/browser_assets/",
     "xpath_explorer/browser/",
     "xpath_explorer/workers/background.py",
+    "packaging/pyinstaller/xpath_explorer.spec",
 )
 
 DOC_REQUIRED_TOKENS: Dict[str, Tuple[str, ...]] = {
     "docs/claude.md": (
         "xpath_explorer/browser/browser.py",
         "xpath_explorer/tools/ai.py",
+        "xpath_explorer/ai/",
+        "xpath_explorer/app/main_window.py",
+        "packaging/pyinstaller/xpath_explorer.spec",
         "xpath_explorer/workers/background.py",
     ),
     "docs/gemini.md": (
         "xpath_explorer/browser/browser.py",
         "xpath_explorer/tools/ai.py",
+        "xpath_explorer/ai/",
+        "xpath_explorer/app/main_window.py",
+        "packaging/pyinstaller/xpath_explorer.spec",
         "xpath_explorer/workers/background.py",
+    ),
+    "docs/PROJECT_STRUCTURE_ANALYSIS.md": (
+        "packaging/pyinstaller/xpath_explorer.spec",
+        "xpath_explorer/core/browser_assets/",
+        ".codegraph/",
     ),
 }
 

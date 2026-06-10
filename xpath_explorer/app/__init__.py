@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compatibility facade for the application window."""
+"""Application composition internals."""
 
 from xpath_explorer.app.main_window import XPathExplorer, configure_qt_env, main
 

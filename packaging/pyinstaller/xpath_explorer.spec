@@ -1,4 +1,4 @@
-﻿# -*- mode: python ; coding: utf-8 -*-
+# -*- mode: python ; coding: utf-8 -*-
 """
 XPath Explorer v4.2 - PyInstaller spec (optimized).
 Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
@@ -36,20 +36,53 @@ def _collect_optional_hiddenimports(*module_names: str):
 # ============================================================================
 hiddenimports = [
     # 프로젝트 모듈
+    'xpath_explorer.app.main_window',
+    'xpath_explorer.ai.assistant',
+    'xpath_explorer.ai.models',
+    'xpath_explorer.ai.config',
+    'xpath_explorer.ai.providers',
     'xpath_explorer.tools.ai',
     'xpath_explorer.tools.xpath_safety',
     'xpath_explorer.analysis.diff',
     'xpath_explorer.state.history',
     'xpath_explorer.tools.optimizer',
     'xpath_explorer.core.constants',
+    'xpath_explorer.core.browser_assets.picker',
+    'xpath_explorer.core.browser_assets.stealth',
+    'xpath_explorer.core.browser_assets.scan',
+    'xpath_explorer.core.browser_assets.timing',
     'xpath_explorer.ui.styles',
+    'xpath_explorer.ui.theme.style_sheet',
     'xpath_explorer.core.config',
     'xpath_explorer.core.paths',
     'xpath_explorer.qt_compat',
     'xpath_explorer.ui.widgets',
+    'xpath_explorer.ui.components.inputs',
+    'xpath_explorer.ui.components.feedback',
+    'xpath_explorer.ui.components.buttons',
+    'xpath_explorer.ui.components.containers',
     'xpath_explorer.mixins.contracts',
     'xpath_explorer.browser.playwright_deps',
     'xpath_explorer.browser.playwright_models',
+    'xpath_explorer.browser.playwright_parts.lifecycle.state',
+    'xpath_explorer.browser.playwright_parts.lifecycle.launch',
+    'xpath_explorer.browser.playwright_parts.lifecycle.navigation',
+    'xpath_explorer.browser.playwright_parts.dom.actions',
+    'xpath_explorer.browser.playwright_parts.dom.snapshots',
+    'xpath_explorer.browser.playwright_parts.dom.frames',
+    'xpath_explorer.browser.selenium_validation_parts.session',
+    'xpath_explorer.browser.selenium_validation_parts.lookup',
+    'xpath_explorer.browser.selenium_validation_parts.element_info',
+    'xpath_explorer.browser.selenium_validation_parts.visual',
+    'xpath_explorer.mixins.tools.batch.runner',
+    'xpath_explorer.mixins.tools.batch.scenario',
+    'xpath_explorer.mixins.tools.batch.reports',
+    'xpath_explorer.mixins.tools.inspection.diagnostics',
+    'xpath_explorer.mixins.tools.inspection.network',
+    'xpath_explorer.mixins.tools.inspection.statistics',
+    'xpath_explorer.mixins.tools.inspection.dom_diff',
+    'xpath_explorer.mixins.tools.inspection.telemetry',
+    'xpath_explorer.mixins.tools.inspection.diff_panel',
     'xpath_explorer.workers.worker_shared',
     # tools_mixin에서 Playwright는 동적 import 경로가 있어 hiddenimports에 명시
     'xpath_explorer.browser.browser',
@@ -62,13 +95,13 @@ hiddenimports = [
     'xpath_explorer.ui.filter_proxy',
     # PyQt6 (필수)
     'PyQt6.QtWidgets', 'PyQt6.QtCore', 'PyQt6.QtGui',
-    
+
     # Selenium (필수)
     'selenium.webdriver', 'selenium.webdriver.chrome.service',
     'selenium.webdriver.chrome.options', 'selenium.webdriver.common.by',
     'selenium.webdriver.support.ui', 'selenium.webdriver.support.expected_conditions',
     'selenium.common.exceptions',
-    
+
     # UC Driver
     'undetected_chromedriver',
 ]
@@ -76,9 +109,11 @@ hiddenimports = [
 # Project package split support:
 # - public facades stay on the legacy import paths
 # - internal implementations now live in split subpackages/modules
-#   (mixins/*, workers/*_worker.py, browser/selenium_*.py, browser/playwright_*.py)
-# - safety/diagnostics/export helpers added in tools and mixins/tools are bundled by
-#   collect_submodules, with key dynamic modules also listed explicitly above.
+#   (app/, ai/, ui/components/, ui/theme/, core/browser_assets/,
+#   mixins/tools/batch/, mixins/tools/inspection/,
+#   browser/selenium_validation_parts/, browser/playwright_parts/)
+# - safety/diagnostics/export helpers and key dynamic modules are listed explicitly
+#   above, then collect_submodules bundles the remaining package surface.
 # collect_submodules('xpath_explorer') keeps those internal modules bundled.
 hiddenimports += collect_submodules('xpath_explorer')
 # Optional dependencies: include only when available in build environment.
@@ -98,25 +133,25 @@ hiddenimports += _collect_optional_hiddenimports(
 excludes = [
     # 데이터 과학 (불필요)
     'matplotlib', 'numpy', 'pandas', 'scipy', 'sklearn',
-    
+
     # 이미지/비디오 (불사용)
     'PIL', 'Pillow', 'cv2', 'opencv',
-    
+
     # ML/AI 대형 라이브러리
     'tensorflow', 'torch', 'keras', 'transformers',
-    
+
     # 개발 도구
     'IPython', 'notebook', 'jupyter', 'pytest', 'unittest', 'sphinx',
-    
+
     # 다른 GUI
     'tkinter', 'wx', 'PySide6', 'PyQt5',
-    
+
     # 웹 프레임워크
     'flask', 'django', 'fastapi', 'aiohttp', 'uvicorn',
-    
+
     # 기타
     'test', 'tests', 'setuptools', 'pip', 'wheel',
-    
+
     # Playwright는 full 기능 지원을 위해 포함 (chromium 설치는 런타임에서 수행)
 ]
 
@@ -193,6 +228,8 @@ exe = EXE(
 # - 선택 기능 포함 빌드: pip install -r requirements/requirements-full.txt
 # - repo-local `.venv`를 사용하면 pyright와 빌드 환경 정합성을 맞추기 쉽습니다.
 # - AI/Playwright 선택 의존성은 설치된 경우에만 hidden import로 포함
+# - app/ai/ui/core/browser/mixins split internals are explicit hidden imports above
+#   and also covered by collect_submodules("xpath_explorer").
 # - Playwright 런타임 브라우저: pip install playwright && playwright install chromium
 # - core.paths는 atomic_write_json() 저장 경로를 포함하므로 hidden import로 유지합니다.
 # - 설정/통계/AI 설정 atomic 저장의 로컬 백업/임시 파일(`*.json.bak`, `.*.tmp`)은

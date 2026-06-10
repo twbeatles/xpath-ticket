@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Compatibility aggregate for split ExplorerInspectionToolsMixin."""
+"""Split internals for ExplorerInspectionToolsMixin."""
 
 from xpath_explorer.mixins.tools.inspection.diagnostics import FeatureDiagnosticsMixin
 from xpath_explorer.mixins.tools.inspection.network import NetworkInspectionMixin
@@ -8,13 +8,11 @@ from xpath_explorer.mixins.tools.inspection.dom_diff import DomDiffInspectionMix
 from xpath_explorer.mixins.tools.inspection.telemetry import TelemetryInspectionMixin
 from xpath_explorer.mixins.tools.inspection.diff_panel import DiffInspectionMixin
 
-
-class ExplorerInspectionToolsMixin(
-    FeatureDiagnosticsMixin,
-    NetworkInspectionMixin,
-    StatisticsInspectionMixin,
-    DomDiffInspectionMixin,
-    TelemetryInspectionMixin,
-    DiffInspectionMixin,
-):
-    """Aggregate mixin preserving the legacy ExplorerInspectionToolsMixin import path."""
+__all__ = [
+    "FeatureDiagnosticsMixin",
+    "NetworkInspectionMixin",
+    "StatisticsInspectionMixin",
+    "DomDiffInspectionMixin",
+    "TelemetryInspectionMixin",
+    "DiffInspectionMixin",
+]
