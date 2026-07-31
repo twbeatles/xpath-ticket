@@ -49,7 +49,6 @@ batch_results_*.csv
 batch_results_*.md
 
 # Project-specific local folders
-.codegraph/
 backup/
 backups/
 
@@ -58,3 +57,15 @@ backups/
 !.vscode/settings.json
 .idea/
 
+# AI Agent Files & Directories
+.agents/
+.claude/
+.grok/
+.specify/
+.codegraph/
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+docs/claude.md
+docs/gemini.md
+docs/AGENTS.md
