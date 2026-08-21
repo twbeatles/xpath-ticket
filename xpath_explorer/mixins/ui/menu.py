@@ -100,6 +100,7 @@ class ExplorerUIMenuMixin:
         
         self.undo_action = QAction('↩️ 실행 취소', self)
         self.undo_action.setShortcut('Ctrl+Z')
+        self.undo_action.setToolTip('실행 취소 (최대 50단계)')
         self.undo_action.triggered.connect(self._undo)
         self.undo_action.setEnabled(False)
         edit_menu.addAction(self.undo_action)

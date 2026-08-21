@@ -96,7 +96,8 @@ class ExplorerUIEditorPanelMixin:
         
         # 오버레이 모드 체크박스
         self.chk_overlay = QCheckBox("오버레이 모드 (클릭 방지)")
-        self.chk_overlay.setToolTip("체크 시 웹페이지의 버튼이 클릭되지 않고 선택만 됩니다.")
+        self.chk_overlay.setToolTip("체크 시 웹페이지의 버튼이 클릭되지 않고 선택만 됩니다. 해제하면 페이지 클릭이 그대로 전달됩니다.")
+        self.chk_overlay.setChecked(True)
         picker_layout.addWidget(self.chk_overlay)
 
         picker_action_row = QHBoxLayout()

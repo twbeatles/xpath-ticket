@@ -93,22 +93,26 @@ class PlaywrightDomActionsMixin:
             if not el:
                 return False
 
-            el.evaluate(f"""el => {{
-                const original = {{
+            duration = max(0, int(duration_ms))
+            el.evaluate(
+                """(el, duration) => {
+                const original = {
                     outline: el.style.outline,
                     outlineOffset: el.style.outlineOffset,
                     backgroundColor: el.style.backgroundColor
-                }};
+                };
                 el.style.outline = '3px solid #00ff88';
                 el.style.outlineOffset = '2px';
                 el.style.backgroundColor = 'rgba(0, 255, 136, 0.2)';
-                el.scrollIntoView({{behavior: 'smooth', block: 'center'}});
-                setTimeout(() => {{
+                el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                setTimeout(() => {
                     el.style.outline = original.outline;
                     el.style.outlineOffset = original.outlineOffset;
                     el.style.backgroundColor = original.backgroundColor;
-                }}, {duration_ms});
-            }}""")
+                }, duration);
+            }""",
+                duration,
+            )
             return True
         except Exception as e:
             logger.error(f"하이라이트 실패: {e}")

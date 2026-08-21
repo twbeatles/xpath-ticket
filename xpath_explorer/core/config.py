@@ -159,8 +159,12 @@ class SiteConfig:
             items = []
             seen_names = set()
             raw_items = data.get('items', [])
-            if not isinstance(raw_items, list):
+            if raw_items is None:
                 raw_items = []
+            if not isinstance(raw_items, list):
+                raise ValueError(
+                    f"SiteConfig.from_dict: items must be a list, got {type(raw_items).__name__}"
+                )
             for i, item_data in enumerate(raw_items):
                 if not isinstance(item_data, dict):
                     raise ValueError(f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다")

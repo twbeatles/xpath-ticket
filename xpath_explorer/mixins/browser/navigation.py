@@ -138,12 +138,15 @@ class ExplorerBrowserNavigationMixin:
 
     def _navigate(self):
         """URL 이동"""
+        from xpath_explorer.core.url_safety import normalize_navigation_url
+
         url = self.input_url.text().strip()
-        if not url: return
-        
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-            self.input_url.setText(url)  # 정규화된 URL로 입력창 업데이트
+        ok, normalized = normalize_navigation_url(url)
+        if not ok:
+            self._show_toast(normalized, "warning")
+            return
+        url = normalized
+        self.input_url.setText(url)
             
         if self.browser.is_alive():
             self.browser.navigate(url)

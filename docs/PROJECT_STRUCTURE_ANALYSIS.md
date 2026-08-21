@@ -1,4 +1,4 @@
-# XPath Explorer 프로젝트 구조 분석 (2026-04-14)
+# XPath Explorer 프로젝트 구조 분석 (2026-08-21)
 
 ## 1. 목적
 - 현재 코드베이스의 실제 구조, 실행 경로, 품질 게이트, 배포 경로를 한 문서에서 빠르게 파악하기 위한 요약 문서입니다.
@@ -42,9 +42,13 @@ xpath_explorer/
 │  ├─ browser_assets/
 │  ├─ preset_constants.py
 │  ├─ template_constants.py
-│  └─ runtime_constants.py
+│  ├─ runtime_constants.py
+│  ├─ config_state.py
+│  ├─ cookie_safety.py
+│  └─ url_safety.py
 ├─ browser/
 │  ├─ browser.py
+│  ├─ engine_router.py
 │  ├─ playwright.py
 │  ├─ selenium_*.py
 │  ├─ selenium_validation_parts/
@@ -54,7 +58,8 @@ xpath_explorer/
 ├─ workers/
 │  ├─ background.py
 │  ├─ *_worker.py
-│  └─ worker_shared.py
+│  ├─ worker_shared.py
+│  └─ driver_guard.py
 ├─ mixins/
 │  ├─ __init__.py
 │  ├─ contracts.py
@@ -79,7 +84,8 @@ xpath_explorer/
 │  ├─ ai.py
 │  ├─ codegen.py
 │  ├─ optimizer.py
-│  └─ xpath_safety.py
+│  ├─ xpath_safety.py
+│  └─ csv_safety.py
 ├─ analysis/
 │  ├─ diff.py
 │  └─ statistics.py
@@ -104,6 +110,10 @@ xpath_explorer/
 - `mixins/*_mixin.py`: 하위 호환 facade
 - `mixins/ui/`, `mixins/browser/`, `mixins/data/`, `mixins/tools/`: 세부 책임별 partial mixin
 - `mixins/*/deps.py`: monkeypatch 안정성을 위한 patch seam
+- `browser/engine_router.py`: Playwright/Selenium 항목별 검증 엔진 선택
+- `core/url_safety.py`, `core/cookie_safety.py`, `core/config_state.py`: URL 스킴, 쿠키 도메인, 미저장 dirty 판별
+- `tools/csv_safety.py`: CSV 수식 주입 무력화
+- `workers/driver_guard.py`: 피커/검증/배치/시나리오 드라이버 점유 가드
 - `browser/browser.py`: Selenium facade
 - `browser/selenium_*.py`, `browser/selenium_validation_parts/`: 창/프레임/검증/피커/DOM 수집 세부 구현
 - `browser/playwright.py`: Playwright facade + `NetworkAnalyzer`
@@ -133,7 +143,7 @@ pytest -q
 - `packaging/pyinstaller/xpath_explorer.spec`는 `ENTRYPOINT_CANDIDATES`로 래퍼/패키지 엔트리포인트를 모두 지원합니다.
 - `collect_submodules("xpath_explorer")`를 사용해 분할된 패키지 구조를 빌드 수집합니다.
 - `app/`, `ai/`, `ui/components/`, `ui/theme/`, `core/browser_assets/`, `browser/playwright_parts/`, `browser/selenium_validation_parts/`, `mixins/tools/batch/`, `mixins/tools/inspection/`는 spec의 명시 hidden import와 `collect_submodules` 양쪽으로 수집됩니다.
-- `xpath_explorer.tools.xpath_safety`는 동적/간접 import 누락 방지를 위해 hidden import에 명시합니다.
+- `xpath_explorer.tools.xpath_safety`, `xpath_explorer.tools.csv_safety`, `xpath_explorer.browser.engine_router`는 동적/간접 import 누락 방지를 위해 hidden import에 명시합니다.
 - `qt_excludes`에서 TLS 라이브러리(`libcrypto`, `libssl`)를 제외하지 않는 정책을 유지합니다.
 - 선택 의존성(`openai`, `google.genai`, `playwright`)은 설치된 경우에만 hidden import로 포함하며, 릴리즈 스모크에서 import 상태를 점검합니다.
 - spec 주석의 품질 점검 명령도 `python -m pyright -p .` 기준으로 유지합니다.

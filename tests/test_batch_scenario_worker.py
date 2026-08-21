@@ -339,3 +339,12 @@ def test_batch_scenario_worker_leave_context_true_keeps_last_context():
     assert completed["results"][0]["window_handle"] == "popup"
     assert completed["final_handle"] == "popup"
     assert completed["final_frame"] == "original-frame"
+
+
+def test_batch_scenario_worker_clamps_wait_seconds():
+    from xpath_explorer.core.constants import SCENARIO_MAX_WAIT_SECONDS
+
+    steps = BatchScenarioWorker._normalize_steps(
+        [{"action": "wait", "seconds": 99999, "name": "long"}]
+    )
+    assert steps[0]["wait_seconds"] == SCENARIO_MAX_WAIT_SECONDS

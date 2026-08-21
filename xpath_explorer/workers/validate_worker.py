@@ -16,6 +16,7 @@ from xpath_explorer.core.perf import perf_span
 logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
+    _engine_browser_for_item,
     _get_browser_frame_path,
     _get_browser_window_metadata,
     _restore_browser_context,
@@ -29,9 +30,10 @@ class ValidateWorker(QThread):
     validated = pyqtSignal(str, dict)
     finished = pyqtSignal(int, int)
 
-    def __init__(self, browser: Any, items: List[XPathItem], handles: List[str]):
+    def __init__(self, browser: Any, items: List[XPathItem], handles: List[str], playwright: Any = None):
         super().__init__()
         self.browser = browser
+        self.playwright = playwright
         self.items = items
         self.handles = handles or []
         self._stop_event = Event()
@@ -72,7 +74,24 @@ class ValidateWorker(QThread):
                 self.progress.emit(int((i / total) * 100), f"검증 중: {item.name}")
 
                 try:
-                    ok, error_msg = _switch_browser_to_item_window(self.browser, item)
+                    engine_browser, engine_name = _engine_browser_for_item(
+                        self.browser, self.playwright, item
+                    )
+                    if engine_browser is None:
+                        self.validated.emit(
+                            item.name,
+                            {
+                                'found': False,
+                                'msg': 'Playwright 브라우저가 연결되어 있지 않습니다.',
+                                'error_type': 'browser_not_connected',
+                                'frame_path': getattr(item, 'found_frame', '') or '',
+                                'window_handle': getattr(item, 'found_window', '') or '',
+                                'window_title': getattr(item, 'found_window_title', '') or '',
+                                'window_url': getattr(item, 'found_window_url', '') or '',
+                            },
+                        )
+                        continue
+                    ok, error_msg = _switch_browser_to_item_window(engine_browser, item)
                     if not ok:
                         self.validated.emit(
                             item.name,
@@ -86,18 +105,19 @@ class ValidateWorker(QThread):
                             },
                         )
                         continue
+                    item_session = session if engine_name != "playwright" else None
                     try:
                         result = cast(
                             Dict[str, Any],
-                            self.browser.validate_xpath(
+                            engine_browser.validate_xpath(
                                 item.xpath,
                                 preferred_frame=item.found_frame or None,
-                                session=session,
+                                session=item_session,
                             ),
                         )
                     except TypeError:
                         # 구 시그니처(validate_xpath(xpath)) 호환
-                        result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
+                        result = cast(Dict[str, Any], engine_browser.validate_xpath(item.xpath))
                     if result.get('found', False):
                         found_total += 1
                     self.validated.emit(item.name, result)

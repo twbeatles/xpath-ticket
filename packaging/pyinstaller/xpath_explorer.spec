@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v4.2 - PyInstaller spec (optimized).
+XPath Explorer v4.3 - PyInstaller spec (optimized).
 Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
 """
 
@@ -43,6 +43,8 @@ hiddenimports = [
     'xpath_explorer.ai.providers',
     'xpath_explorer.tools.ai',
     'xpath_explorer.tools.xpath_safety',
+    'xpath_explorer.tools.csv_safety',
+    'xpath_explorer.browser.engine_router',
     'xpath_explorer.analysis.diff',
     'xpath_explorer.state.history',
     'xpath_explorer.tools.optimizer',
@@ -202,7 +204,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='XPathExplorer_v4.2',
+    name='XPathExplorer_v4.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -5,3 +5,4 @@
 HISTORY_MAX_SIZE = 50          # Undo/Redo 최대 저장 개수
 STATISTICS_SAVE_INTERVAL = 5.0 # 통계 저장 간격 (초)
 PERF_LOG_SLOW_MS = 40          # ms - 성능 로그 임계값
+SCENARIO_MAX_WAIT_SECONDS = 60.0  # 시나리오 wait/popup timeout 상한

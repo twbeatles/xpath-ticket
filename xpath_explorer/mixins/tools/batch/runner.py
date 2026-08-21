@@ -73,13 +73,17 @@ from xpath_explorer.runtime import logger, error_telemetry
 class BatchRunnerMixin:
     def _batch_test(self, category: Optional[str] = None):
         """배치 테스트 실행 (취소 가능, 비동기)"""
-        if not self.browser.is_alive():
+        pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+        if not self.browser.is_alive() and not pw_alive:
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
             return
 
         if self.batch_worker and self.batch_worker.isRunning():
             self._show_toast("이미 배치 테스트가 실행 중입니다.", "warning")
             return
+        if self._abort_if_driver_busy("배치 테스트"):
+            return
+        self._stop_live_preview_sync()
 
         # 테스트할 항목 필터링
         items_to_test = self.config.items
@@ -96,7 +100,11 @@ class BatchRunnerMixin:
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("테스트 준비 중...")
         self.btn_open.setEnabled(False)  # 브라우저 버튼 비활성화
-        self.batch_worker = BatchTestWorker(self.browser, list(items_to_test))
+        self.batch_worker = BatchTestWorker(
+            self.browser,
+            list(items_to_test),
+            playwright=getattr(self, "pw_manager", None),
+        )
         self.batch_worker.progress.connect(self._on_batch_test_progress)
         if hasattr(self.batch_worker, "item_validated"):
             self.batch_worker.item_validated.connect(self._on_batch_item_validated)

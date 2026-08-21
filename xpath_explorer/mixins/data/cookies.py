@@ -24,8 +24,12 @@ from xpath_explorer.qt_compat import (
     QVBoxLayout,
 )
 
+from pathlib import Path
+
 from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_label, category_to_value
 from xpath_explorer.core.config import XPathItem, SiteConfig
+from xpath_explorer.core.cookie_safety import partition_cookies_for_url
+from xpath_explorer.core.paths import atomic_write_json
 from xpath_explorer.core.perf import perf_span
 
 
@@ -36,12 +40,24 @@ class ExplorerDataCookiesMixin:
         driver = self.browser.driver
         if driver is None:
             return
+        reply = QMessageBox.warning(
+            self,
+            "쿠키 저장",
+            "로그인 세션이 포함된 쿠키가 암호화 없이 JSON 파일로 저장됩니다. 계속할까요?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         fname, _ = QFileDialog.getSaveFileName(self, '쿠키 저장', 'cookies.json', 'JSON 파일 (*.json)')
         if fname:
             try:
                 cookies = driver.get_cookies()
-                with open(fname, 'w', encoding='utf-8') as f:
-                    json.dump(cookies, f)
+                atomic_write_json(Path(fname), cookies)
+                try:
+                    Path(fname).chmod(0o600)
+                except Exception:
+                    pass
                 self._show_toast(f"쿠키 {len(cookies)}개 저장됨", "success")
             except Exception as e:
                 self._show_toast(f"실패: {e}", "error")
@@ -62,16 +78,25 @@ class ExplorerDataCookiesMixin:
                     self._show_toast('Invalid cookie file format.', 'error')
                     return
 
+                try:
+                    page_url = str(driver.current_url or "")
+                except Exception:
+                    page_url = ""
+                accepted, rejected = partition_cookies_for_url(cookies, page_url)
+
                 success_count = 0
                 failures: Counter[str] = Counter()
-                for cookie in cookies:
+                for cookie in rejected:
+                    key = ''
+                    if isinstance(cookie, dict):
+                        key = str(cookie.get('name', '') or cookie.get('domain', ''))
+                    failures[key or 'domain-mismatch'] += 1
+                for cookie in accepted:
                     try:
                         driver.add_cookie(cookie)
                         success_count += 1
                     except Exception:
-                        key = ''
-                        if isinstance(cookie, dict):
-                            key = str(cookie.get('name', '') or cookie.get('domain', ''))
+                        key = str(cookie.get('name', '') or cookie.get('domain', ''))
                         failures[key or 'unknown'] += 1
 
                 fail_count = max(0, len(cookies) - success_count)

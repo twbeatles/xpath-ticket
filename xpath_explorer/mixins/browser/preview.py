@@ -66,9 +66,16 @@ class ExplorerBrowserPreviewMixin:
                 self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
                 return
             
-            if not self.browser.is_alive():
-                self.lbl_live_preview.setText("🔍 매칭: (브라우저 없음)")
+            from xpath_explorer.workers.driver_guard import exclusive_driver_worker_running
+
+            engine_browser, engine_name = self._active_validation_browser()
+            if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+                label = "Playwright 없음" if engine_name == "playwright" else "브라우저 없음"
+                self.lbl_live_preview.setText(f"🔍 매칭: ({label})")
                 self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
+                return
+            busy, _name = exclusive_driver_worker_running(self)
+            if busy:
                 return
 
             self._live_preview_request_id += 1
@@ -76,6 +83,7 @@ class ExplorerBrowserPreviewMixin:
 
             if self.live_preview_worker and self.live_preview_worker.isRunning():
                 self.live_preview_worker.cancel()
+                self.live_preview_worker.wait(WORKER_WAIT_TIMEOUT)
 
             self.lbl_live_preview.setText("🔍 매칭: 계산 중...")
             self.lbl_live_preview.setStyleSheet("color: #89b4fa; font-size: 11px;")
@@ -112,7 +120,7 @@ class ExplorerBrowserPreviewMixin:
             frame_path = self._resolve_active_frame_path()
             try:
                 worker = browser_mixin_module.LivePreviewWorker(
-                    self.browser,
+                    engine_browser,
                     xpath,
                     request_id,
                     frame_path=frame_path,
@@ -120,7 +128,7 @@ class ExplorerBrowserPreviewMixin:
                 )
             except TypeError:
                 worker = browser_mixin_module.LivePreviewWorker(
-                    self.browser,
+                    engine_browser,
                     xpath,
                     request_id,
                     frame_path=frame_path,

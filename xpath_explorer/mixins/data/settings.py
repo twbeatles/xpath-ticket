@@ -35,6 +35,12 @@ class ExplorerDataSettingsMixin:
         if preset_name == self.config.name:
             return
 
+        if not self._confirm_discard_unsaved("프리셋 불러오기"):
+            self.combo_preset.blockSignals(True)
+            self.combo_preset.setCurrentText(self.config.name)
+            self.combo_preset.blockSignals(False)
+            return
+
         if len(self.config.items) > 0:
             reply = QMessageBox.question(
                 self,
@@ -61,6 +67,7 @@ class ExplorerDataSettingsMixin:
         self._filter_options_dirty = True
         self._refresh_table(refresh_filters=True)
         self._reset_history_baseline()
+        self._mark_config_clean()
         self._show_toast(f'{preset_name} 프리셋 로드 완료', 'success')
 
     def _increase_font(self):

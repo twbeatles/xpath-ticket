@@ -120,9 +120,22 @@ if QT_AVAILABLE:
             self._setup_timers()
             self._refresh_table(refresh_filters=True)
             self._reset_history_baseline()
+            self._mark_config_clean()
 
         def init_settings(self):
-            self.settings = QSettings("MyCompany", "XPathExplorer")
+            from xpath_explorer.core.constants import (
+                QSETTINGS_APP,
+                QSETTINGS_LEGACY_APP,
+                QSETTINGS_LEGACY_ORG,
+                QSETTINGS_ORG,
+            )
+
+            self.settings = QSettings(QSETTINGS_ORG, QSETTINGS_APP)
+            if not self.settings.contains("geometry"):
+                legacy = QSettings(QSETTINGS_LEGACY_ORG, QSETTINGS_LEGACY_APP)
+                for key in legacy.allKeys():
+                    if not self.settings.contains(key):
+                        self.settings.setValue(key, legacy.value(key))
 else:
 
     class _HeadlessXPathExplorer:  # pragma: no cover - exercised only in headless CI

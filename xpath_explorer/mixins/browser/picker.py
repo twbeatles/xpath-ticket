@@ -61,6 +61,9 @@ class ExplorerBrowserPickerMixin:
         if self.picker_watcher and self.picker_watcher.isRunning():
             self._show_toast("요소 선택 모드가 이미 실행 중입니다.", "info")
             return
+        if self._abort_if_driver_busy("요소 선택"):
+            return
+        self._stop_live_preview_sync()
 
         watcher = PickerWatcher(self.browser)
         self.picker_watcher = watcher

@@ -15,6 +15,12 @@ from xpath_explorer.core.perf import perf_span
 
 logger = logging.getLogger('XPathExplorer')
 
+def _engine_browser_for_item(selenium: Any, playwright: Any, item: Any) -> tuple[Any, str]:
+    from xpath_explorer.browser.engine_router import resolve_browser_for_item
+
+    return resolve_browser_for_item(selenium, playwright, item)
+
+
 def _window_context_from_item(item: Any) -> Dict[str, str]:
     return {
         "handle": str(getattr(item, "found_window", "") or ""),

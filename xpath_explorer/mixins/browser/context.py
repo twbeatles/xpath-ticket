@@ -156,6 +156,42 @@ class ExplorerBrowserContextMixin:
 
         return {"handle": combo_handle or "", "title": "", "url": ""}
 
+    def _active_source_engine(self) -> str:
+        return str(getattr(self, "_editing_source_engine", "") or "").strip().lower()
+
+    def _active_validation_browser(self):
+        from xpath_explorer.browser.engine_router import resolve_browser_for_item
+
+        item = type("Item", (), {"source_engine": self._active_source_engine()})()
+        browser, engine = resolve_browser_for_item(
+            getattr(self, "browser", None),
+            getattr(self, "pw_manager", None),
+            item,
+            fallback_selenium=False,
+        )
+        return browser, engine
+
+    def _highlight_on_browser(self, browser, xpath: str, frame_path: Optional[str] = None) -> bool:
+        if browser is None:
+            return False
+        if frame_path:
+            switch = getattr(browser, "switch_to_frame_by_path", None) or getattr(browser, "switch_to_frame", None)
+            if callable(switch):
+                try:
+                    switch(frame_path)
+                except Exception:
+                    pass
+        highlight = getattr(browser, "highlight", None)
+        if not callable(highlight):
+            return False
+        try:
+            return bool(highlight(xpath, frame_path=frame_path))
+        except TypeError:
+            try:
+                return bool(highlight(xpath, 2000))
+            except TypeError:
+                return bool(highlight(xpath))
+
     def _ensure_window_context_for_action(self) -> bool:
         context = self._resolve_active_window_context()
         handle = str(context.get("handle", "") or "")

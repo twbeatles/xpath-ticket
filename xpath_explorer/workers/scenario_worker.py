@@ -8,7 +8,11 @@ from threading import Event
 from xpath_explorer.qt_compat import QThread, pyqtSignal
 
 from xpath_explorer.core.config import XPathItem
-from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
+from xpath_explorer.core.constants import (
+    PICKER_POLL_INTERVAL_MS,
+    PICKER_ACTIVE_CHECK_TICKS,
+    SCENARIO_MAX_WAIT_SECONDS,
+)
 from xpath_explorer.tools.ai import XPathAIAssistant
 from xpath_explorer.analysis.diff import XPathDiffAnalyzer
 from xpath_explorer.core.perf import perf_span
@@ -16,6 +20,7 @@ from xpath_explorer.core.perf import perf_span
 logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
+    _engine_browser_for_item,
     _get_browser_frame_path,
     _get_browser_window_metadata,
     _restore_browser_context,
@@ -31,9 +36,10 @@ class BatchScenarioWorker(QThread):
     completed = pyqtSignal(list, bool, str)  # results, cancelled, scenario_name
     failed = pyqtSignal(str)
 
-    def __init__(self, browser: Any, items: List[XPathItem], scenario: Dict[str, Any]):
+    def __init__(self, browser: Any, items: List[XPathItem], scenario: Dict[str, Any], playwright: Any = None):
         super().__init__()
         self.browser = browser
+        self.playwright = playwright
         self.items = list(items or [])
         self.scenario = scenario if isinstance(scenario, dict) else {}
         self._stop_event = Event()
@@ -95,7 +101,7 @@ class BatchScenarioWorker(QThread):
                 "xpath": str(raw.get("xpath") or ""),
                 "frame_path": str(raw.get("frame_path") or ""),
                 "title": str(raw.get("title") or ""),
-                "wait_seconds": max(0.0, wait_seconds),
+                "wait_seconds": min(SCENARIO_MAX_WAIT_SECONDS, max(0.0, wait_seconds)),
                 "retries": max(0, cls._to_int(raw.get("retries", 0), default=0)),
             }
             steps.append(step)
@@ -108,18 +114,19 @@ class BatchScenarioWorker(QThread):
             self._stop_event.wait(timeout=tick)
             remaining -= tick
 
-    def _run_validate(self, xpath: str, preferred_frame: str, session: Any) -> Dict[str, Any]:
+    def _run_validate(self, xpath: str, preferred_frame: str, session: Any, browser: Any = None) -> Dict[str, Any]:
+        target = browser if browser is not None else self.browser
         try:
             try:
-                result = self.browser.validate_xpath(
+                result = target.validate_xpath(
                     xpath,
                     preferred_frame=preferred_frame or None,
                     session=session,
                 )
             except TypeError:
-                result = self.browser.validate_xpath(xpath)
+                result = target.validate_xpath(xpath)
         except Exception as e:
-            window_meta = _get_browser_window_metadata(self.browser)
+            window_meta = _get_browser_window_metadata(target)
             return {
                 "success": False,
                 "msg": str(e),
@@ -134,7 +141,7 @@ class BatchScenarioWorker(QThread):
 
         success = bool(result.get("found", False))
         msg = str(result.get("msg", "")) or ("Found" if success else "Not found")
-        window_meta = _get_browser_window_metadata(self.browser)
+        window_meta = _get_browser_window_metadata(target)
         return {
             "success": success,
             "msg": msg,
@@ -153,6 +160,7 @@ class BatchScenarioWorker(QThread):
         preferred_frame: str,
         session: Any,
         retries: int,
+        browser: Any = None,
     ) -> Dict[str, Any]:
         max_attempts = max(1, int(retries) + 1)
         current_frame = preferred_frame or ""
@@ -184,7 +192,7 @@ class BatchScenarioWorker(QThread):
                 }
                 break
 
-            outcome = self._run_validate(xpath, current_frame, session)
+            outcome = self._run_validate(xpath, current_frame, session, browser=browser)
             current_frame = str(outcome.get("frame_path", "") or current_frame)
             last_outcome = {
                 "success": bool(outcome.get("success")),
@@ -315,26 +323,41 @@ class BatchScenarioWorker(QThread):
                         msg = f"item not found: {item_name}"
                         error_type = "item_not_found"
                     else:
-                        ok, error_msg = _switch_browser_to_item_window(self.browser, item)
+                        engine_browser, engine_name = _engine_browser_for_item(
+                            self.browser, self.playwright, item
+                        )
                         xpath = item.xpath
                         if not frame_path:
                             frame_path = item.found_frame or ""
                         target = xpath
-                        if not ok:
+                        if engine_browser is None:
                             success = False
-                            msg = error_msg
-                            error_type = "window_context"
+                            msg = "Playwright 브라우저가 연결되어 있지 않습니다."
+                            error_type = "browser_not_connected"
                         else:
-                            outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
-                            success = bool(outcome["success"])
-                            msg = str(outcome["msg"])
-                            frame_path = str(outcome["frame_path"])
-                            count = int(outcome["count"])
-                            tag = str(outcome.get("tag", "") or "")
-                            error_type = str(outcome.get("error_type", "") or "")
-                            attempt = int(outcome["attempt"])
-                            max_attempts = int(outcome["max_attempts"])
-                            retry_count = int(outcome["retry_count"])
+                            ok, error_msg = _switch_browser_to_item_window(engine_browser, item)
+                            if not ok:
+                                success = False
+                                msg = error_msg
+                                error_type = "window_context"
+                            else:
+                                item_session = session if engine_name != "playwright" else None
+                                outcome = self._run_validate_with_retry(
+                                    xpath,
+                                    frame_path,
+                                    item_session,
+                                    retries=retries,
+                                    browser=engine_browser,
+                                )
+                                success = bool(outcome["success"])
+                                msg = str(outcome["msg"])
+                                frame_path = str(outcome["frame_path"])
+                                count = int(outcome["count"])
+                                tag = str(outcome.get("tag", "") or "")
+                                error_type = str(outcome.get("error_type", "") or "")
+                                attempt = int(outcome["attempt"])
+                                max_attempts = int(outcome["max_attempts"])
+                                retry_count = int(outcome["retry_count"])
                 elif action in ("validate_xpath", "xpath", "validate"):
                     if not xpath:
                         success = False

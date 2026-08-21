@@ -67,9 +67,30 @@ from xpath_explorer.browser.dom_export import (
 )
 
 from xpath_explorer.runtime import logger, error_telemetry
+from xpath_explorer.workers.driver_guard import exclusive_driver_worker_running
 
 
 class ExplorerLifecycleToolsMixin:
+    def _stop_live_preview_sync(self):
+        worker = getattr(self, "live_preview_worker", None)
+        if worker is None:
+            return
+        try:
+            if worker.isRunning():
+                cancel_fn = getattr(worker, "cancel", None)
+                if callable(cancel_fn):
+                    cancel_fn()
+                worker.wait(WORKER_WAIT_TIMEOUT)
+        except Exception:
+            pass
+
+    def _abort_if_driver_busy(self, action_label: str) -> bool:
+        busy, name = exclusive_driver_worker_running(self)
+        if not busy:
+            return False
+        self._show_toast(f"{action_label}을(를) 진행할 수 없습니다. 다른 브라우저 작업이 실행 중입니다 ({name}).", "warning")
+        return True
+
     def keyPressEvent(self, a0):
         """키보드 이벤트 처리 - ESC로 배치 테스트 취소"""
         if a0.key() == Qt.Key.Key_Escape:
@@ -113,6 +134,11 @@ class ExplorerLifecycleToolsMixin:
         logger.info("앱 종료 시작...")
 
         try:
+            confirm = getattr(self, "_confirm_discard_unsaved", None)
+            if callable(confirm) and not confirm("종료"):
+                a0.ignore()
+                return
+
             check_timer = getattr(self, "check_timer", None)
             if check_timer is not None:
                 check_timer.stop()

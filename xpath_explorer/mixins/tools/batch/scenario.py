@@ -86,7 +86,8 @@ class BatchScenarioMixin:
 
     def _show_batch_scenario_runner(self):
         """JSON 시나리오 기반 배치 실행기."""
-        if not self.browser.is_alive():
+        pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+        if not self.browser.is_alive() and not pw_alive:
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
             return
 
@@ -237,7 +238,8 @@ class BatchScenarioMixin:
             if worker is not None and worker.isRunning():
                 return
 
-            if not self.browser.is_alive():
+            pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+            if not self.browser.is_alive() and not pw_alive:
                 self._show_toast("브라우저 연결이 끊어졌습니다.", "warning")
                 return
 
@@ -255,7 +257,15 @@ class BatchScenarioMixin:
             progress.setValue(0)
             lbl_summary.setText("시나리오 시작...")
 
-            worker = BatchScenarioWorker(self.browser, list(self.config.items), scenario)
+            if self._abort_if_driver_busy("시나리오 실행"):
+                return
+            self._stop_live_preview_sync()
+            worker = BatchScenarioWorker(
+                self.browser,
+                list(self.config.items),
+                scenario,
+                playwright=getattr(self, "pw_manager", None),
+            )
             self.scenario_worker = worker
             worker.progress.connect(on_progress)
             worker.step_completed.connect(append_step_row)

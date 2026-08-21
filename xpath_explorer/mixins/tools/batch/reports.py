@@ -68,6 +68,7 @@ from xpath_explorer.browser.dom_export import (
 )
 
 from xpath_explorer.runtime import logger, error_telemetry
+from xpath_explorer.tools.csv_safety import sanitize_csv_value
 
 
 class BatchReportMixin:
@@ -138,7 +139,11 @@ class BatchReportMixin:
         writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         for row in results:
-            writer.writerow(cls._batch_export_row(row))
+            sanitized = {
+                key: sanitize_csv_value(value)
+                for key, value in cls._batch_export_row(row).items()
+            }
+            writer.writerow(sanitized)
         return output.getvalue()
 
     @staticmethod

@@ -152,6 +152,15 @@ PICKER_SCRIPT = '''
         return tokens.length ? 'concat(' + tokens.join(', ') + ')' : '""';
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function escapeCssIdentifier(value) {
         if (window.CSS && typeof window.CSS.escape === 'function') {
             return window.CSS.escape(value);
@@ -227,10 +236,10 @@ PICKER_SCRIPT = '''
 
         tooltip.style.display = 'block';
         tooltip.innerHTML = `
-            <div><strong>태그:</strong> ${tag}</div>
-            <div><strong>XPath:</strong> ${xpath}</div>
-            <div><strong>CSS:</strong> ${css}</div>
-            ${text ? `<div><strong>텍스트:</strong> ${text}</div>` : ''}
+            <div><strong>태그:</strong> ${escapeHtml(tag)}</div>
+            <div><strong>XPath:</strong> ${escapeHtml(xpath)}</div>
+            <div><strong>CSS:</strong> ${escapeHtml(css)}</div>
+            ${text ? `<div><strong>텍스트:</strong> ${escapeHtml(text)}</div>` : ''}
             <div style="margin-top:5px; font-size:11px; color:#aaa;">(클릭하면 캡처 고정/해제를 전환합니다)</div>
         `;
     }
@@ -243,8 +252,10 @@ PICKER_SCRIPT = '''
             return;
         }
 
-        e.preventDefault();
-        e.stopPropagation();
+        if (window.__pickerOverlay !== false) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
 
         var target = e.target;
 
@@ -279,8 +290,8 @@ PICKER_SCRIPT = '''
         tooltip.className = '__picker_tooltip locked';
         tooltip.innerHTML = `
             <div style="color:#ffd166; margin-bottom:5px;">🔒 고정됨 ('이 요소 사용'을 눌러 선택)</div>
-            <div><strong>태그:</strong> ${tag}</div>
-            <div style="margin:5px 0; padding:5px; background:rgba(0,0,0,0.3); border-radius:4px;">${xpath}</div>
+            <div><strong>태그:</strong> ${escapeHtml(tag)}</div>
+            <div style="margin:5px 0; padding:5px; background:rgba(0,0,0,0.3); border-radius:4px;">${escapeHtml(xpath)}</div>
             <button class="__picker_btn __picker_btn_copy" id="__btnUse">이 요소 사용</button>
             <button class="__picker_btn __picker_btn_unlock" id="__btnUnlock">잠금 해제</button>
         `;
@@ -406,5 +417,11 @@ PICKER_SCRIPT = '''
     return "STARTED";
 })();
 '''
+
+
+def picker_overlay_bootstrap(overlay_mode: bool) -> str:
+    """Set overlay capture flag before (or after) injecting PICKER_SCRIPT."""
+    flag = "true" if overlay_mode else "false"
+    return f"window.__pickerOverlay = {flag};"
 
 # UI 상수

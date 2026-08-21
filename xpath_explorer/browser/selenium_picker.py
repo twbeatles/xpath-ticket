@@ -16,6 +16,7 @@ MAX_FRAME_DEPTH ,
 FRAME_CACHE_DURATION ,
 VALIDATION_MISS_TTL_SECONDS ,
 )
+from xpath_explorer .core .browser_assets .picker import picker_overlay_bootstrap
 from xpath_explorer .browser .dom_export import DomSnapshot 
 from xpath_explorer .core .perf import perf_span 
 
@@ -82,6 +83,7 @@ class BrowserPickerMixin:
     def start_picker (self ,overlay_mode :bool =False ):
         """요소 선택 모드를 시작하고 모든 윈도우/iframe에 picker를 주입합니다."""
         with self ._lock :
+            self ._picker_overlay_mode = bool (overlay_mode )
             self .ensure_valid_window ()
             original_frame_path =self .current_frame_path 
             try :
@@ -98,6 +100,7 @@ class BrowserPickerMixin:
                 try :
                     self .driver .switch_to .window (handle )
                     self .driver .switch_to .default_content ()
+                    self .driver .execute_script (picker_overlay_bootstrap(bool (getattr (self ,"_picker_overlay_mode",False ))))
                     self .driver .execute_script (PICKER_SCRIPT )
                     injected_count +=1 
                     self ._inject_to_frames ()
@@ -302,6 +305,7 @@ class BrowserPickerMixin:
                 try :
                 # 스크립트 주입
                     try :
+                        self .driver .execute_script (picker_overlay_bootstrap(bool (getattr (self ,"_picker_overlay_mode",False ))))
                         self .driver .execute_script (PICKER_SCRIPT )
                     except Exception :
                         pass # 안전하지 않은 프레임에서는 주입 실패 가능

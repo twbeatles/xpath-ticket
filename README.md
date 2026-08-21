@@ -1,4 +1,4 @@
-# 🔍 XPath Explorer v4.2
+# 🔍 XPath Explorer v4.3
 
 > **티켓 사이트 및 복잡한 웹 애플리케이션 자동화를 위한 강력한 데스크톱 XPath 탐색·분석·검증·관리 도구**
 
@@ -21,21 +21,22 @@ XPath Explorer는 인터파크, 멜론티켓, YES24 등 복잡한 티켓팅 사�
 - [📁 프로젝트 아키텍처](#-프로젝트-아키텍처)
 - [🔨 빌드 및 배포](#-빌드-및-배포)
 - [🧪 개발 및 품질 검증](#-개발-및-품질-검증)
+- [📝 변경 이력](#-변경-이력)
 - [📄 라이선스](#-라이선스)
 
 ---
 
 ## ✨ 핵심 기능
 
-- 🎯 **대화형 시각적 요소 선택기 (Visual Element Picker)**: 브라우저 상에서 마우스 호버/클릭으로 요소를 즉각 선택하고 견고한 XPath를 자동 추출합니다. 실수 클릭을 방지하는 **오버레이 모드**와 **요소 고정(Lock)** 기능을 제공합니다.
+- 🎯 **대화형 시각적 요소 선택기 (Visual Element Picker)**: 브라우저 상에서 마우스 호버/클릭으로 요소를 즉각 선택하고 견고한 XPath를 자동 추출합니다. 기본 켜진 **오버레이 모드**는 페이지 클릭을 가로채 실수 클릭을 막고, 해제하면 페이지 클릭이 그대로 전달됩니다. **요소 고정(Lock)** 도 지원합니다.
 - 🤖 **AI XPath 어시스턴트**: OpenAI(`gpt-5.4`) 및 Google Gemini(`gemini-flash-latest`)와 연동하여 자연어 설명("로그인 버튼", "날짜 선택 셀")만으로 최적의 XPath를 생성합니다.
 - 🪟 **다중 창/팝업 & 중첩 iframe 완벽 지원**: 예매 팝업창, 본인인증 팝업 및 인터파크 좌석 예매 iframe(`ifrmSeat` 등)의 문맥을 자동 기억하여 정확한 위치에서 검증 및 하이라이트를 수행합니다.
-- 🔍 **Playwright 자동 페이지 스캔**: 버튼, 입력 필드, 링크 등 페이지 내 상호작용 가능한 모든 요소를 일괄 스캔하여 목록화합니다.
+- 🔍 **Playwright 자동 페이지 스캔**: 버튼, 입력 필드, 링크 등 페이지 내 상호작용 가능한 모든 요소를 일괄 스캔하여 목록화합니다. Playwright에서 가져온 항목은 Playwright 세션이 살아 있을 때 그 엔진으로 검증/하이라이트합니다.
 - 💡 **XPath 자동 최적화 (Optimizer)**: ID, `data-*`, name, class, 텍스트, 부모-자식 관계 등 가중치 기반으로 안정성이 높은 다중 대안 XPath를 추천합니다.
 - 📊 **배치 테스트 & 시나리오 실행기**: 등록된 XPath의 일괄 동작 테스트, 성공률 집계 및 팝업/대기 액션이 포함된 시나리오 자동 실행을 지원합니다.
 - 🧾 **DOM 스냅샷 및 DOM Diff 분석**: 전체 페이지/iframe의 DOM을 단일 `.htm`으로 저장하고, 변경 전후의 구조 차이를 시각적으로 비교하는 리포트를 생성합니다.
 - 🔧 **매크로 및 자동화 코드 생성**: Python Selenium, Playwright Python, PyAutoGUI 실행 코드를 원클릭으로 생성하고 내보냅니다.
-- 🔄 **안전한 상태 관리**: 무제한 Undo/Redo(Ctrl+Z / Ctrl+Y) 및 원자적 파일 저장(`atomic_write_json`)으로 작업 손실을 완벽 방지합니다.
+- 🔄 **안전한 상태 관리**: Undo/Redo(Ctrl+Z / Ctrl+Y, 최대 50단계), 종료/열기 시 미저장 확인, 원자적 파일 저장(`atomic_write_json`)으로 작업 손실을 줄입니다.
 
 ---
 
@@ -70,9 +71,10 @@ python -m playwright install chromium
 
 ### 3. AI API 키 설정 (선택)
 
-AI XPath 어시스턴트를 사용하려면 메뉴의 `도구(T) > 🤖 AI XPath 추천...` 다이얼로그에서 설정하거나 환경변수를 등록합니다.
-- OpenAI: `OPENAI_API_KEY`
+AI XPath 어시스턴트를 사용하려면 환경변수를 등록하거나, 메뉴의 `도구(T) > 🤖 AI XPath 추천...` 다이얼로그에서 현재 세션 키를 입력합니다.
+- OpenAI: `OPENAI_API_KEY` (환경변수가 있으면 파일에 남은 키보다 우선)
 - Google Gemini: `GEMINI_API_KEY` (또는 `GOOGLE_API_KEY`)
+- API 키는 디스크의 `ai_config.json`에 저장하지 않습니다. provider/model만 저장됩니다.
 
 ---
 
@@ -111,7 +113,7 @@ python "xpath 조사기(모든 티켓 사이트).py"
 #### 방법 A. 🎯 대화형 시각적 요소 선택기 (Visual Picker)
 1. 오른쪽 패널 **`📝 편집기`** 탭에서 **`🎯 요소 선택 시작`** 버튼을 클릭합니다.
 2. 브라우저 화면에서 마우스를 가져가면 요소가 하이라이트됩니다.
-3. **`오버레이 모드 (클릭 방지)`** 체크 시 버튼 클릭 액션이 실행되지 않고 안전하게 요소 선택만 진행됩니다.
+3. **`오버레이 모드 (클릭 방지)`** 는 기본 켜짐입니다. 켜져 있으면 페이지 버튼 클릭이 실행되지 않고 선택만 됩니다. 해제하면 페이지 클릭이 그대로 전달됩니다.
 4. 원하는 요소 위에서 클릭하거나, **`📌 현재 요소 고정`** 버튼을 누르면 해당 요소의 XPath, 태그, 텍스트 및 기본 속성이 편집기에 자동으로 입력됩니다.
 
 #### 방법 B. 🔍 Playwright 자동 일괄 스캔 (Auto Scan)
@@ -177,7 +179,7 @@ python "xpath 조사기(모든 티켓 사이트).py"
 | **XPath 템플릿 라이브러리** | `도구 > 📚 XPath 템플릿 라이브러리...` | 버튼, 폼, 테이블, 텍스트 매칭 등 자주 쓰는 검증된 XPath 패턴 검색 및 즉시 적용 |
 | **DOM 비교 (Diff) 리포트** | `도구 > 🧾 DOM 비교 리포트` | 기준 페이지 대비 DOM 변경점을 분석하여 차이점을 시각적 HTML 리포트로 출력 |
 | **DOM 추출 (.htm)** | 편집기 / 자동 탐색 패널 | 전체 페이지, 현재 창, iframe을 포함한 원본 DOM을 단일 `.htm` 파일로 저장 |
-| **쿠키 관리** | `도구 > 쿠키 관리` | 로그인 세션 쿠키를 로컬에 저장하고 필요 시 다시 불러와 로그인 상태 유지 |
+| **쿠키 관리** | `도구 > 쿠키 관리` | 로그인 세션 쿠키를 로컬 JSON으로 저장/불러오기. 저장 전 경고, 현재 도메인과 맞는 쿠키만 주입 |
 | **요소 스크린샷** | `도구 > 📸 요소 스크린샷...` | 선택된 XPath 요소 영역만 정밀 캡처하여 이미지로 저장 |
 | **검증 히스토리 & 통계** | `도구 > 🕒 검증 히스토리 / 📈 통계` | 최근 검증 이력 500건 조회, 요소별 누적 성공률 및 응답 시간 분석 |
 | **오류 텔레메트리 & 진단** | `도구 > 🚨 오류 텔레메트리 / 🧭 기능 진단` | 브라우저 세션 상태, 프레임 구조, 런타임 에러 집계 및 Markdown 진단 리포트 출력 |
@@ -193,7 +195,7 @@ python "xpath 조사기(모든 티켓 사이트).py"
 | <kbd>Ctrl</kbd> + <kbd>S</kbd> | 현재 설정 저장 |
 | <kbd>Ctrl</kbd> + <kbd>T</kbd> | 현재 입력된 XPath 즉시 테스트(검증) |
 | <kbd>F5</kbd> | 등록된 전체 XPath 유효성 검증 |
-| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | 실행 취소 (Undo) |
+| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | 실행 취소 (Undo, 최대 50단계) |
 | <kbd>Ctrl</kbd> + <kbd>Y</kbd> | 다시 실행 (Redo) |
 | <kbd>Ctrl</kbd> + <kbd>H</kbd> | XPath 수정 히스토리 조회 |
 | <kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | UI 폰트 크기 확대 / 축소 / 초기화 |
@@ -237,7 +239,7 @@ python -m pip install -r requirements/requirements-full.txt
 pyinstaller packaging/pyinstaller/xpath_explorer.spec
 ```
 
-- **빌드 결과물**: `dist/XPathExplorer_v4.2.exe` (약 50~80MB)
+- **빌드 결과물**: `dist/XPathExplorer_v4.3.exe` (약 50~80MB)
 - **특징**: UPX 압축 지원, Chromium 드라이버 및 필수 에셋 번들링, headless-safe Qt 부트스트랩 지원
 
 ---
@@ -262,6 +264,12 @@ pytest -q
 # 5. 종합 품질 및 릴리즈 스모크 체크
 python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 ```
+
+---
+
+## 📝 변경 이력
+
+상세 내용은 `CHANGELOG.md`를 참고하세요. 최신 릴리즈는 **v4.3** 입니다.
 
 ---
 

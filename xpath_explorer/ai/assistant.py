@@ -10,7 +10,7 @@ import logging
 import json
 from typing import Any, Dict, List, Optional, cast
 
-from xpath_explorer.ai.config import load_ai_config
+from xpath_explorer.ai.config import load_ai_config, persistable_ai_config
 from xpath_explorer.ai.models import AIConfigResult, XPathSuggestion
 from xpath_explorer.ai.providers import (
     DEFAULT_GEMINI_MODEL,
@@ -143,7 +143,7 @@ class XPathAIAssistant:
             )
 
         try:
-            compat.atomic_write_json(config_path, self._config)
+            compat.atomic_write_json(config_path, persistable_ai_config(self._config))
             return AIConfigResult(
                 ok=True,
                 config_saved=True,

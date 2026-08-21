@@ -86,6 +86,17 @@ def test_site_config_from_dict_rejects_empty_name_or_xpath():
         )
 
 
+def test_site_config_from_dict_rejects_non_list_items():
+    with pytest.raises(ValueError, match="items must be a list"):
+        SiteConfig.from_dict(
+            {
+                "name": "site",
+                "url": "https://example.com",
+                "items": {"name": "a", "xpath": "//a"},
+            }
+        )
+
+
 def test_site_config_from_dict_preserves_source_engine():
     config = SiteConfig.from_dict(
         {

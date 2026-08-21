@@ -16,6 +16,7 @@ from xpath_explorer.core.perf import perf_span
 logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
+    _engine_browser_for_item,
     _get_browser_frame_path,
     _get_browser_window_metadata,
     _restore_browser_context,
@@ -30,9 +31,10 @@ class BatchTestWorker(QThread):
     item_validated = pyqtSignal(str, dict)  # name, full result dict
     completed = pyqtSignal(list, bool)  # results, cancelled
 
-    def __init__(self, browser: Any, items: List[XPathItem]):
+    def __init__(self, browser: Any, items: List[XPathItem], playwright: Any = None):
         super().__init__()
         self.browser = browser
+        self.playwright = playwright
         self.items = items
         self._stop_event = Event()
 
@@ -73,27 +75,36 @@ class BatchTestWorker(QThread):
                 try:
                     result: Dict[str, Any] = {}
                     window_meta: Dict[str, Any] = {}
-                    ok, error_msg = _switch_browser_to_item_window(self.browser, item)
-                    if not ok:
+                    engine_browser, engine_name = _engine_browser_for_item(
+                        self.browser, self.playwright, item
+                    )
+                    if engine_browser is None:
                         success = False
-                        msg = error_msg
-                        result = {"error_type": "window_context", "frame_path": item.found_frame or ""}
+                        msg = "Playwright 브라우저가 연결되어 있지 않습니다."
+                        result = {"error_type": "browser_not_connected", "frame_path": item.found_frame or ""}
                     else:
-                        with perf_span("worker.batch_validate_loop"):
-                            try:
-                                result = cast(
-                                    Dict[str, Any],
-                                    self.browser.validate_xpath(
-                                        item.xpath,
-                                        preferred_frame=item.found_frame or None,
-                                        session=session,
-                                    ),
-                                )
-                            except TypeError:
-                                # 구 시그니처(validate_xpath(xpath)) 호환
-                                result = cast(Dict[str, Any], self.browser.validate_xpath(item.xpath))
-                        success = bool(result.get('found', False))
-                        msg = result.get('msg', '')
+                        ok, error_msg = _switch_browser_to_item_window(engine_browser, item)
+                        if not ok:
+                            success = False
+                            msg = error_msg
+                            result = {"error_type": "window_context", "frame_path": item.found_frame or ""}
+                        else:
+                            item_session = session if engine_name != "playwright" else None
+                            with perf_span("worker.batch_validate_loop"):
+                                try:
+                                    result = cast(
+                                        Dict[str, Any],
+                                        engine_browser.validate_xpath(
+                                            item.xpath,
+                                            preferred_frame=item.found_frame or None,
+                                            session=item_session,
+                                        ),
+                                    )
+                                except TypeError:
+                                    # 구 시그니처(validate_xpath(xpath)) 호환
+                                    result = cast(Dict[str, Any], engine_browser.validate_xpath(item.xpath))
+                            success = bool(result.get('found', False))
+                            msg = result.get('msg', '')
                     window_meta = _get_browser_window_metadata(self.browser)
                 except Exception as e:
                     success = False

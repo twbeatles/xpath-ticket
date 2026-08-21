@@ -26,12 +26,27 @@ def test_arg_overrides_file_and_env(monkeypatch, tmp_path):
 
     a1 = XPathAIAssistant()
     assert a1._provider == "openai"
-    assert a1._api_key == "file_key"  # file overrides env
+    assert a1._api_key == "env_key"  # env overrides leftover file keys
     assert a1._model == "x"
 
     a2 = XPathAIAssistant(api_key="arg_key")
     assert a2._api_key == "arg_key"  # arg overrides everything
     assert a2._model == "x"
+
+
+def test_file_key_used_when_env_missing(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    cfg_dir = tmp_path / ".xpath_explorer"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    (cfg_dir / "ai_config.json").write_text(
+        json.dumps({"provider": "openai", "model": "x", "openai_api_key": "file_key"}),
+        encoding="utf-8",
+    )
+
+    assistant = XPathAIAssistant()
+    assert assistant._api_key == "file_key"
 
 
 def test_google_api_key_is_respected_for_gemini(monkeypatch, tmp_path):
@@ -67,7 +82,8 @@ def test_configure_reports_saved_result_and_persists(monkeypatch, tmp_path):
     saved = json.loads((tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8"))
     assert saved["provider"] == "openai"
     assert saved["model"] == ai_module.DEFAULT_OPENAI_MODEL
-    assert saved["openai_api_key"] == "sk-valid-test-key"
+    assert "openai_api_key" not in saved
+    assert assistant._api_key == "sk-valid-test-key"
 
 
 def test_configure_uses_atomic_json_writer(monkeypatch, tmp_path):

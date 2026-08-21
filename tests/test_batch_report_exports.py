@@ -26,6 +26,17 @@ def test_batch_results_csv_export_escapes_commas_quotes_and_newlines():
     assert parsed[0]["error_type"] == "not_found"
 
 
+def test_batch_results_csv_export_neutralizes_formula_cells():
+    rows = [{"success": True, "name": "=cmd", "xpath": "+1", "msg": "@SUM(A1)"}]
+
+    content = ExplorerBatchToolsMixin._batch_results_to_csv(rows)
+    parsed = list(csv.DictReader(io.StringIO(content)))
+
+    assert parsed[0]["name"].startswith("'")
+    assert parsed[0]["xpath"].startswith("'")
+    assert parsed[0]["msg"].startswith("'")
+
+
 def test_batch_results_markdown_export_escapes_pipe_characters():
     rows = [{"success": True, "name": "a|b", "msg": "ok|done", "frame_path": "f1"}]
 

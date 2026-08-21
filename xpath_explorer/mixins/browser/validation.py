@@ -57,23 +57,34 @@ class ExplorerBrowserValidationMixin:
         xpath = self.input_xpath.toPlainText().strip()
         if not xpath: return
         
-        if not self.browser.is_alive():
-            self._show_toast("브라우저가 연결되지 않았습니다.", "error")
+        engine_browser, engine_name = self._active_validation_browser()
+        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+            if engine_name == "playwright":
+                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "error")
+            else:
+                self._show_toast("브라우저가 연결되지 않았습니다.", "error")
             return
             
         self._show_toast("XPath 검색 중...", "info")
-        if not self._ensure_window_context_for_action():
+        if engine_name != "playwright" and not self._ensure_window_context_for_action():
             error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
             self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
             self._show_toast(error_msg, "error")
             return
         
-        original_frame = self.browser.current_frame_path
+        original_frame = getattr(engine_browser, "current_frame_path", "") or ""
 
         target_frame = self._resolve_active_frame_path()
 
         try:
-            result = self._validate_xpath_for_ui(xpath, target_frame)
+            if engine_name == "playwright":
+                if target_frame:
+                    switch = getattr(engine_browser, "switch_to_frame", None)
+                    if callable(switch):
+                        switch(target_frame)
+                result = cast(Dict[str, Any], engine_browser.validate_xpath(xpath))
+            else:
+                result = self._validate_xpath_for_ui(xpath, target_frame)
             success = bool(result.get('found'))
             name = self.input_name.text().strip()
             self._record_validation_outcome(name, xpath, success, result)
@@ -90,19 +101,18 @@ class ExplorerBrowserValidationMixin:
                 self._show_toast("요소를 찾았습니다!", "success")
                 
                 # 하이라이트
-                if result.get('frame_path'):
-                    self.browser.highlight(xpath, frame_path=result['frame_path'])
-                else:
-                    self.browser.highlight(xpath)
+                self._highlight_on_browser(engine_browser, xpath, result.get('frame_path') or target_frame)
             else:
-                error_msg = str(result.get('msg') or getattr(self.browser, "last_error", "") or "요소를 찾을 수 없습니다.")
+                error_msg = str(result.get('msg') or getattr(engine_browser, "last_error", "") or "요소를 찾을 수 없습니다.")
                 self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
                 self._show_toast(error_msg, "error")
             self._refresh_table()
         finally:
             # 프레임 복구 (항상 원복)
             try:
-                self.browser.switch_to_frame_by_path(original_frame if original_frame else "main")
+                switch_back = getattr(engine_browser, "switch_to_frame_by_path", None) or getattr(engine_browser, "switch_to_frame", None)
+                if callable(switch_back):
+                    switch_back(original_frame if original_frame else "main")
             except Exception:
                 pass
 
@@ -111,16 +121,20 @@ class ExplorerBrowserValidationMixin:
         xpath = self.input_xpath.toPlainText().strip()
         if not xpath:
             return
-        if not self.browser.is_alive():
-            self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
+        engine_browser, engine_name = self._active_validation_browser()
+        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+            if engine_name == "playwright":
+                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "warning")
+            else:
+                self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
             return
-        if not self._ensure_window_context_for_action():
+        if engine_name != "playwright" and not self._ensure_window_context_for_action():
             last_error = getattr(self.browser, "last_error", "")
             self._show_toast(last_error or "대상 창을 찾을 수 없습니다.", "error")
             return
         frame_path = self._resolve_active_frame_path()
-        if not self.browser.highlight(xpath, frame_path=frame_path):
-            last_error = getattr(self.browser, "last_error", "")
+        if not self._highlight_on_browser(engine_browser, xpath, frame_path):
+            last_error = getattr(engine_browser, "last_error", "")
             self._show_toast(last_error or "하이라이트 실패", "error")
 
     def _validate_all(self):
@@ -129,17 +143,29 @@ class ExplorerBrowserValidationMixin:
             self._show_toast("검증할 항목이 없습니다.", "warning")
             return
             
-        if not self.browser.is_alive():
+        if not self.browser.is_alive() and not (
+            getattr(self, "pw_manager", None) is not None and self.pw_manager.is_alive()
+        ):
             self._show_toast("브라우저 연결 필요", "error")
             return
+        if self._abort_if_driver_busy("전체 검증"):
+            return
+        self._stop_live_preview_sync()
 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         
         # 현재 열린 모든 윈도우 핸들 수집 (워커에 전달용)
-        windows = [w['handle'] for w in self.browser.get_windows()]
+        windows = []
+        if self.browser.is_alive():
+            windows = [w['handle'] for w in self.browser.get_windows()]
         
-        worker = ValidateWorker(self.browser, self.config.items, windows)
+        worker = ValidateWorker(
+            self.browser,
+            self.config.items,
+            windows,
+            playwright=getattr(self, "pw_manager", None),
+        )
         self.validate_worker = worker
         worker.progress.connect(lambda v, m: (self.progress_bar.setValue(v), self.lbl_status.setText(m)))
         worker.validated.connect(self._on_validated)
