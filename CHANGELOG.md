@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v4.4 - 2026-09-25
 
 ### 사용자 기능
 - 편집기에 **클릭 테스트** 버튼을 추가했습니다. 입력된 XPath 요소를 실제 브라우저에서 직접 클릭해 보고, 실패 시 원인을 결과창에 표시합니다 (Selenium 스크롤·ActionChains 폴백 / Playwright 공용).

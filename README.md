@@ -1,4 +1,4 @@
-# 🔍 XPath Explorer v4.3
+# 🔍 XPath Explorer v4.4
 
 > **티켓 사이트 및 복잡한 웹 애플리케이션 자동화를 위한 강력한 데스크톱 XPath 탐색·분석·검증·관리 도구**
 
@@ -243,7 +243,7 @@ python -m pip install -r requirements/requirements-full.txt
 pyinstaller packaging/pyinstaller/xpath_explorer.spec
 ```
 
-- **빌드 결과물**: `dist/XPathExplorer_v4.3.exe` (약 50~80MB)
+- **빌드 결과물**: `dist/XPathExplorer_v4.4.exe` (약 50~80MB)
 - **특징**: UPX 압축 지원, Chromium 드라이버 및 필수 에셋 번들링, headless-safe Qt 부트스트랩 지원
 
 ---
@@ -273,7 +273,7 @@ python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 
 ## 📝 변경 이력
 
-상세 내용은 `CHANGELOG.md`를 참고하세요. 최신 릴리즈는 **v4.3** 입니다.
+상세 내용은 `CHANGELOG.md`를 참고하세요. 최신 릴리즈는 **v4.4** 입니다.
 
 ---
 

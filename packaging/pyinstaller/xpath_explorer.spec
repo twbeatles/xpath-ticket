@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-XPath Explorer v4.3 - PyInstaller spec (optimized).
+XPath Explorer v4.4 - PyInstaller spec (optimized).
 Build: pyinstaller packaging/pyinstaller/xpath_explorer.spec
 """
 
@@ -204,7 +204,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='XPathExplorer_v4.3',
+    name='XPathExplorer_v4.4',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
