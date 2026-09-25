@@ -137,6 +137,49 @@ class ExplorerBrowserValidationMixin:
             last_error = getattr(engine_browser, "last_error", "")
             self._show_toast(last_error or "하이라이트 실패", "error")
 
+    def _click_test_xpath(self):
+        """현재 XPath 요소 클릭 테스트 (Selenium/Playwright 공용)."""
+        xpath = self.input_xpath.toPlainText().strip()
+        if not xpath:
+            self._show_toast("XPath를 먼저 입력하세요.", "warning")
+            return
+        engine_browser, engine_name = self._active_validation_browser()
+        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+            if engine_name == "playwright":
+                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "error")
+            else:
+                self._show_toast("브라우저가 연결되지 않았습니다.", "error")
+            return
+        if engine_name != "playwright" and not self._ensure_window_context_for_action():
+            error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+            self.txt_result.setPlainText(f"❌ 클릭 실패\n{error_msg}")
+            self._show_toast(error_msg, "error")
+            return
+        frame_path = self._resolve_active_frame_path()
+        click = getattr(engine_browser, "click_element", None)
+        if not callable(click):
+            self._show_toast("현재 엔진에서 클릭을 지원하지 않습니다.", "error")
+            return
+        self._show_toast("요소 클릭 시도 중...", "info")
+        try:
+            try:
+                ok = bool(click(xpath, frame_path=frame_path) if frame_path else click(xpath))
+            except TypeError:
+                ok = bool(click(xpath))
+        except Exception as e:
+            ok = False
+            try:
+                engine_browser.last_error = str(e)
+            except Exception:
+                pass
+        if ok:
+            self.txt_result.setPlainText(f"🖱️ 클릭 성공\n{xpath}")
+            self._show_toast("요소를 클릭했습니다.", "success")
+        else:
+            last_error = str(getattr(engine_browser, "last_error", "") or "클릭 실패")
+            self.txt_result.setPlainText(f"❌ 클릭 실패\n{last_error}")
+            self._show_toast(last_error, "error")
+
     def _validate_all(self):
         """전체 검증 시작"""
         if not self.config.items:

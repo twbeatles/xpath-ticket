@@ -167,3 +167,72 @@ class SeleniumValidationVisualMixin:
                 self ._set_last_error (f"스크린샷 저장 실패: {e }")
                 logger .error (f"스크린샷 저장 실패: {e }")
                 return False
+
+    def click_element (self ,xpath :str ,frame_path :Optional [str ]=None ,scroll :bool =True )->bool :
+        """XPath 요소 클릭. 프레임 전체 탐색 후 스크롤·일반 클릭·ActionChains 순으로 시도합니다."""
+        with self .frame_context ():
+            if not self .is_alive ():
+                self ._set_last_error ("브라우저가 연결되지 않았습니다.")
+                return False
+
+            self ._clear_last_error ()
+
+            try :
+                effective_frame =None
+                if frame_path :
+                    if self .switch_to_frame_by_path (frame_path ):
+                        effective_frame =frame_path
+                    else :
+                        self ._set_last_error (f"프레임 전환 실패: {frame_path }")
+                        return False
+
+                if not effective_frame :
+                    _ ,found_path =self .find_element_in_all_frames (xpath )
+                    if not found_path :
+                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                        return False
+                    effective_frame =found_path
+
+                with self .frame_context (effective_frame ):
+                    element =None
+                    deadline =time .time ()+3.0
+                    while True :
+                        try :
+                            element =self .driver .find_element (By .XPATH ,xpath )
+                            break
+                        except NoSuchElementException :
+                            if time .time ()>=deadline :
+                                self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                                return False
+                            time .sleep (0.25 )
+
+                    if scroll :
+                        try :
+                            self .driver .execute_script (
+                                "arguments[0].scrollIntoView({block: 'center'});",element )
+                            time .sleep (0.2 )
+                        except Exception :
+                            pass
+
+                    try :
+                        element .click ()
+                    except Exception as click_error :
+                        if ActionChains is None :
+                            raise
+                        try :
+                            ActionChains (self .driver ).move_to_element (element ).click ().perform ()
+                        except Exception :
+                            raise click_error
+
+                self ._clear_last_error ()
+                return True
+
+            except InvalidSelectorException as e :
+                self ._set_last_error (
+                    f"Invalid XPath selector: {self ._short_webdriver_error (e )}")
+                logger .error (f"클릭 오류: {e }")
+                return False
+            except Exception as e :
+                self ._set_last_error (f"클릭 실패: {e }")
+                logger .error (f"클릭 실패: {e }")
+                return False

@@ -86,3 +86,24 @@ def test_playwright_scan_all_pages_includes_popup_frames():
     assert [element.window_handle for element in elements] == ["pw-page-1", "pw-page-2"]
     assert [element.source_engine for element in elements] == ["playwright", "playwright"]
 
+class _NavigatingFrame(_FakeFrame):
+    """Navigating frame whose eval injection fails."""
+
+    def eval_on_selector_all(self, selector, script, max_count):
+        raise RuntimeError("Execution context was destroyed, frame was navigated")
+
+
+def test_playwright_scan_skips_navigating_frame():
+    bad = _NavigatingFrame("child")
+    main = _FakeFrame("", rows=[_row(text="Main")], children=[bad])
+    page = _FakePage("Root", "https://root.example", main)
+    manager = PlaywrightManager()
+    manager._is_initialized = True
+    cast(Any, manager)._page = page
+    cast(Any, manager)._context = _FakeContext([page])
+    cast(Any, manager)._current_frame = main
+
+    elements = manager.scan_elements("button", scope="current_window_frames")
+
+    assert [element.text for element in elements] == ["Main"]
+    assert [element.frame_path for element in elements] == ["main"]

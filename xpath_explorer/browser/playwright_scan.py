@@ -145,82 +145,96 @@ class PlaywrightScanMixin:
                     if remaining <= 0:
                         break
 
-                    data_rows = frame.eval_on_selector_all(
-                        selector,
-                        """
-                    (elements, maxCount) => {
-                        function xpathLiteral(value) {
-                            const text = String(value == null ? "" : value);
-                            if (!text.includes('"')) return `"${text}"`;
-                            if (!text.includes("'")) return `'${text}'`;
-                            const tokens = [];
-                            const parts = text.split('"');
-                            for (let i = 0; i < parts.length; i++) {
-                                if (parts[i]) tokens.push(`"${parts[i]}"`);
-                                if (i < parts.length - 1) tokens.push("'\"'");
+                    try:
+                        data_rows = frame.eval_on_selector_all(
+                            selector,
+                            """
+                        (elements, maxCount) => {
+                            function xpathLiteral(value) {
+                                const text = String(value == null ? "" : value);
+                                if (!text.includes('"')) return `"${text}"`;
+                                if (!text.includes("'")) return `'${text}'`;
+                                const tokens = [];
+                                const parts = text.split('"');
+                                for (let i = 0; i < parts.length; i++) {
+                                    if (parts[i]) tokens.push(`"${parts[i]}"`);
+                                    if (i < parts.length - 1) tokens.push('"');
+                                }
+                                return tokens.length ? `concat(${tokens.join(", ")})` : '""';
                             }
-                            return tokens.length ? `concat(${tokens.join(", ")})` : '""';
-                        }
 
-                        function attrEquals(attr, value) {
-                            return `@${attr}=${xpathLiteral(value)}`;
-                        }
-
-                        function buildXPath(el) {
-                            if (!el) return "";
-                            if (el.id) return `//*[${attrEquals("id", el.id)}]`;
-                            const tag = (el.tagName || "").toLowerCase();
-                            const name = el.getAttribute("name") || "";
-                            const text = (el.innerText || "").trim();
-                            if (name) return `//${tag}[${attrEquals("name", name)}]`;
-                            if (text && (tag === "button" || tag === "a")) {
-                                const clean = text.slice(0, 30);
-                                if (clean) return `//${tag}[contains(text(), ${xpathLiteral(clean)})]`;
+                            function attrEquals(attr, value) {
+                                return `@${attr}=${xpathLiteral(value)}`;
                             }
-                            return `//${tag || "*"}`;
-                        }
 
-                        function buildCss(el) {
-                            if (!el) return "";
-                            const esc = (v) => (v || "").replace(/([!"#$%&'()*+,./:;<=>?@[\\\\\\]^`{|}~])/g, "\\\\$1");
-                            const tag = (el.tagName || "").toLowerCase() || "*";
-                            const id = el.getAttribute("id") || "";
-                            const name = el.getAttribute("name") || "";
-                            const klass = el.getAttribute("class") || "";
-
-                            if (id) return `#${esc(id)}`;
-                            if (name) return `${tag}[name="${(name || "").replace(/"/g, '\\"')}"]`;
-                            if (klass) {
-                                const classes = klass.split(/\\s+/).filter(Boolean).slice(0, 2).map(esc);
-                                if (classes.length) return `${tag}.${classes.join(".")}`;
+                            function buildXPath(el) {
+                                if (!el) return "";
+                                if (el.id) return `//*[${attrEquals("id", el.id)}]`;
+                                const tag = (el.tagName || "").toLowerCase() || "*";
+                                const get = (n) => (el.getAttribute(n) || "").trim();
+                                const name = get("name");
+                                const testId = get("data-testid") || get("data-test") || get("data-test-id");
+                                const placeholder = get("placeholder");
+                                const aria = get("aria-label");
+                                const inputType = get("type");
+                                const klass = get("class").split(/\\s+/).filter(Boolean)[0] || "";
+                                const text = (el.innerText || "").trim().slice(0, 30);
+                                if (testId) return `//${tag}[${attrEquals("data-testid", testId)}]`;
+                                if (name) return `//${tag}[${attrEquals("name", name)}]`;
+                                if (placeholder) return `//${tag}[${attrEquals("placeholder", placeholder)}]`;
+                                if (aria) return `//${tag}[${attrEquals("aria-label", aria)}]`;
+                                if (inputType && (tag === "input" || tag === "button"))
+                                    return `//${tag}[${attrEquals("type", inputType)}]`;
+                                if (klass) return `//${tag}[contains(concat(" ", normalize-space(@class), " "), ${xpathLiteral(" " + klass + " ")})]`;
+                                if (text) return `//${tag}[contains(text(), ${xpathLiteral(text)})]`;
+                                return `//${tag}`;
                             }
-                            return tag;
-                        }
 
-                        const rows = [];
-                        const slice = elements.slice(0, maxCount);
-                        for (const el of slice) {
-                            try {
-                                const tag = (el.tagName || "").toLowerCase();
-                                const text = ((el.innerText || "").trim()).slice(0, 50);
-                                rows.push({
-                                    tag,
-                                    text,
-                                    element_id: el.getAttribute("id") || "",
-                                    element_name: el.getAttribute("name") || "",
-                                    element_class: (el.getAttribute("class") || "").slice(0, 50),
-                                    is_visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
-                                    is_enabled: !el.disabled,
-                                    xpath: buildXPath(el),
-                                    css_selector: buildCss(el)
-                                });
-                            } catch (_) {}
+                            function buildCss(el) {
+                                if (!el) return "";
+                                const esc = (v) => (v || "").replace(/([!"#$%&'()*+,./:;<=>?@[\\\\\\]^`{|}~])/g, "\\\\$1");
+                                const tag = (el.tagName || "").toLowerCase() || "*";
+                                const id = el.getAttribute("id") || "";
+                                const name = el.getAttribute("name") || "";
+                                const klass = el.getAttribute("class") || "";
+
+                                if (id) return `#${esc(id)}`;
+                                if (name) return `${tag}[name="${(name || "").replace(/"/g, '\\"')}"]`;
+                                if (klass) {
+                                    const classes = klass.split(/\\s+/).filter(Boolean).slice(0, 2).map(esc);
+                                    if (classes.length) return `${tag}.${classes.join(".")}`;
+                                }
+                                return tag;
+                            }
+
+                            const rows = [];
+                            const slice = elements.slice(0, maxCount);
+                            for (const el of slice) {
+                                try {
+                                    const tag = (el.tagName || "").toLowerCase();
+                                    const text = ((el.innerText || "").trim()).slice(0, 50);
+                                    rows.push({
+                                        tag,
+                                        text,
+                                        element_id: el.getAttribute("id") || "",
+                                        element_name: el.getAttribute("name") || "",
+                                        element_class: (el.getAttribute("class") || "").slice(0, 50),
+                                        is_visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
+                                        is_enabled: !el.disabled,
+                                        xpath: buildXPath(el),
+                                        css_selector: buildCss(el)
+                                    });
+                                } catch (_) {}
+                            }
+                            return rows;
                         }
-                        return rows;
-                    }
-                    """,
-                        remaining
-                    )
+                        """,
+                            remaining
+                        )
+                    except Exception as frame_error:
+                        logger.warning(
+                            f"프레임 스캔 건너뜀 ({frame_path}): {frame_error}")
+                        continue
 
                     for row in data_rows:
                         results.append(
@@ -268,7 +282,7 @@ class PlaywrightScanMixin:
                     const parts = text.split('"');
                     for (let i = 0; i < parts.length; i++) {
                         if (parts[i]) tokens.push(`"${parts[i]}"`);
-                        if (i < parts.length - 1) tokens.push("'\"'");
+                        if (i < parts.length - 1) tokens.push('"');
                     }
                     return tokens.length ? `concat(${tokens.join(", ")})` : '""';
                 }

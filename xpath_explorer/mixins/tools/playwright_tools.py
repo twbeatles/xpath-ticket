@@ -212,11 +212,17 @@ class ExplorerPlaywrightToolsMixin:
                 self.table_scan_results.setUpdatesEnabled(False)
                 self.table_scan_results.setRowCount(len(elements))
                 
+                self._last_scan_elements = list(elements)
                 for row, elem in enumerate(elements):
-                    xpath = elem.xpath
-                    if len(xpath) > 80:
-                        xpath = xpath[:77] + "..."
-                    self.table_scan_results.setItem(row, 0, QTableWidgetItem(xpath))
+                    full_xpath = elem.xpath or ""
+                    shown = full_xpath if len(full_xpath) <= 80 else full_xpath[:77] + "..."
+                    xpath_item = QTableWidgetItem(shown)
+                    xpath_item.setToolTip(full_xpath)
+                    try:
+                        xpath_item.setData(Qt.ItemDataRole.UserRole, full_xpath)
+                    except Exception:
+                        pass
+                    self.table_scan_results.setItem(row, 0, xpath_item)
                     self.table_scan_results.setItem(row, 1, QTableWidgetItem(elem.tag))
                     text = elem.text[:30] + "..." if len(elem.text) > 30 else elem.text
                     self.table_scan_results.setItem(row, 2, QTableWidgetItem(text))
@@ -286,9 +292,70 @@ class ExplorerPlaywrightToolsMixin:
             logger.error(f"Playwright DOM 저장 실패: {e}")
             self._show_toast(f"DOM 저장 실패: {e}", "error")
 
+    def _export_dom_bundle_playwright(self, scope: str = "all", include_frames: bool = True):
+        """Playwright DOM 분석 번들(.zip: 보고서 + manifest + 원본 HTML) 저장."""
+        if not self.pw_manager or not self.pw_manager.is_alive():
+            self._show_toast("Playwright 브라우저를 먼저 실행하세요.", "warning")
+            return
+
+        default_name = f"playwright_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        fname, _ = QFileDialog.getSaveFileName(
+            self,
+            "Playwright DOM 분석 번들 저장",
+            default_name,
+            "ZIP 파일 (*.zip)",
+        )
+        if not fname:
+            return
+
+        if not fname.lower().endswith(".zip"):
+            fname += ".zip"
+
+        self._show_toast("Playwright DOM 번들 추출 중...", "info", 2000)
+        try:
+            from xpath_explorer.browser.dom_export import save_dom_bundle
+
+            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            current_window = self.pw_manager.get_current_window_metadata()
+            summary = save_dom_bundle(
+                snapshots,
+                fname,
+                source_label="Playwright",
+                scope=scope,
+                selected_window_title=str(current_window.get("title", "") or ""),
+                selected_window_url=str(current_window.get("url", "") or ""),
+            )
+            self._show_toast(
+                f"DOM 번들 저장 완료: {fname} (문서 {summary['documents']}개, 실패 {summary['failed']}개)",
+                "success",
+                5000,
+            )
+        except Exception as e:
+            logger.error(f"Playwright DOM 번들 저장 실패: {e}")
+            self._show_toast(f"DOM 번들 저장 실패: {e}", "error")
+
+    def _copy_all_scanned_xpaths(self):
+        """스캔된 전체 XPath를 클립보드에 복사 (바로 활용)."""
+        elements = list(getattr(self, "_last_scan_elements", []) or [])
+        xpaths = [str(getattr(elem, "xpath", "") or "") for elem in elements]
+        xpaths = [xpath for xpath in xpaths if xpath]
+        if not xpaths:
+            self._show_toast("복사할 스캔 결과가 없습니다.", "warning")
+            return
+        try:
+            QApplication.clipboard().setText("\n".join(xpaths))
+        except Exception as e:
+            self._show_toast(f"복사 실패: {e}", "error")
+            return
+        self._show_toast(f"{len(xpaths)}개 XPath를 복사했습니다.", "success")
+
     def _use_scanned_element(self, element):
         """스캔된 요소를 편집기로 로드"""
         self.input_xpath.setPlainText(element.xpath)
+        try:
+            QApplication.clipboard().setText(element.xpath or "")
+        except Exception:
+            pass
         self.input_css.setText(element.css_selector)
         self._editing_source_engine = "playwright"
         self._editing_source_frame = str(getattr(element, "frame_path", "") or "main")

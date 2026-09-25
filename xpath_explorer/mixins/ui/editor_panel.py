@@ -222,6 +222,12 @@ class ExplorerUIEditorPanelMixin:
         self.btn_highlight.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_highlight.clicked.connect(self._highlight_xpath)
         btn_row.addWidget(self.btn_highlight)
+
+        self.btn_click = QPushButton("클릭 테스트")
+        self.btn_click.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_click.setToolTip("현재 입력된 XPath 요소를 실제 브라우저에서 클릭해봅니다.")
+        self.btn_click.clicked.connect(self._click_test_xpath)
+        btn_row.addWidget(self.btn_click)
         
         self.btn_save = QPushButton("목록에 저장")
         self.btn_save.setObjectName("success")
@@ -333,6 +339,12 @@ class ExplorerUIEditorPanelMixin:
         self.btn_scan.clicked.connect(self._scan_page_elements)
         scan_settings_layout.addWidget(self.btn_scan)
 
+        self.btn_copy_all_xpaths = QPushButton("📋 스캔 XPath 모두 복사")
+        self.btn_copy_all_xpaths.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy_all_xpaths.setToolTip("스캔된 전체 XPath를 줄바꿈으로 이어 클립보드에 복사합니다.")
+        self.btn_copy_all_xpaths.clicked.connect(self._copy_all_scanned_xpaths)
+        scan_settings_layout.addWidget(self.btn_copy_all_xpaths)
+
         self.btn_scan_export_dom = QToolButton()
         self.btn_scan_export_dom.setText("🧾 DOM 추출 (.htm)")
         self.btn_scan_export_dom.setObjectName("primary")
@@ -344,6 +356,7 @@ class ExplorerUIEditorPanelMixin:
         playwright_dom_menu.addAction("전체 DOM 저장", lambda: self._export_dom_playwright_htm(scope="all", include_frames=True))
         playwright_dom_menu.addAction("현재 창 DOM 저장", lambda: self._export_dom_playwright_htm(scope="current", include_frames=False))
         playwright_dom_menu.addAction("현재 창 + iframe DOM 저장", lambda: self._export_dom_playwright_htm(scope="current", include_frames=True))
+        playwright_dom_menu.addAction("분석용 번들 저장 (.zip)", lambda: self._export_dom_bundle_playwright(scope="all", include_frames=True))
         self.btn_scan_export_dom.setMenu(playwright_dom_menu)
         scan_settings_layout.addWidget(self.btn_scan_export_dom)
         

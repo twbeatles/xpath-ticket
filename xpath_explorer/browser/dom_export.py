@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 import difflib
+import json
+import zipfile
 
 
 @dataclass
@@ -324,3 +326,76 @@ def render_dom_diff_report_htm(
     parts.append("</body>")
     parts.append("</html>")
     return "\n".join(parts)
+
+def snapshot_record(snapshot: DomSnapshot, index: int) -> dict:
+    """추후 분석용 매니페스트에 담을 단일 문서 메타데이터."""
+    return {
+        "id": f"doc-{index}",
+        "engine": snapshot.engine or "",
+        "window_id": snapshot.window_id or "",
+        "window_title": snapshot.window_title or "",
+        "window_url": snapshot.window_url or "",
+        "is_popup": bool(snapshot.is_popup),
+        "frame_path": snapshot.frame_path or "main",
+        "frame_label": snapshot.frame_label or snapshot.frame_path or "main",
+        "document_url": snapshot.document_url or "",
+        "html_size": len(snapshot.html or ""),
+        "error": snapshot.error or "",
+        "error_type": snapshot.error_type or "",
+        "file": f"documents/doc-{index:03d}.html",
+    }
+
+
+def save_dom_bundle(
+    snapshots: list[DomSnapshot],
+    output_path: str,
+    source_label: str = "DOM",
+    scope: str = "all",
+    selected_window_title: str = "",
+    selected_window_url: str = "",
+    generated_at_iso: str | None = None,
+) -> dict:
+    """DOM 분석 번들(.zip: 보고서 HTM + manifest.json + 원본 HTML) 저장.
+
+    추후 XPath 재분석·사이트 구조 비교에 그대로 재사용할 수 있는 형태다.
+    """
+    from pathlib import Path as _Path
+
+    if generated_at_iso is None:
+        generated_at_iso = datetime.now().isoformat(timespec="seconds")
+
+    out = _Path(output_path)
+    if out.parent and str(out.parent) not in ("", "."):
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+    report = render_dom_report_htm(
+        snapshots,
+        source_label=source_label,
+        generated_at_iso=generated_at_iso,
+        scope=scope,
+        selected_window_title=selected_window_title,
+        selected_window_url=selected_window_url,
+    )
+    records = [snapshot_record(snap, idx) for idx, snap in enumerate(snapshots, start=1)]
+    manifest = {
+        "generated_at": generated_at_iso,
+        "source": source_label,
+        "scope": scope,
+        "selected_window_title": selected_window_title,
+        "selected_window_url": selected_window_url,
+        "total_documents": len(records),
+        "failed_documents": sum(1 for snap in snapshots if snap.error),
+        "documents": records,
+    }
+
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr("report.htm", report)
+        bundle.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        for record, snap in zip(records, snapshots):
+            bundle.writestr(record["file"], snap.html or "")
+
+    return {
+        "path": str(out),
+        "documents": len(records),
+        "failed": sum(1 for snap in snapshots if snap.error),
+    }

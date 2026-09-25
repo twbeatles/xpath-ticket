@@ -165,6 +165,7 @@ class ExplorerUIBrowserPanelMixin:
         selenium_dom_menu.addAction("전체 DOM 저장", lambda: self._export_dom_selenium_htm(scope="all", include_frames=True))
         selenium_dom_menu.addAction("현재 창 DOM 저장", lambda: self._export_dom_selenium_htm(scope="current", include_frames=False))
         selenium_dom_menu.addAction("현재 창 + iframe DOM 저장", lambda: self._export_dom_selenium_htm(scope="current", include_frames=True))
+        selenium_dom_menu.addAction("분석용 번들 저장 (.zip)", lambda: self._export_dom_bundle(scope="all", include_frames=True))
         self.btn_export_dom.setMenu(selenium_dom_menu)
         self.browser_layout.addWidget(self.btn_export_dom)
         

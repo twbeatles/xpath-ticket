@@ -46,7 +46,7 @@ from xpath_explorer.tools.ai import XPathAIAssistant
 from xpath_explorer.analysis.diff import XPathDiffAnalyzer
 from xpath_explorer.ui.table_model import XPathItemTableModel
 from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
-from xpath_explorer.browser.dom_export import render_dom_report_htm
+from xpath_explorer.browser.dom_export import render_dom_report_htm, save_dom_bundle
 
 from xpath_explorer.runtime import logger
 
@@ -139,3 +139,47 @@ class ExplorerBrowserExportMixin:
         except Exception as e:
             logger.error(f"Selenium DOM 저장 실패: {e}")
             self._show_toast(f"DOM 저장 실패: {e}", "error")
+
+    def _export_dom_bundle(
+        self,
+        scope: Literal["all", "current"] = "all",
+        include_frames: bool = True,
+    ):
+        """Selenium DOM 분석 번들(.zip: 보고서 + manifest + 원본 HTML) 저장."""
+        if not self.browser.is_alive():
+            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            return
+
+        default_name = f"selenium_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        fname, _ = QFileDialog.getSaveFileName(
+            cast(QWidget, self),
+            "DOM 분석 번들 저장",
+            default_name,
+            "ZIP 파일 (*.zip)",
+        )
+        if not fname:
+            return
+
+        if not fname.lower().endswith(".zip"):
+            fname += ".zip"
+
+        self._show_toast("DOM 번들 추출 중...", "info", 2000)
+        try:
+            snapshots = self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            current_window = self.browser.get_current_window_metadata()
+            summary = save_dom_bundle(
+                snapshots,
+                fname,
+                source_label="Selenium",
+                scope=scope,
+                selected_window_title=str(current_window.get("title", "") or ""),
+                selected_window_url=str(current_window.get("url", "") or ""),
+            )
+            self._show_toast(
+                f"DOM 번들 저장 완료: {fname} (문서 {summary['documents']}개, 실패 {summary['failed']}개)",
+                "success",
+                5000,
+            )
+        except Exception as e:
+            logger.error(f"Selenium DOM 번들 저장 실패: {e}")
+            self._show_toast(f"DOM 번들 저장 실패: {e}", "error")

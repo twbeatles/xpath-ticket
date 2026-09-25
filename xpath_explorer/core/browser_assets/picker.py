@@ -147,7 +147,7 @@ PICKER_SCRIPT = '''
         var parts = text.split('"');
         for (var i = 0; i < parts.length; i++) {
             if (parts[i]) tokens.push('"' + parts[i] + '"');
-            if (i < parts.length - 1) tokens.push("'\"'");
+            if (i < parts.length - 1) tokens.push('"');
         }
         return tokens.length ? 'concat(' + tokens.join(', ') + ')' : '""';
     }
@@ -165,7 +165,7 @@ PICKER_SCRIPT = '''
         if (window.CSS && typeof window.CSS.escape === 'function') {
             return window.CSS.escape(value);
         }
-        return String(value || '').replace(/[^a-zA-Z0-9_-]/g, function(ch) { return '\\' + ch; });
+        return String(value || '').replace(/[^a-zA-Z0-9_-]/g, function(ch) { return '\\\\' + ch; });
     }
 
     // XPath 생성 함수

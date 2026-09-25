@@ -169,17 +169,51 @@ class PlaywrightDomActionsMixin:
         except Exception as e:
             return {"found": False, "msg": str(e), "error_type": "exception"}
 
-    def click_element(self, xpath: str, timeout: int = 5000) -> bool:
-        """요소 클릭"""
+    def click_element(
+        self,
+        xpath: str,
+        timeout: int = 5000,
+        frame_path: Optional[str] = None,
+    ) -> bool:
+        """요소 클릭. 지정 프레임 우선, 현재 프레임, 전체 프레임 순으로 탐색합니다."""
         if not self.is_alive():
+            self.last_error = "브라우저 연결 안됨"
             return False
         try:
-            frame = self._get_frame()
-            if not frame:
+            page = self._get_current_page()
+            candidates: list[Any] = []
+            if frame_path and page is not None:
+                for candidate, candidate_path in self._walk_frame_paths(page):
+                    if candidate_path == frame_path:
+                        candidates.append(candidate)
+                        break
+            current = self._get_frame()
+            if current is not None and current not in candidates:
+                candidates.append(current)
+            if page is not None:
+                for candidate, _candidate_path in self._walk_frame_paths(page):
+                    if candidate not in candidates:
+                        candidates.append(candidate)
+            if not candidates:
+                self.last_error = "브라우저 연결 안됨"
                 return False
-            frame.click(f"xpath={xpath}", timeout=timeout)
-            return True
+
+            last_error: str = ""
+            for frame in candidates:
+                try:
+                    locator = frame.locator(f"xpath={xpath}")
+                    locator.scroll_into_view_if_needed(timeout=timeout)
+                    locator.click(timeout=timeout)
+                    self.last_error = ""
+                    return True
+                except Exception as e:
+                    last_error = str(e)
+                    continue
+            self.last_error = last_error or "요소를 찾을 수 없음"
+            logger.error(f"클릭 실패: {self.last_error}")
+            return False
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"클릭 실패: {e}")
             return False
 
