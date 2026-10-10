@@ -115,6 +115,9 @@ class XPathAIAssistant:
         self._config["provider"] = provider
         self._config["model"] = self._model
         self._config[f"{provider}_api_key"] = api_key
+        # Drop the other provider's key from memory on switch.
+        other = "gemini" if provider == "openai" else "openai"
+        self._config.pop(f"{other}_api_key", None)
 
         return self._save_config()
 
@@ -269,7 +272,9 @@ class XPathAIAssistant:
             openai_cls = getattr(openai_module, "OpenAI", None)
             if openai_cls is None:
                 raise ImportError("openai.OpenAI not found")
-            self._client = openai_cls(api_key=self._api_key)
+            # Explicit timeout: never let a hung network call pin the worker.
+            # (Gemini path keeps SDK defaults; explicit timeout unverified.)
+            self._client = openai_cls(api_key=self._api_key, timeout=30.0)
         elif self._provider == "gemini":
             genai_module = _compat_ai_module().import_optional("google.genai")
             if genai_module is None:

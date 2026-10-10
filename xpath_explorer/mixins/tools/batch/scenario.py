@@ -7,6 +7,7 @@ import io
 import json
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from xpath_explorer.qt_compat import (
@@ -67,6 +68,7 @@ from xpath_explorer.browser.dom_export import (
     diff_dom_snapshots,
 )
 
+from xpath_explorer.core.paths import atomic_write_text
 from xpath_explorer.runtime import logger, error_telemetry
 
 
@@ -303,8 +305,7 @@ class BatchScenarioMixin:
             if not fname:
                 return
             try:
-                with open(fname, "w", encoding="utf-8") as f:
-                    f.write(input_json.toPlainText())
+                atomic_write_text(Path(fname), input_json.toPlainText())
                 self._show_toast(f"시나리오 저장 완료: {fname}", "success")
             except Exception as e:
                 self._show_toast(f"시나리오 저장 실패: {e}", "error")

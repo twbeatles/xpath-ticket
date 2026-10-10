@@ -34,19 +34,55 @@ def test_arg_overrides_file_and_env(monkeypatch, tmp_path):
     assert a2._model == "x"
 
 
-def test_file_key_used_when_env_missing(monkeypatch, tmp_path):
+def test_legacy_file_key_is_purged_and_never_used(monkeypatch, tmp_path):
     _patch_home(monkeypatch, tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
     cfg_dir = tmp_path / ".xpath_explorer"
     cfg_dir.mkdir(parents=True, exist_ok=True)
-    (cfg_dir / "ai_config.json").write_text(
-        json.dumps({"provider": "openai", "model": "x", "openai_api_key": "file_key"}),
+    cfg_file = cfg_dir / "ai_config.json"
+    cfg_file.write_text(
+        json.dumps({
+            "provider": "openai",
+            "model": "x",
+            "openai_api_key": "legacy_key",
+            "gemini_api_key": "legacy_gemini_key",
+        }),
         encoding="utf-8",
     )
 
     assistant = XPathAIAssistant()
-    assert assistant._api_key == "file_key"
+    assert assistant._api_key is None
+    assert not assistant.is_available()
+
+    scrubbed = json.loads(cfg_file.read_text(encoding="utf-8"))
+    assert "openai_api_key" not in scrubbed
+    assert "gemini_api_key" not in scrubbed
+    assert scrubbed["provider"] == "openai"
+    assert scrubbed["model"] == "x"
+
+
+def test_env_key_still_wins_and_purges_legacy_file_key(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "env_key")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    cfg_dir = tmp_path / ".xpath_explorer"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    cfg_file = cfg_dir / "ai_config.json"
+    cfg_file.write_text(
+        json.dumps({"provider": "openai", "model": "x", "openai_api_key": "legacy_key"}),
+        encoding="utf-8",
+    )
+
+    assistant = XPathAIAssistant()
+    assert assistant._api_key == "env_key"
+
+    scrubbed = json.loads(cfg_file.read_text(encoding="utf-8"))
+    assert "openai_api_key" not in scrubbed
 
 
 def test_google_api_key_is_respected_for_gemini(monkeypatch, tmp_path):
@@ -125,4 +161,16 @@ def test_configure_rejects_invalid_key():
     assert result.ok is False
     assert result.config_saved is False
     assert "API 키" in result.message
+
+
+def test_configure_drops_other_provider_key_from_memory(monkeypatch, tmp_path):
+    _patch_home(monkeypatch, tmp_path)
+
+    assistant = XPathAIAssistant()
+    assistant.configure("openai-key-1234567890", provider="openai")
+    assert assistant._config.get("openai_api_key") == "openai-key-1234567890"
+
+    assistant.configure("gemini-key-1234567890", provider="gemini")
+    assert "openai_api_key" not in assistant._config
+    assert assistant._config.get("gemini_api_key") == "gemini-key-1234567890"
 

@@ -51,3 +51,22 @@ def test_get_client_gemini_raises_clear_error_when_module_missing(monkeypatch):
         assistant._get_client()
 
     assert "pip install google-genai" in str(exc_info.value)
+
+
+def test_get_client_openai_sets_explicit_timeout(monkeypatch):
+    captured = {}
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    fake_module = types.SimpleNamespace(OpenAI=_FakeOpenAI)
+    monkeypatch.setattr(ai_module, "import_optional", lambda _name: fake_module)
+
+    assistant = XPathAIAssistant(api_key="12345678901")
+    assistant._provider = "openai"
+    client = assistant._get_client()
+
+    assert isinstance(client, _FakeOpenAI)
+    assert captured.get("api_key") == "12345678901"
+    assert captured.get("timeout") == 30.0

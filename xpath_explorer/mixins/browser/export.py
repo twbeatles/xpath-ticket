@@ -47,6 +47,7 @@ from xpath_explorer.analysis.diff import XPathDiffAnalyzer
 from xpath_explorer.ui.table_model import XPathItemTableModel
 from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
 from xpath_explorer.browser.dom_export import render_dom_report_htm, save_dom_bundle
+from xpath_explorer.core.paths import atomic_write_text
 
 from xpath_explorer.runtime import logger
 
@@ -127,8 +128,7 @@ class ExplorerBrowserExportMixin:
                 selected_window_title=str(current_window.get("title", "") or ""),
                 selected_window_url=str(current_window.get("url", "") or ""),
             )
-            with open(fname, "w", encoding="utf-8") as f:
-                f.write(report)
+            atomic_write_text(Path(fname), report)
 
             fail_count = sum(1 for s in snapshots if s.error)
             self._show_toast(

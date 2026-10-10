@@ -1,4 +1,4 @@
-# 🔍 XPath Explorer v4.4
+# 🔍 XPath Explorer v4.5
 
 > **티켓 사이트 및 복잡한 웹 애플리케이션 자동화를 위한 강력한 데스크톱 XPath 탐색·분석·검증·관리 도구**
 
@@ -31,14 +31,14 @@ XPath Explorer는 인터파크, 멜론티켓, YES24 등 복잡한 티켓팅 사�
 - 🎯 **대화형 시각적 요소 선택기 (Visual Element Picker)**: 브라우저 상에서 마우스 호버/클릭으로 요소를 즉각 선택하고 견고한 XPath를 자동 추출합니다. 기본 켜진 **오버레이 모드**는 페이지 클릭을 가로채 실수 클릭을 막고, 해제하면 페이지 클릭이 그대로 전달됩니다. **요소 고정(Lock)** 도 지원합니다.
 - 🤖 **AI XPath 어시스턴트**: OpenAI(`gpt-5.4`) 및 Google Gemini(`gemini-flash-latest`)와 연동하여 자연어 설명("로그인 버튼", "날짜 선택 셀")만으로 최적의 XPath를 생성합니다.
 - 🪟 **다중 창/팝업 & 중첩 iframe 완벽 지원**: 예매 팝업창, 본인인증 팝업 및 인터파크 좌석 예매 iframe(`ifrmSeat` 등)의 문맥을 자동 기억하여 정확한 위치에서 검증 및 하이라이트를 수행합니다.
-- 🖱️ **XPath 클릭 테스트**: 편집기의 검증/하이라이트 옆에 있는 버튼으로 실제 브라우저에서 요소를 직접 클릭해 봅니다. Selenium/Playwright 공용이며 창/프레임 컨텍스트를 자동으로 맞춥니다.
+- 🖱️ **XPath 클릭 테스트**: 편집기의 검증/하이라이트 옆에 있는 버튼으로 실제 브라우저에서 요소를 직접 클릭해 봅니다. Selenium/Playwright 공용이며 창/프레임 컨텍스트를 자동으로 맞춥니다. 실클릭 전에 상태 변경(예매·결제 등) 가능성을 확인하며, 클릭 성공 후 창/프레임 목록을 갱신합니다.
 - 🔍 **Playwright 자동 페이지 스캔**: 버튼, 입력 필드, 링크 등 페이지 내 상호작용 가능한 모든 요소를 일괄 스캔하여 목록화합니다. Playwright에서 가져온 항목은 Playwright 세션이 살아 있을 때 그 엔진으로 검증/하이라이트합니다.
 - 📋 **스캔 XPath 바로 복사**: 스캔 결과의 전체 XPath를 잘림 없이 클립보드에 복사합니다. 개별 `사용`은 해당 XPath를 편집기에 넣으면서 동시에 복사하고, `📋 스캔 XPath 모두 복사`로 전체 목록을 한 번에 복사합니다.
 - 💡 **XPath 자동 최적화 (Optimizer)**: ID, `data-*`, name, class, 텍스트, 부모-자식 관계 등 가중치 기반으로 안정성이 높은 다중 대안 XPath를 추천합니다.
 - 📊 **배치 테스트 & 시나리오 실행기**: 등록된 XPath의 일괄 동작 테스트, 성공률 집계 및 팝업/대기 액션이 포함된 시나리오 자동 실행을 지원합니다.
 - 🧾 **DOM 스냅샷 및 DOM Diff 분석**: 전체 페이지/iframe의 DOM을 단일 `.htm`으로 저장하고, 변경 전후의 구조 차이를 시각적으로 비교하는 리포트를 생성합니다. `분석용 번들 저장 (.zip)`으로 보고서 HTM + manifest.json + 원본 HTML을 묶어 저장해 추후 재분석에 활용할 수 있습니다.
 - 🔧 **매크로 및 자동화 코드 생성**: Python Selenium, Playwright Python, PyAutoGUI 실행 코드를 원클릭으로 생성하고 내보냅니다.
-- 🔄 **안전한 상태 관리**: Undo/Redo(Ctrl+Z / Ctrl+Y, 최대 50단계), 종료/열기 시 미저장 확인, 원자적 파일 저장(`atomic_write_json`)으로 작업 손실을 줄입니다.
+- 🔄 **안전한 상태 관리**: Undo/Redo(Ctrl+Z / Ctrl+Y, 최대 50단계), 종료/열기 시 미저장 확인, 원자적 파일 저장(`atomic_write_json`)으로 작업 손실을 줄입니다. 항목 변경 시 `~/.xpath_explorer/autosave.json`에 자동 저장하고, 미저장 상태로 끝난 세션이 있으면 다음 시작 때 복원을 제안합니다.
 
 ---
 
@@ -76,7 +76,7 @@ python -m playwright install chromium
 AI XPath 어시스턴트를 사용하려면 환경변수를 등록하거나, 메뉴의 `도구(T) > 🤖 AI XPath 추천...` 다이얼로그에서 현재 세션 키를 입력합니다.
 - OpenAI: `OPENAI_API_KEY` (환경변수가 있으면 파일에 남은 키보다 우선)
 - Google Gemini: `GEMINI_API_KEY` (또는 `GOOGLE_API_KEY`)
-- API 키는 디스크의 `ai_config.json`에 저장하지 않습니다. provider/model만 저장됩니다.
+- API 키는 디스크의 `ai_config.json`에 저장하지 않습니다. provider/model만 저장됩니다. v4.3 이전에 저장된 평문 키가 파일에 남아 있으면 첫 실행 때 자동 파기하고 환경변수를 사용합니다.
 
 ---
 
@@ -158,6 +158,7 @@ python "xpath 조사기(모든 티켓 사이트).py"
 3. **시나리오 실행기 (Scenario Runner)**:
    - 메뉴 `도구(T) > 📊 배치 테스트 > 시나리오 실행기...`를 실행합니다.
    - 팝업 대기(`wait_for_popup`), 팝업 전환(`switch_latest_popup`), 프레임 전환, 요소 검증이 결합된 JSON 시나리오를 불러와 자동 실행합니다.
+   - 요소 검증 스텝은 항목의 엔진(Selenium/Playwright)을 따라가지만, 팝업 대기·창 전환 스텝은 Selenium 전용입니다. 요구 엔진이 꺼져 있으면 실행 전에 실패 사유를 안내합니다. 스텝 재시도는 최대 10회, 대기는 최대 60초입니다.
 4. **리포트 내보내기**:
    - 검증 및 시나리오 결과를 **CSV** 또는 **Markdown** 리포트 파일로 즉시 저장할 수 있습니다.
 
@@ -180,10 +181,11 @@ python "xpath 조사기(모든 티켓 사이트).py"
 | 도구 | 메뉴 위치 | 설명 |
 |------|-----------|------|
 | **XPath 템플릿 라이브러리** | `도구 > 📚 XPath 템플릿 라이브러리...` | 버튼, 폼, 테이블, 텍스트 매칭 등 자주 쓰는 검증된 XPath 패턴 검색 및 즉시 적용 |
-| **DOM 비교 (Diff) 리포트** | `도구 > 🧾 DOM 비교 리포트` | 기준 페이지 대비 DOM 변경점을 분석하여 차이점을 시각적 HTML 리포트로 출력 |
+| **DOM 비교 (Diff) 리포트** | `도구 > 🧾 DOM 비교 리포트` | 기준 페이지 대비 DOM 변경점을 분석하여 차이점을 시각적 HTML 리포트로 출력. Selenium/Playwright 공용 |
+| **Diff 분석 (변경 감지)** | `도구 > 🔍 Diff 분석 (변경 감지)...` | 등록 항목의 현재 상태를 기준과 비교. Selenium 연결이 필요하며 다른 브라우저 작업 실행 중에는 시작할 수 없음 |
 | **DOM 분석 번들 (.zip)** | 브라우저/DOM 메뉴 | 보고서 HTM + manifest.json + 문서별 원본 HTML을 묶은 재분석용 번들 저장 |
 | **DOM 추출 (.htm)** | 편집기 / 자동 탐색 패널 | 전체 페이지, 현재 창, iframe을 포함한 원본 DOM을 단일 `.htm` 파일로 저장 |
-| **쿠키 관리** | `도구 > 쿠키 관리` | 로그인 세션 쿠키를 로컬 JSON으로 저장/불러오기. 저장 전 경고, 현재 도메인과 맞는 쿠키만 주입 |
+| **쿠키 관리** | `도구 > 쿠키 관리` | 로그인 세션 쿠키를 로컬 JSON으로 저장/불러오기. 저장 전 경고, 현재 도메인과 맞는 쿠키만 주입. Selenium이 꺼져 있으면 Playwright 세션을 사용. 백업(`.bak`) 파일을 남기지 않음 |
 | **요소 스크린샷** | `도구 > 📸 요소 스크린샷...` | 선택된 XPath 요소 영역만 정밀 캡처하여 이미지로 저장 |
 | **검증 히스토리 & 통계** | `도구 > 🕒 검증 히스토리 / 📈 통계` | 최근 검증 이력 500건 조회, 요소별 누적 성공률 및 응답 시간 분석 |
 | **오류 텔레메트리 & 진단** | `도구 > 🚨 오류 텔레메트리 / 🧭 기능 진단` | 브라우저 세션 상태, 프레임 구조, 런타임 에러 집계 및 Markdown 진단 리포트 출력 |
@@ -243,7 +245,7 @@ python -m pip install -r requirements/requirements-full.txt
 pyinstaller packaging/pyinstaller/xpath_explorer.spec
 ```
 
-- **빌드 결과물**: `dist/XPathExplorer_v4.4.exe` (약 50~80MB)
+- **빌드 결과물**: `dist/XPathExplorer_v4.5.exe` (약 50~80MB)
 - **특징**: UPX 압축 지원, Chromium 드라이버 및 필수 에셋 번들링, headless-safe Qt 부트스트랩 지원
 
 ---
@@ -265,6 +267,9 @@ python -m pyright -p .
 # 4. 단위 테스트 실행
 pytest -q
 
+# 전체 의존성 없이 순수 로직 테스트만 실행할 때
+pytest -q tests/test_csv_safety.py tests/test_url_safety.py tests/test_cookie_safety.py tests/test_ai_config_precedence.py tests/test_engine_router.py tests/test_autosave.py
+
 # 5. 종합 품질 및 릴리즈 스모크 체크
 python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 ```
@@ -273,7 +278,7 @@ python scripts/run_quality_checks.py --strict-doc-warnings --smoke-release
 
 ## 📝 변경 이력
 
-상세 내용은 `CHANGELOG.md`를 참고하세요. 최신 릴리즈는 **v4.4** 입니다.
+상세 내용은 `CHANGELOG.md`를 참고하세요. 최신 릴리즈는 **v4.5** 입니다.
 
 ---
 

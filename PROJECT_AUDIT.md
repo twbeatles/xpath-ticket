@@ -1,465 +1,322 @@
 # Project Audit
 
-감사 기준일: 2026-08-21  
-대상: XPath Explorer v4.3 (`xpath-ticket`)  
-후속: 본 감사의 1·2단계 수정과 문서/릴리즈 반영은 v4.3에서 완료. Selenium 소스 재포맷은 별도 작업으로 남김.  
-방법: `README.md` 정독, `CLAUDE.md` 부재 확인, CodeGraph MCP로 엔트리포인트/호출 관계/영향 범위 분석, 필요한 경우에만 현재 패키지 소스와 테스트를 보조 확인.  
-범위: 기능 구현상 실제 문제가 될 수 있는 부분. 코드 수정은 하지 않음.
+감사 기준일: 2026-10-10
+대상: XPath Explorer v4.4 (`xpath-ticket`, 현재 패키지 `xpath_explorer/`)
+방법: `README.md`·`CLAUDE.md`·`docs/claude.md`·`CHANGELOG.md` 정독, CodeGraph MCP 우선 분석 후 grep·직접 열람·테스트 실행으로 보완. 코드는 수정하지 않음(본 보고서 파일만 신규 작성/갱신).
+이전 감사: 루트의 기존 `PROJECT_AUDIT.md`(v4.3 기준, 2026-08-21)는 본 감사로 대체한다. v4.3에서 수정 예고된 항목이 실제 반영됐는지도 재확인했다.
+후속(2026-10-10): 본 문서의 High-Risk 5건과 주요 갭은 v4.5(`CHANGELOG.md` 참고)에서 반영했다. 아래 본문은 감사 시점 기록으로 유지한다.
 
 ---
 
 ## 1. Executive Summary
 
-이 프로젝트는 레거시 단일 파일 GUI를 계층형 패키지로 분리한 PyQt6 데스크톱 앱이다. 설정 스키마 강제 변환, 원자적 JSON 저장, 워커 취소, 창/프레임 복구, 검증 세션 캐시 등 **안정성 장치는 이미 꽤 들어가 있다.** 단위 테스트도 워커/설정/경로/DOM 리포트 중심으로 넓게 깔려 있다.
+이 프로젝트는 티켓 사이트 자동화를 위한 PyQt6 데스크톱 XPath 탐색·검증 도구다. v4.3 감사에서 지적된 고위험 항목(오버레이 미동작, 이중 엔진 단절, API 키 평문 저장, 쿠키 평문·도메인 미분리, 종료 시 미저장 손실, 미리보기 중첩 실행, CSV 수식 주입, URL 스킴, 시나리오 무제한 대기, 설정 스키마 침묵 실패, QSettings 키)은 **모두 코드상 수정이 확인**됐다 (`CHANGELOG.md` v4.3 절과 일치. 관련 테스트 33개 실행·통과).
 
-다만 사용자에게 보이는 핵심 기능 몇 개가 문서와 다르거나, 엔진이 둘로 갈라져 있으며, 세션 비밀이 평문으로 남는다. 전체 위험도는 **Medium-High**다. 앱이 즉시 못 뜨는 수준의 치명 결함은 확인되지 않았지만, 티켓팅 자동화 도구로서 **세션 쿠키/API 키 유출**, **오버레이 모드 무력화**, **Selenium/Playwright 이중 엔진 불일치**, **종료 시 작업 손실**은 실제 사용에서 바로 체감될 가능성이 높다.
+전체 위험도는 **Medium**이다. 앱이 뜨지 않거나 데이터를 광범위하게 날리는 치명 결함은 확인되지 않았다. 다만 v4.4 현재 코드에서 **이중 엔진(Selenium/Playwright) 대응의 잔재**가 시나리오 실행기와 Diff 분석에 남아 있고, **실시간 티켓 사이트를 향한 실클릭 버튼에 확인 절차가 없으며**, **구버전이 남긴 평문 API 키 파일을 여전히 읽어 사용**한다. 세 가지는 실제 사용에서 바로 체감될 수 있는 문제다.
 
-핵심 문제 요약:
+가장 중요한 문제 3~5개:
 
-| 영역 | 핵심 소견 | 우선순위 |
-|------|-----------|----------|
-| Visual Picker | `overlay_mode`가 UI에서 넘어가지만 `start_picker()`가 사용하지 않음. 클릭은 JS에서 항상 가로챔 | High |
-| 이중 엔진 | Playwright 스캔 결과는 `source_engine=playwright`로 저장되나, 검증/라이브 미리보기/배치는 Selenium `BrowserManager`만 사용 | High |
-| 보안 | `ai_config.json`에 API 키 평문 저장, 쿠키 JSON도 평문. 파일 권한이 제한되지 않음 | High |
-| 상태 | `closeEvent`가 미저장 XPath 목록을 묻지 않고 종료 | High |
-| 비동기 | 라이브 미리보기 워커가 이전 스레드를 기다리지 않고 새로 시작. Picker/Validate와 같은 WebDriver를 공유 | High |
-| 문서 | `CLAUDE.md` 없음. README의 “무제한 Undo/Redo”, 오버레이 모드, 환경변수 우선순위가 구현과 불일치 | Medium |
-| 테스트 | facade/워커/스키마는 있으나, 오버레이, 쿠키 mixin, 메인 윈도우 통합, 이중 엔진 경로는 거의 없음 | Medium |
+1. [ISSUE-001] Playwright-only 상태에서 시나리오 실행이 빈 결과로 "완료"되고, 팝업/창 액션은 항상 Selenium만 본다 (High, Confirmed).
+2. [ISSUE-002] 클릭 테스트가 확인 없이 실제 브라우저 클릭을 수행한다 (Medium, Confirmed).
+3. [ISSUE-003] 구버전 `ai_config.json`에 남은 평문 API 키를 환경변수 없이 계속 사용한다 (Medium, Confirmed — 런타임 재현).
+4. [ISSUE-004] Diff 분석이 Selenium 전용이며 실행 가드가 없다 (Medium, Confirmed).
+5. [ISSUE-005] 쿠키 저장 시 원자적 쓰기의 `.bak` 백업이 평문으로 남고 권한 제한도 없다 (Medium, Confirmed).
 
-CodeGraph blast radius 기준으로 `XPathExplorer`, `start_picker`, `ExplorerDataCookiesMixin`, `load_ai_config`는 호출은 많지만 해당 심볼 자체의 직접 테스트가 없거나 매우 얇다.
+데이터 손상/유실 가능성: XPath 목록 자체는 dirty 확인 + 원자적 저장으로 보호된다. 다만 **비정상 종료 시 복구 파일이 없어**(자동저장 없음) 크래시하면 미저장 작업이 날아가고, 쿠키·(레거시)API 키 같은 비밀의 디스크 잔재(`.bak` 포함)는 여전하다. 대규모 사용자 데이터 파괴 경로는 없다.
+
+가장 먼저 수정해야 할 영역: `workers/scenario_worker.py`의 엔진 게이트·윈도우 액션 라우팅(ISSUE-001) → 클릭 테스트 확인 절차(ISSUE-002) → 레거시 키 정리(ISSUE-003) 순이다.
 
 ---
 
 ## 2. Project Understanding
 
-### 2.1 목적
+### 프로젝트 목적
 
-README 기준, 인터파크/멜론티켓/YES24 같은 복잡한 티켓팅 사이트에서 XPath를 추출·검증·관리하고, Selenium/Playwright/PyAutoGUI 코드를 생성하는 PyQt6 데스크톱 도구다.
+인터파크/멜론티켓/YES24 등 복잡한 티켓팅 사이트에서 XPath를 추출·검증·관리하고 Selenium/Playwright/PyAutoGUI 코드를 생성하는 PyQt6 데스크톱 앱이다. `CLAUDE.md`는 `docs/claude.md`를 정본으로 지정한다. `AGENTS.md`는 저장소에 없다(6장 참고).
 
-`CLAUDE.md`는 저장소에 없다. 개발 규칙은 `README.md`의 품질 게이트 절, `docs/PROJECT_STRUCTURE_ANALYSIS.md`, `scripts/check_docs_sync.py` / `run_quality_checks.py`에 흩어져 있다.
-
-### 2.2 실행 흐름
+### 주요 entrypoint
 
 ```text
 python -m xpath_explorer
-        └─ xpath_explorer/__main__.py
-              └─ xpath_explorer.main_window.main
-                    └─ xpath_explorer/app/main_window.py::main()
-                          ├─ configure_qt_env()
-                          ├─ require_qt()
-                          ├─ QApplication
-                          └─ XPathExplorer.show() / app.exec()
-
+  └─ xpath_explorer/__main__.py
+       └─ xpath_explorer/main_window.py (facade)
+            └─ xpath_explorer/app/main_window.py::main()
+                 ├─ configure_qt_env() → require_qt() → QApplication → XPathExplorer.show() → app.exec()
 레거시 래퍼: "xpath 조사기(모든 티켓 사이트).py" → 동일 main()
 ```
 
-`XPathExplorer`는 mixin 조합으로 조립된다.
+`XPathExplorer`는 `ExplorerToolsMixin + ExplorerDataMixin + ExplorerBrowserMixin + ExplorerUIMixin + QMainWindow` 조합이다. Qt가 없으면 `_HeadlessXPathExplorer`가 `require_qt()`로 즉시 실패한다(의도에 부합).
 
-```text
-ExplorerToolsMixin
-ExplorerDataMixin
-ExplorerBrowserMixin
-ExplorerUIMixin
-QMainWindow
-```
-
-초기화 순서 (`app/main_window.py::__init__`):
-
-1. `BrowserManager`, `SiteConfig.from_preset("인터파크")`, 통계/코드생성/옵티마이저/히스토리/AI/Diff 생성
-2. 워커 핸들과 미리보기/검색 디바운스 타이머 준비
-3. `init_settings()` → `QSettings("MyCompany", "XPathExplorer")`
-4. `_init_ui()` → `_load_settings()` → `_setup_timers()` → `_refresh_table()` → `_reset_history_baseline()`
-
-종료 흐름 (`mixins/tools/lifecycle_tools.py::closeEvent`):
-
-1. 타이머 정지, geometry/`_save_settings()` 저장
-2. Picker/Validate/LivePreview/AI/Diff/Batch/Scenario/Install 워커 취소 후 `wait(WORKER_WAIT_TIMEOUT)`
-3. Playwright 매니저 close, 통계 shutdown, Selenium `browser.close()`
-4. 이벤트 `accept()` — 미저장 확인 없음
-
-### 2.3 주요 모듈과 호출 관계
-
-CodeGraph 기준으로 실제 런타임 경로는 아래와 같다. `archive/251221 xpath 조사기(모든 티켓 사이트).py`에도 동명 심볼이 남아 인덱스가 자주 레거시를 끌어오므로, 본 감사는 현재 패키지 `xpath_explorer/`를 기준으로 한다.
+### 핵심 모듈
 
 | 계층 | 위치 | 역할 |
-|------|------|------|
-| Facade | `xpath_explorer/main_window.py`, `workers/background.py`, `mixins/*_mixin.py` | 하위 호환 re-export |
-| UI 조립 | `mixins/ui/` | 메뉴, 패널, 단축키 |
-| 브라우저 UI | `mixins/browser/` | 네비게이션, 피커, 미리보기, 검증, DOM 내보내기 |
-| 데이터 | `mixins/data/` | 설정 파일, 쿠키, 편집기, 필터, QSettings |
-| 도구 | `mixins/tools/` | 배치/시나리오, Playwright 스캔, AI, 진단 |
-| Selenium | `browser/selenium_*.py` + `selenium_validation_parts/` | 창/프레임/피커/검증. `RLock`으로 드라이버 직렬화 |
-| Playwright | `browser/playwright.py` + `playwright_parts/` | 별도 프로세스/브라우저. `pw_manager` |
-| 워커 | `workers/*_worker.py` | QThread. 대부분 `BrowserManager`를 공유 |
-| 저장 | `core/paths.py::atomic_write_json` | 설정/통계/AI 설정 |
-| 스키마 | `core/config.py::SiteConfig.from_dict` | 항목 검증, 중복 이름 거부, 타입 coerce |
+|---|---|---|
+| 조립 | `app/main_window.py` | 매니저/상태 생성, QSettings 이관, UI 초기화 순서 고정 |
+| Selenium | `browser/browser.py` facade + `selenium_*.py` | 창/프레임/피커/검증. `RLock` 직렬화, 검증 세션 힌트 캐시 |
+| Playwright | `browser/playwright.py` facade + `playwright_parts/` | 스캔·DOM·수명주기 분리. `pw_manager` |
+| 엔진 선택 | `browser/engine_router.py` | `source_engine` 기준 Selenium/Playwright 라우팅 |
+| 워커 | `workers/*_worker.py` + `driver_guard.py` | QThread. 진입 가드·미리보기 동기 정지 |
+| 저장 | `core/paths.py::atomic_write_json` | 설정·통계·AI 설정·쿠키의 원자적 저장(+`.bak`) |
+| 스키마 | `core/config.py::SiteConfig.from_dict` | 항목 검증· coerce·`items` 비리스트 거부 |
+| 안전장치 | `tools/csv_safety.py`, `core/url_safety.py`, `core/cookie_safety.py` | CSV 수식 무력화·URL 스킴 허용목록·쿠키 도메인 분리 |
+| AI | `ai/assistant.py` + `ai/config.py` | 키는 메모리에만, 디스크에는 provider/model만 |
 
-### 2.4 README와 구현이 맞는 부분
+### 데이터 저장 방식
 
-- 패키지 엔트리 `python -m xpath_explorer`와 레거시 래퍼가 모두 `app/main_window.py::main()`으로 모인다.
-- 내보내기 메뉴는 JSON/CSV/Python Selenium/JavaScript 네 가지다 (`mixins/ui/menu.py`).
-- 배치 테스트, 시나리오 실행기, 매크로, 템플릿, DOM Diff, 쿠키, 스크린샷, 검증 히스토리, 텔레메트리, 진단 메뉴가 실제로 존재한다.
-- `atomic_write_json`은 설정 저장과 AI 설정 저장에 사용된다.
-- AI 기본 모델명은 README와 코드가 같다: `gpt-5.4`, `gemini-flash-latest`.
+DB를 쓰지 않는다. 사용자 XPath 목록은 사용자가 고른 경로의 JSON(원자적 저장), 앱 상태는 `~/.xpath_explorer/`(`ai_config.json`·`statistics.json` 등, 쓰기 불가 시 temp 폴백·최후 메모리 전용), 창 설정은 `QSettings("XPathExplorer", ...)`(구 `MyCompany` 키 1회 이관)이다.
+
+### 외부 의존성
+
+필수: PyQt6, selenium, undetected-chromedriver, webdriver-manager. 선택: playwright(Chromium 설치는 고정 argv `subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])`, 셸 미사용 — 주입 경로 없음), openai, google-genai(둘 다 optional import, 부재 시 명확한 에러·규칙 기반 폴백).
+
+### 핵심 실행 흐름
+
+```text
+검증(단건): 편집기 입력 → _test_xpath → engine_router(source_engine) → Selenium/Playwright validate → 결과창·하이라이트·통계
+전체 검증(F5): _validate_all → ValidateWorker(browser, playwright) → 항목별 엔진 라우팅 → _record_validation_outcome(태그/창/프레임·성공률 기록)
+배치: runner(가드+미리보기 정지) → BatchTestWorker(항목별 라우팅) → CSV/Markdown 리포트(수식 무력화)
+시나리오: dialog(둘 중 하나라도 alive면 시작) → BatchScenarioWorker → validate 계열은 항목별 라우팅, wait/popup/창 전환은 Selenium 고정(ISSUE-001)
+피커: chk_overlay → start_picker(overlay_mode) → picker_overlay_bootstrap + PICKER_SCRIPT 주입 → PickerWatcher
+쿠키: 저장 전 경고 → atomic_write_json + chmod 600 시도 / 불러오기: JSON 리스트 검증 → 도메인 분리 → 성공/실패 집계 → refresh
+AI: 다이얼로그 입력 → configure(키 메모리 보관) → persistable 저장(키 제외) → 로드 시 파일+환경변수 병합(ISSUE-003)
+종료: _confirm_discard_unsaved → 워커 정지·Playwright 종료·통계 shutdown·Selenium 종료 → accept
+```
 
 ---
 
-## 3. High-Risk Issues
+## 3. Audit Coverage & Limitations
 
-### 3.1 오버레이 모드가 UI만 있고 동작하지 않음
+### 실제 확인한 주요 모듈
 
-* 위치: `xpath_explorer/mixins/browser/picker.py::_start_picker` → `xpath_explorer/browser/selenium_picker.py::BrowserPickerMixin.start_picker` → `xpath_explorer/core/browser_assets/picker.py::PICKER_SCRIPT`
-* 문제: 체크박스 `chk_overlay` 값이 `start_picker(overlay_mode=...)`로 전달되지만, `start_picker` 본문이 `overlay_mode`를 전혀 쓰지 않는다. Picker JS는 클릭마다 항상 `preventDefault()`/`stopPropagation()`을 호출한다.
-* 영향: README와 툴팁(“체크 시 버튼이 클릭되지 않고 선택만”)과 반대로, 체크 여부와 무관하게 페이지 클릭이 항상 가로채진다. 사용자는 오버레이를 끈 뒤 실제 클릭 동작을 확인하려고 해도 불가능하다. 레거시 archive 구현은 overlay 여부에 따라 안내 문구를 바꿨다.
-* 근거:
+`app/main_window.py`, `browser/engine_router.py`, `browser/selenium_validation_parts/visual.py`(클릭), `browser/selenium_windows.py`, `browser/dom_export.py`, `browser/selenium_dom.py`, `mixins/browser/{validation,preview,picker,navigation,export,context}.py`, `mixins/data/{files,cookies}.py`, `mixins/tools/batch/{runner,scenario,reports}.py`, `mixins/tools/inspection/dom_diff.py`, `mixins/tools/inspection/diff_panel.py`, `workers/{scenario,batch,validate,preview,ai,diff}_worker.py`, `workers/driver_guard.py`, `workers/worker_shared.py`, `ai/{assistant,config,providers}.py`, `tools/csv_safety.py`, `core/{url_safety,cookie_safety,config,config_state,paths}.py`, `analysis/statistics.py`, `state/history.py`, `browser/playwright_parts/lifecycle/install.py`.
 
-```70:70:xpath_explorer/mixins/browser/picker.py
-        self.browser.start_picker(overlay_mode=self.chk_overlay.isChecked())
-```
+### CodeGraph로 분석한 호출 관계
 
-```82:101:xpath_explorer/browser/selenium_picker.py
-    def start_picker (self ,overlay_mode :bool =False ):
-        """요소 선택 모드를 시작하고 모든 윈도우/iframe에 picker를 주입합니다."""
-        with self ._lock :
-            ...
-                    self .driver .execute_script (PICKER_SCRIPT )
-```
+CodeGraph MCP(`codegraph_explore`) 6회 호출로 entrypoint·피커/검증·엔진 라우터·AI/쿠키/종료·클릭/안전장치·시나리오/가드·DOM 번들·설정/통계·미리보기/AI 워커의 호출·역호출(blast radius)·동적 디스패치 경계를 확인했다. 주요 흐름: `_click_test_xpath → _active_validation_browser → resolve_browser_for_item`, `closeEvent → statistics.save → atomic_write_json`, `BatchScenarioWorker ← runner/scenario + tests`, `exclusive_driver_worker_running ← lifecycle/preview` 등이다.
 
-```239:248:xpath_explorer/core/browser_assets/picker.py
-    function onClick(e) {
-        ...
-        e.preventDefault();
-        e.stopPropagation();
-```
+### 실행한 테스트
 
-CodeGraph: `start_picker` 호출자는 `mixins/browser/picker.py`, `workers/picker_worker.py` 두 곳. 해당 심볼 직접 테스트 없음.
-* 권장 수정 방향: JS 주입 시 `overlay_mode`를 인자/전역 플래그로 넘기고, 비오버레이일 때만 기본 클릭을 통과시키거나, 체크박스를 제거하고 “클릭은 항상 선택 전용”으로 문서를 맞출 것.
-* 우선순위: High
+의존성 없이 실행 가능한 범위에서 직접 실행했다(PyQt6·Selenium이 없는 환경이라 Qt/Selenium 의존 테스트는 수집 자체가 불가 — 아래 한계 참고):
 
-### 3.2 Playwright로 수집한 항목을 Selenium으로만 검증한다
+- `test_csv_safety.py`, `test_url_safety.py`, `test_cookie_safety.py`, `test_ai_config_precedence.py`, `test_engine_router.py`, `test_picker_overlay_script.py`, `test_js_asset_syntax.py`, `test_config_schema.py`, `test_atomic_json_write.py` — **33 passed**.
+- `scripts/check_docs_sync.py` — Errors 0, Warnings 0.
+- `scripts/check_encoding_health.py` — 244 files, decode 실패 0, mojibake 0.
+- 레거시 키 재현 프로브(`/tmp` 격리 스크립트, `Path.home` 일시 교체): 파일에만 키가 있고 환경변수가 없을 때 `load_ai_config`가 파일 키를 그대로 반환함을 확인 — `legacy openai key loaded without env: True`.
+- 전체 수집 시도: 140개 수집 + 15개 모듈 수집 에러(모두 `PyQt6`/`selenium` 부재 causes). 실패가 아니라 **환경 미충족**이다.
 
-* 위치: `xpath_explorer/mixins/tools/playwright_tools.py` (스캔/하이라이트, `_editing_source_engine = "playwright"`) vs `mixins/browser/validation.py::_test_xpath`, `mixins/browser/preview.py::_update_live_preview`, `workers/validate_worker.py`, `workers/batch_worker.py`
-* 문제: Playwright 스캔에서 편집기로 가져온 항목은 `source_engine="playwright"`로 저장된다. 그러나 Ctrl+T 검증, F5 전체 검증, 배치, 라이브 매칭 카운트는 전부 `self.browser`(Selenium `BrowserManager`)만 본다. 미리보기는 Playwright 항목이면 Selenium 창 핸들을 비우고 URL/title만 넘긴다.
-* 영향: Playwright 브라우저와 Selenium 브라우저가 다른 세션/팝업/iframe에 있으면, 방금 스캔한 XPath가 “없음”으로 나온다. README의 “Playwright 자동 스캔 → 사용 클릭 → 편집기/목록” 흐름이 검증 단계와 단절된다.
-* 근거: CodeGraph상 `pw_manager.scan_elements` / `highlight`는 Playwright 쪽, `ValidateWorker`/`BatchTestWorker`/`LivePreviewWorker`는 `self.browser.validate_xpath` / `count_elements`만 호출. `_test_xpath`는 `self.browser.is_alive()`가 거짓이면 바로 실패한다.
-* 권장 수정 방향: `source_engine == "playwright"`이고 `pw_manager`가 살아 있으면 검증/하이라이트/카운트를 Playwright 경로로 보내거나, 스캔 결과를 Selenium 세션으로 재적용하는 브리지를 만들 것. 최소한 UI에 “이 항목은 Playwright 세션 전용” 경고를 띄울 것.
-* 우선순위: High
+### 확인하지 못한 환경/외부 서비스
 
-### 3.3 AI API 키가 홈 디렉터리 JSON에 평문으로 저장된다
+실제 Chrome/Selenium 세션, Playwright Chromium, 티켓 사이트 실페이지, OpenAI/Gemini 실 API, PyInstaller 빌드 산출물, Windows 레지스트리 QSettings 실동작, macOS/Linux 경로 동작. Qt 필요 테스트(`pytest.mark.qt`)와 브라우저 의존 테스트는 미실행이다.
 
-* 위치: `xpath_explorer/ai/assistant.py::configure` / `_save_config`, `xpath_explorer/ai/config.py::load_ai_config`, 저장 경로 `~/.xpath_explorer/ai_config.json`
-* 문제: `configure()`가 `openai_api_key` / `gemini_api_key`를 JSON에 그대로 쓴다. 파일 권한 제한, DPAPI/keyring, 마스킹이 없다. 로드 시 **파일 내용이 환경변수를 덮어쓴다.**
-* 영향: 공유 PC, 백업, 동기화 폴더에 키가 남는다. README는 환경변수(`OPENAI_API_KEY`, `GEMINI_API_KEY`)를 설정 수단으로 안내하지만, 한 번 다이얼로그에서 저장하면 env가 무시된다. 테스트도 이 우선순위를 고정하고 있다 (`tests/test_ai_config_precedence.py`: `file_key`가 `env_key`를 이김).
-* 근거:
+### CodeGraph·분석상의 한계
 
-```14:34:xpath_explorer/ai/config.py
-def load_ai_config(logger: Logger) -> Dict[str, Any]:
-    ...
-    if openai_key:
-        config["openai_api_key"] = openai_key
-    ...
-            if isinstance(file_config, dict):
-                config.update(file_config)  # 파일이 env를 덮어씀
-```
-
-```115:146:xpath_explorer/ai/assistant.py
-        self._config[f"{provider}_api_key"] = api_key
-        return self._save_config()
-        ...
-            compat.atomic_write_json(config_path, self._config)
-```
-
-* 권장 수정 방향: 키는 OS 자격 증명 저장소 또는 권한 0600 파일 + 환경변수 우선. 파일에는 provider/model만 저장. README의 우선순위를 코드와 테스트에 맞출 것.
-* 우선순위: High
-
-### 3.4 로그인 세션 쿠키가 평문 JSON으로 저장된다
-
-* 위치: `xpath_explorer/mixins/data/cookies.py::ExplorerDataCookiesMixin`
-* 문제: `driver.get_cookies()` 결과를 사용자 선택 경로에 `json.dump`로 저장한다. 원자적 쓰기 없음, 암호화 없음, 도메인 제한 없음. 로드 시 현재 페이지 도메인과 맞지 않는 쿠키도 `add_cookie`를 시도하고, 실패만 집계한다. 성공 후 `driver.refresh()`로 세션을 바로 적용한다.
-* 영향: 티켓 사이트 로그인/예매 세션이 디스크에 남는다. 잘못된 도메인에서 로드하면 일부만 적용되어 “로그인이 된 것 같은데 좌석은 안 됨” 같은 부분 실패가 난다. CodeGraph: 이 mixin은 `data_mixin`에서만 쓰이고 **직접 테스트가 없다.**
-* 근거:
-
-```33:89:xpath_explorer/mixins/data/cookies.py
-    def _save_cookies(self):
-        ...
-                cookies = driver.get_cookies()
-                with open(fname, 'w', encoding='utf-8') as f:
-                    json.dump(cookies, f)
-    def _load_cookies(self):
-        ...
-                for cookie in cookies:
-                    try:
-                        driver.add_cookie(cookie)
-```
-
-레거시 archive는 `sameSite`/`storeId`/`id`를 제거하고 도메인별 기본 경로를 썼다. 현재 코드는 그 호환 처리가 없다.
-* 권장 수정 방향: 민감 쿠키 저장 경고, 현재 URL 도메인과 일치하는 항목만 주입, `sameSite` 호환 처리, `atomic_write_json`, 가능하면 암호화. 저장 기본 경로를 `resolve_storage_dir()/cookies`로 고정하고 권한을 제한할 것.
-* 우선순위: High
-
-### 3.5 종료 시 미저장 XPath 목록을 버리지 않고 닫는다
-
-* 위치: `xpath_explorer/mixins/tools/lifecycle_tools.py::closeEvent`
-* 문제: 종료 시 UI geometry/폰트/프리셋만 저장한다. `self.config.items`는 사용자가 `_save_config()`로 파일을 고르지 않으면 디스크에 남지 않는다. `closeEvent`는 확인 없이 `a0.accept()`한다.
-* 영향: 피커로 수십 개 수집한 뒤 창을 닫으면 작업이 사라진다. README의 “안전한 상태 관리 / 작업 손실 완벽 방지”와 어긋난다. Undo는 메모리 `HistoryManager`뿐이고 프로세스 종료와 함께 소멸한다.
-* 근거: `closeEvent` 본문은 워커 정지 + `_save_settings()` + 브라우저 종료만 수행. `_save_config()` 호출 없음. `_new_config`/`_on_preset_changed`만 확인 대화상자가 있다.
-* 권장 수정 방향: dirty 플래그(마지막 저장 스냅샷과 `config.to_dict()` 비교)를 두고, 종료/새 설정/프리셋 전환 시 저장 여부를 물을 것. 자동 복구용 세션 스냅샷을 `atomic_write_json`으로 쓰는 것도 검토.
-* 우선순위: High
-
-### 3.6 라이브 미리보기 워커가 이전 작업을 기다리지 않고 중첩 실행된다
-
-* 위치: `xpath_explorer/mixins/browser/preview.py::_update_live_preview`, `xpath_explorer/workers/preview_worker.py::LivePreviewWorker`
-* 문제: XPath 입력마다 디바운스 후 새 `LivePreviewWorker`를 시작한다. 이전 워커가 돌고 있으면 `cancel()`만 호출하고 `wait()`하지 않는다. cancel은 `Event` 플래그라 `count_elements()` 도중에는 중단되지 않는다. 같은 `BrowserManager`를 PickerWatcher, ValidateWorker, BatchWorker도 공유한다.
-* 영향: 입력 중 매칭 카운트가 깜빡이거나, 피커 주입/창 전환과 프레임이 엇갈릴 수 있다. Selenium `RLock`이 호출 단위로는 직렬화하지만, `validate_xpath`가 락을 여러 번 잡았다 놓으면 그 사이에 미리보기가 창/프레임을 바꿀 수 있다. UI는 `request_id`로 stale 결과를 버리므로 표시는 비교적 안전하나, **브라우저 컨텍스트 자체는 안전하지 않다.**
-* 근거:
-
-```74:132:xpath_explorer/mixins/browser/preview.py
-            if self.live_preview_worker and self.live_preview_worker.isRunning():
-                self.live_preview_worker.cancel()
-            ...
-            self.live_preview_worker = worker
-            worker.start()
-```
-
-`LivePreviewWorker.run()`은 시작 시 창/프레임을 바꾸고 `finally`에서 복구한다. 테스트(`tests/test_live_preview_worker.py`)는 FakeBrowser에서 `run()`을 동기 호출할 뿐, 중첩 start/cancel을 검증하지 않는다.
-* 권장 수정 방향: 새 워커 시작 전 `wait()`하거나, 단일 워커 + 최신 xpath만 실행하는 큐로 바꿀 것. 피커 활성 중에는 라이브 미리보기를 멈출 것. 드라이버 락을 검증 세션 전체로 확장할 것.
-* 우선순위: High
-
-### 3.7 Picker 툴팁이 페이지 텍스트를 `innerHTML`에 삽입한다
-
-* 위치: `xpath_explorer/core/browser_assets/picker.py` (`onMouseOver`, `lock`)
-* 문제: `xpath`, `css`, `tag`, `text`를 템플릿 리터럴로 `tooltip.innerHTML`에 넣는다. HTML 이스케이프가 없다. 대상 페이지가 이미 실행 중인 브라우저라 심각도는 웹앱 XSS보다 낮지만, 피커 UI를 통해 주입 스크립트가 돌 수 있다.
-* 영향: 악성/변조된 DOM 속성·텍스트가 피커 오버레이에서 실행되면 `__pickerResult`를 조작하거나 키 입력을 가로챌 수 있다. 티켓 사이트 자체보다는, 열린 창에 악성 iframe이 있을 때 의미가 있다.
-* 근거:
-
-```229:235:xpath_explorer/core/browser_assets/picker.py
-        tooltip.innerHTML = `
-            <div><strong>태그:</strong> ${tag}</div>
-            <div><strong>XPath:</strong> ${xpath}</div>
-            ...
-            ${text ? `<div><strong>텍스트:</strong> ${text}</div>` : ''}
-```
-
-XPath 리터럴 생성(`xpathLiteral`)은 잘 되어 있으나, HTML 삽입 경로와는 별개다.
-* 권장 수정 방향: `textContent` 기반 DOM 생성 또는 HTML escape. 잠금 UI 버튼은 `createElement`로 붙일 것.
-* 우선순위: Medium
-
-### 3.8 CSV 내보내기에 수식 주입 방어가 없다
-
-* 위치: `xpath_explorer/mixins/data/files.py::_export` (`fmt == 'csv'`), `xpath_explorer/mixins/tools/batch/reports.py::_batch_results_to_csv`
-* 문제: 이름/XPath/설명/메시지를 `csv.writer` / `csv.DictWriter`에 그대로 넣는다. 셀이 `=`, `+`, `-`, `@`로 시작하면 스프레드시트가 수식으로 해석할 수 있다. Markdown 쪽은 `_escape_markdown_cell`이 있으나 CSV는 대응이 없다.
-* 영향: 페이지에서 가져온 텍스트/XPath를 CSV로 열어 분석할 때 로컬 Excel/LibreOffice 수식 실행 위험이 있다. 배치 리포트의 `msg`/`xpath` 컬럼이 특히 노출면이 넓다.
-* 근거: `_export` CSV 분기와 `_batch_results_to_csv`에 prefix escape가 없음. 패키지 안에 `csv_safety` 모듈은 현재 존재하지 않는다(디렉터리 스냅샷의 pyc만 남아 있을 수 있음).
-* 권장 수정 방향: CSV 셀 선행 `=+-@` / 탭을 따옴표 이스케이프 또는 `'=` prefix로 무력화하는 공통 helper를 쓰고, 파일 내보내기와 배치 리포트 양쪽에 적용할 것.
-* 우선순위: Medium
-
-### 3.9 URL 이동이 `http(s)`만 허용하도록 강제되어 `file://` / `about:` 가 깨진다
-
-* 위치: `xpath_explorer/mixins/browser/navigation.py::_navigate`
-* 문제: `http://`/`https://`가 아니면 무조건 `https://`를 붙인다. `file:///C:/page.html` → `https://file:///C:/page.html`. `about:blank`도 동일. 브라우저 열기(`_toggle_browser`)는 `about:blank`를 허용한다.
-* 영향: 로컬 HTML 픽스처나 저장된 DOM 스냅샷을 다시 열어 검증하는 흐름이 실패한다. `javascript:` 같은 위험 스킴은 우연히 차단되지만, 의도와 예외 처리가 아니라 부작용이다.
-* 근거:
-
-```139:145:xpath_explorer/mixins/browser/navigation.py
-        url = self.input_url.text().strip()
-        if not url: return
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-            self.input_url.setText(url)
-```
-
-* 권장 수정 방향: 허용 스킴 화이트리스트(`http`, `https`, `about`, 옵션으로 `file`). `javascript:`, `data:`는 거부. 호스트만 입력된 경우에만 `https://`를 붙일 것.
-* 우선순위: Medium
-
-### 3.10 시나리오 `wait` 시간에 상한이 없다
-
-* 위치: `xpath_explorer/workers/scenario_worker.py::_normalize_steps`, `run`의 `wait`/`sleep` 분기, `_run_window_action(wait_for_popup)`
-* 문제: `seconds`를 `float`로만 받고 `max(0.0, ...)`만 한다. 상한 없음. JSON을 불러오면 파싱만 하고 액션/타임아웃을 미리 검증하지 않는다. 알 수 없는 액션은 실행 중 `unsupported_action`으로 실패 처리된다(크래시는 아님).
-* 영향: `{"action":"wait","seconds":86400}`이면 워커가 하루 동안 점유한다. 종료 시 `wait(WORKER_WAIT_TIMEOUT)` 후 disconnect하지만, 스레드가 `Event.wait` 루프에 있으면 타임아웃까지 UI가 멈춘 것처럼 보일 수 있다. `wait_for_popup`도 동일하게 긴 timeout을 바이트 그대로 사용한다.
-* 근거: `_to_float` + `max(0.0, wait_seconds)`. `start_run()` 검증은 `dict` + `steps` 리스트 여부만 본다 (`mixins/tools/batch/scenario.py`).
-* 권장 수정 방향: step당 wait/popup timeout 상한(예: 60s), 시나리오 로드 시 액션 화이트리스트 사전 검증, 취소가 타임아웃 루프를 실제로 끊는지 테스트할 것.
-* 우선순위: Medium
-
-### 3.11 Selenium 드라이버 소스의 토큰 간격/한글 주석 손상
-
-* 위치: `xpath_explorer/browser/selenium_driver.py`, `selenium_picker.py`, `selenium_windows.py`, `selenium_validation_parts/lookup.py`
-* 문제: `def start_picker (self ,overlay_mode :bool =False ):`, `self ._lock =RLock ()`처럼 식별자 사이 공백이 들어가 있고, 주석이 `WebDriver 묎렐 곷젹`처럼 모지바케다. Python 문법상 동작은 하지만, 인코딩/자동 포맷 사고가 코드 전역에 남아 있다.
-* 영향: 이후 패치/리뷰/검색이 어렵고, 비슷한 변환이 문자열 리터럴까지 건드리면 런타임 버그가 된다. README가 강조하는 `check_encoding_health.py`의 대상이 바로 이 계층이다.
-* 근거: CodeGraph가 해당 파일들을 그대로 반환. `create_driver`, `start_picker`, `count_elements` 본문이 모두 이 스타일이다.
-* 권장 수정 방향: 해당 파일을 정상 포맷(black/ruff)으로 재기록하고, 품질 게이트에서 토큰 사이 이상 공백/모지바케를 fail 처리할 것. 기능 변경 없이 재포맷 PR을 따로 둘 것.
-* 우선순위: Medium
-
-### 3.12 QSettings 조직명이 플레이스홀더다
-
-* 위치: `xpath_explorer/app/main_window.py::init_settings` — `QSettings("MyCompany", "XPathExplorer")`
-* 문제: Windows 레지스트리/ini 경로가 `MyCompany` 아래로  mo인다. 레거시는 `QSettings("XPathExplorer", "v3")`였다.
-* 영향: 구버전에서 쓰던 창 위치/폰트/마지막 프리셋이 마이그레이션되지 않는다. 기능 버그는 아니지만, “설정이 초기화됐다”로 보인다.
-* 근거: `init_settings` 한 줄. archive와 키가 다름.
-* 권장 수정 방향: org/app 이름을 제품명으로 고정하고, 구 키가 있으면 한 번 읽어 이관할 것.
-* 우선순위: Low
-
-### 3.13 Undo/Redo는 무제한이 아니다
-
-* 위치: `xpath_explorer/core/runtime_constants.py::HISTORY_MAX_SIZE = 50`, `xpath_explorer/state/history.py::HistoryManager.push_state`
-* 문제: README는 “무제한 Undo/Redo”를 약속한다. 구현은 50개에서 앞쪽 스냅샷을 버린다.
-* 영향: 대량 편집 후 초반 작업을 되돌릴 수 없다. 히스토리 자체는 RLock + deepcopy로 비교적 견고하고 테스트(`tests/test_history_manager.py`)가 있다.
-* 근거: `if len(self._undo_stack) > self._max_history: self._undo_stack.pop(0)`
-* 권장 수정 방향: README를 “최대 50단계”로 고치거나, 제한을 UI에 표시할 것.
-* 우선순위: Low (문서) / 기능적으로는 의도된 제한일 수 있음
-
-### 3.14 Playwright `highlight`가 `duration_ms`를 JS 문자열에 삽입한다
-
-* 위치: `xpath_explorer/browser/playwright_parts/dom/actions.py::highlight`
-* 문제: `el.evaluate(f"""... setTimeout(..., {duration_ms}); ...""")`. 기본값은 int 2000이라 현재 호출(`highlight(element.xpath, 2000)`)은 안전하다. 타입이 보장되지 않으면 JS 삽입이 된다.
-* 영향: 현재 공개 UI 경로의 인자는 상수라 **실제 익스플로잇 면은 좁다.** 내부 API가 외부 입력에 열리면 위험해진다.
-* 근거: f-string evaluate. `xpath` 자체는 Playwright `xpath=` 셀렉터로 넘어가 별도 문제(잘못된 XPath로 예외)다.
-* 권장 수정 방향: `int(duration_ms)`로 클램프하고, evaluate 인자로 넘길 것. XPath는 `xpath=` 접두 전 검증.
-* 우선순위: Low
+- 인덱스가 `archive/` 레거시 단일 파일의 동명 심볼(`XPathExplorer`, `BrowserManager` 등)을 현재 패키지와 묶어 blast radius가 부풀려 보인다. 본 감사는 `xpath_explorer/` 기준으로 재확인했다.
+- `getattr` 기반 동적 디스패치(`switch_to_frame`, `wait_for_popup`, `begin_validation_session` 등)는 정적 추적만으로 실제 분기를 단정할 수 없어, 해당 경로는 소스 직접 열람으로 보완했다.
+- 런타임 재현은 비밀·브라우저가 필요 없는 1건(ISSUE-003)만 수행했고, 나머지는 코드 흐름 확정 + 테스트 명세 대조로 판단했다. 신뢰도 표기는 이 기준을 따른다.
 
 ---
 
-## 4. Potential Functional Gaps
+## 4. High-Risk Issues
 
-아래는 코드로 뒷받침되지만, 제품 의도가 불명확하면 **추정**으로 표시한다.
+### [ISSUE-001] Playwright-only 시나리오가 빈 결과로 "완료"되고 창 액션은 Selenium 고정
 
-1. **미저장 확인 부재 (확정)**  
-   종료뿐 아니라 `_open_config`도 현재 목록을 바로 교체한다. `_new_config`만 확인한다.
+* **위치:** `xpath_explorer/workers/scenario_worker.py::run` (게이트), `_run_window_action` (윈도우 액션), `xpath_explorer/mixins/tools/batch/scenario.py::start_run` (다이얼로그 게이트)
+* **우선순위:** High
+* **신뢰도:** Confirmed
+* **문제:** 워커 진입 게이트가 Selenium(`self.browser.is_alive()`)만 검사한다. 다이얼로그는 Selenium·Playwright 둘 중 하나라도 살아 있으면 시작을 허용하므로, Playwright만 켠 사용자가 시나리오를 실행하면 워커가 결과를 0건으로 `completed`를 쏘고 끝난다. 또한 `wait_for_popup`·`switch_latest_popup`·`switch_window_by_title`·`switch_root_window`는 `self.browser`(Selenium) 고정이라 Playwright 팝업을 절대 못 보고 "popup not found"로 실패한다. `validate_item`·`validate_xpath` 계열만 항목별 엔진 라우팅을 탄다.
+* **발생 조건:** (a) Selenium을 닫고 Playwright만 실행한 채 시나리오 실행. (b) Playwright 세션의 팝업을 기다리거나 창을 전환하는 스텝 포함(양쪽 다 켜져 있어도 실패).
+* **영향:** "시나리오 완료" 표시와 함께 0건 요약이 나와 성공처럼 보인다. 팝업 대기 스텝은 Playwright 세션에 팝업이 있어도 실패한다. Playwright 중심 사용자에게 시나리오 실행기가 사실상 고장 난 것처럼 동작한다.
+* **근거:**
+  - `scenario_worker.py:264`: `if not self.browser.is_alive(): self.completed.emit(results, False, scenario_name); return` — Playwright 검사가 없다.
+  - `scenario_worker.py:216-255`: `_run_window_action` 전체가 `self.browser`의 `wait_for_popup`·`switch_to_*`만 사용한다.
+  - `mixins/tools/batch/scenario.py:241-244`: 다이얼로그는 `not self.browser.is_alive() and not pw_alive`일 때만 막는다 — 워커 게이트와 정합이 어긋난다.
+* **반증 확인:** 항목별 라우팅(`_engine_browser_for_item`, batch/validate/scenario의 validate 계열)은 확인했고, 다이얼로그의 `pw_alive` 검사도 확인했다. 그러나 진입 게이트와 윈도우 액션 경로는 라우팅을 타지 않음을 소스에서 직접 확인했으므로 반증되지 않는다. `BatchTestWorker`·`ValidateWorker`는 항목별 라우팅을 하므로 F5/배치는 해당 없음 — 시나리오 워커만의 문제다.
+* **호출/영향 범위:** CodeGraph 기준 `BatchScenarioWorker` 호출자 25곳(다이얼로그·리포트·runner·facade). 영향은 시나리오 실행 경로 한정. Selenium 전용 사용자는 영향 없음.
+* **권장 수정 방향:** 워커 진입 게이트를 "Selenium 또는 Playwright 중 유효 엔진이 하나라도 있고, 스텝이 요구하는 엔진이 살아 있음"으로 변경하고, 빈 결과 완료 시 "실행된 스텝 0건 — 요구 엔진 미연결"을 명시한다. `_run_window_action`을 엔진별로 분기한다(Playwright 측 popup 대기·창 전환 API가 있으면 사용, 없으면 해당 스텝을 `window_action_not_supported_for_engine`으로 명확히 실패). 다이얼로그 시작 전에 스텝별 요구 엔진과 연결 상태를 미리 검증하는 것이 가장 좋다.
+* **필요한 회귀 테스트:** (Unit) `run()` 게이트: Selenium dead + Playwright alive + playwright 스텝 → 빈 완료가 아니라 스텝 실행. Fake 양쪽 매니저로 검증. (Unit) `wait_for_popup` 스텝이 Playwright 세션의 팝업을 보는지, Selenium 고정이면 실패 메시지가 엔진을 명시하는지. (Integration) 다이얼로그 `start_run` 게이트와 워커 게이트의 허용 조건 일치 테스트.
 
-2. **이중 엔진 세션 동기화 없음 (확정 + 추정)**  
-   Playwright 스캔 ↔ Selenium 검증 단절은 확정. 쿠키/창 목록을 두 엔진이 공유하지 않는 것은 **추정**으로는 설계 한계일 수 있으나, README는 사용자에게 단일 도구처럼 설명한다.
+### [ISSUE-002] 클릭 테스트가 확인 절차 없이 실제 클릭을 수행
 
-3. **오버레이 체크박스 의미 소실 (확정)**  
-   현재 JS는 항상 클릭을 막으므로, “오버레이 OFF = 실제 클릭” 기능은 빠져 있다.
+* **위치:** `xpath_explorer/mixins/browser/validation.py::_click_test_xpath`
+* **우선순위:** Medium
+* **신뢰도:** Confirmed
+* **문제:** v4.4 신규 "클릭 테스트" 버튼이 토스트 한 줄(`"요소 클릭 시도 중..."`)만 띄우고 곧바로 `click_element`를 호출한다. Selenium 경로는 스크롤→일반 클릭→ActionChains 폴백, Playwright 경로는 `scroll_into_view_if_needed + click`으로 실제 페이지에 작용한다. 티켓팅 사이트에서 이 클릭은 예매 이동·팝업 오픈·수량 변경 등 되돌리기 어려운 부작용을 낼 수 있다. 클릭 후 창/프레임 목록을 새로고침하지 않아, 페이지가 이동했으면 이후 검증이 stale 컨텍스트에서 돈다.
+* **발생 조건:** 사용자가 검증indi 목적으로 클릭 테스트를 누르고, 해당 XPath가 상태 변경 요소(예매·결제·삭제 버튼)인 경우. 오버레이 모드(클릭 차단)와 정반대 작용이라, 오버레이로 안전에 익숙해진 사용자가 더 쉽게 누른다.
+* **영향:** 의도하지 않은 예매 흐름 진입·폼 제출. 최악의 경우 결제 단계까지 진행될 수 있는 사이트 특성상 "검증용 클릭"의 기대와 다르다.
+* **근거:** `_click_test_xpath(:140-181)`에 확인 다이얼로그·경고 문구가 없고, 성공 시 `🖱️ 클릭 성공`만 표시한다. 클릭 후 `_refresh_windows`·`_scan_frames` 호출이 없다.
+* **반증 확인:** 피커의 오버레이(클릭 방지)와는 별개 경로임을 확인했다. 프레임 복구(`finally`의 `switch_back`)는 있으나 페이지 내비게이션 자체를 막지 못한다. "사용자가 버튼을 직접 눌렀다"는 점은 고의 조작을 막지 못한다는 반증이 되지 않는다(기대 위반이 핵심).
+* **호출/영향 범위:** 편집기 클릭 버튼 1곳 → 양 엔진의 `click_element`. 영향은 클릭된 실페이지 한정.
+* **권장 수정 방향:** 클릭 전 확인 다이얼로그("실제 페이지에 클릭합니다. 예매·결제로 이어질 수 있습니다")를 기본 켜짐으로 두고, 성공 후 창/프레임 목록을 갱신한다. 부작용이 큰 사이트용으로 "스크롤만 하기(클릭 없음)" 옵션을 함께 두면 검증 목적에 충분하다.
+* **필요한 회귀 테스트:** (Unit, Qt) 버튼 핸들러가 확인 다이얼로그에서 `No`를 고르면 `click_element`가 호출되지 않는지(Fake 엔진 호출 횟수 0). (Unit) `Yes` 후 창/프레임 갱신 함수가 호출되는지. (E2E, 수동) 실페이지 이동 후 후속 검증이 정상 동작하는지.
 
-4. **쿠키 로드 도메인 전제 (확정)**  
-   Selenium은 현재 문서 도메인에만 쿠키를 넣는다. 로드 전 해당 URL로 이동하는 단계가 없다. 실패 카운트만 보여 준다.
+### [ISSUE-003] 구버전이 남긴 평문 API 키 파일을 계속 읽어 사용
 
-5. **시나리오에 클릭/입력 액션이 없음 (추정)**  
-   지원 액션은 validate/wait/window switch 계열이다. README “팝업/대기 액션이 포함된 시나리오 자동 실행”은 맞지만, 매크로 수준의 click/fill은 시나리오 워커가 아니라 코드 생성 쪽에 있다. 사용자가 시나리오에서 클릭을 기대하면 빈 기능으로 느껴질 수 있다.
+* **위치:** `xpath_explorer/ai/config.py::load_ai_config`, `xpath_explorer/ai/assistant.py::_save_config`
+* **우선순위:** Medium
+* **신뢰도:** Confirmed
+* **문제:** v4.3부터 신규 저장은 키를 제외(`persistable_ai_config`)하고 환경변수가 파일보다 우선한다. 그러나 v4.2 이하에서 이미 기록된 `~/.xpath_explorer/ai_config.json` 안의 `openai_api_key`·`gemini_api_key`는 로드 시 그대로 병합되고, 해당 provider의 환경변수가 없을 때 유효한 키로 쓰인다. `_save_config`는 재설정할 때만 파일을 덮어쓰므로, 한 번도 재설정하지 않은 사용자의 디스크 평문 키는 영구히 살아 있고 계속 사용된다.
+* **발생 조건:** v4.2 이하에서 다이얼로그로 키를 저장한 적이 있고, v4.3+로 업데이트 후 환경변수를 설정하지 않았거나(또는 한 provider만 설정) 재설정을 하지 않은 경우.
+* **영향:** "파일에 키를 저장하지 않는다"는 v4.3 릴리즈 노트·README 설명과 달리, 과거 키가 공유 PC·백업·동기화 폴더에 남아 사용된다. 키 유출 시 과금·남용 위험.
+* **근거:** `config.py:24-39` — 파일 전체를 `config.update(file_config)`로 병합한 뒤 환경변수 키만 덮어쓴다. 파일 유래 키를 버리는 로직이 없다. 런타임 재현(환경변수 제거 + 파일에 레거시 키만 존재): `openai_api_key`가 그대로 로드됨을 실행으로 확인했다.
+* **반증 확인:** 신규 저장 경로(`persistable_ai_config`)와 환경변수 우선은 테스트(`test_ai_config_precedence.py`, 7개 통과)로 확인했다. 그러나 이는 *신규* 동작만 보장하고, 레거시 파일의 키를 무효화하지 않으므로 반증되지 않는다. 마이그레이션 정리 코드·관련 테스트는 없다.
+* **호출/영향 범위:** `load_ai_config` 호출자는 assistant 초기화 경로 2곳. 영향은 레거시 키 보유 사용자 + 해당 키로 호출되는 OpenAI/Gemini API.
+* **권장 수정 방향:** 로드 시 파일 유래 `*_api_key`를 무시(또는 읽되 즉시 파일에서 삭제 후 로그)하는 1회 마이그레이션을 둔다. 예: 파일에 비밀 키가 있으면 키를 제거한 파일을 원자적으로 다시 쓰고 `logger.warning("레거시 평문 키 N건을 제거했습니다. 환경변수를 설정하세요")`. README에 "업데이트 후 첫 실행 시 기존 파일의 키는 자동 파기" 한 줄을 추가한다.
+* **필요한 회귀 테스트:** (Unit) 파일에 레거시 키 + 환경변수 없음 → 반환 config에 키 없음 + 파일에서 키 제거됨. (Unit) 환경변수 있음 → 환경변수 키 사용 + 파일 키는 제거됨. 기존 `test_ai_config_precedence.py`에 레거시 케이스 2개를 추가한다.
 
-6. **`javascript:` URL 명시 차단 없음 (추정)**  
-   `_navigate`의 `https://` prefix가 사실상 막는다. 의도가 보안 통제인지는 문서에 없다.
+### [ISSUE-004] Diff 분석이 Selenium 전용·무가드로 실행
 
-7. **설정 파일 `items`가 리스트가 아니면 빈 목록으로 침묵 로드 (확정)**  
-   `SiteConfig.from_dict`는 `raw_items`가 list가 아니면 `[]`로 바꾼다. 잘못된 파일을 “성공”으로 열고 항목이 전부 사라진 것처럼 보인다.
+* **위치:** `xpath_explorer/mixins/tools/inspection/diff_panel.py::run_analysis`
+* **우선순위:** Medium
+* **신뢰도:** Confirmed
+* **문제:** `DiffAnalyzeWorker(list(self.config.items), self.browser, self.diff_analyzer)`에 항상 Selenium 브라우저를 넘긴다. 실행 전 alive 검사도, `_abort_if_driver_busy` 가드도 없다. Playwright만 켠 상태에서는 전 항목이 "찾지못함"으로 나온다. 검증/배치/시나리오 실행 중에 Diff 분석을 열면 같은 WebDriver를 두 워커가 공유한다(종료 시에는 정리되나 실행 중 경합은 막지 못한다).
+* **발생 조건:** (a) Playwright 세션으로 작업하면서 Diff 분석 실행. (b) F5/배치/시나리오 실행 중 Diff 분석 실행.
+* **영향:** (a) 실제 변경이 없어도 "찾지못함 N개"로 보여 오판 유발. (b) 프레임/창 컨텍스트 경합으로 양쪽 결과가 흔들릴 수 있다(Selenium `RLock`은 호출 단위 직렬화라 세션 단위 경합은 남는다).
+* **근거:** `diff_panel.py:158-167` — 가드·게이트 없이 워커 생성·시작. 대조적으로 `validation.py:189-196`, `runner.py:84-86`, `scenario.py:260-262`는 alive 검사 + `_abort_if_driver_busy` + `_stop_live_preview_sync`를 모두 수행한다.
+* **반증 확인:** DOM Diff *리포트*(`dom_diff.py`)는 Selenium→Playwright 폴백과 기준선 소스 추적을 갖추고 있어 정상이다. 그러나 항목 *분석*(`diff_panel.py` + `diff_worker.py::get_element_info`) 경로는 Selenium 고정임을 확인했으므로 반증되지 않는다. AI 워커는 브라우저를触지 않아 제외가 정당하나, Diff 워커는 `self.browser.get_element_info`를 호출하므로 가드 대상이다.
+* **호출/영향 범위:** Diff 분석 다이얼로그 1곳. 영향은 분석 결과 신뢰도 + 동시 실행 시 드라이버 경합.
+* **권장 수정 방향:** 다른 실행 경로와 동일하게 alive 검사 + `_abort_if_driver_busy("Diff 분석")`를 둔다. `DiffAnalyzeWorker`에 `playwright`를 전달하고 항목별 라우팅을 적용하거나, 최소한 Playwright-only 상태에서는 "Selenium 연결 필요"를 명시한다.
+* **필요한 회귀 테스트:** (Unit) 실행 중(validate/batch/scenario Fake 가동) Diff 시작 → 거부 토스트. (Unit) Selenium dead + Playwright alive → 명확한 안내(또는 Playwright 경로 분석). (Unit) 다이얼로그 종료 시 cancel+wait 정리.
 
-8. **자동 저장/복구 파일 없음 (추정)**  
-   `atomic_write_json`과 `resolve_storage_dir()`가 있는데, XPath 목록 오토세이브에는 쓰이지 않는다. 크래시 복구는 없을 가능성이 높다.
+### [ISSUE-005] 쿠키 `.bak` 백업이 평문·무권한으로 잔류
 
-9. **워커 중복 실행 가드 불균일 (확정)**  
-   피커는 “이미 실행 중”을 막는다. 시나리오 실행기도 running 가드가 있다. F5 검증/배치/라이브 미리보기는 동시에 뜰 수 있다.
-
-10. **Playwright `execute_script`/`inject_script`가 임의 JS를 실행 (추정)**  
-    내부 도구 API다. UI에서 사용자 JS 콘솔을 여는지는 이 감사에서 확인하지 못했다. 있으면 그대로 RCE에 가깝다.
-
-11. **Windows에서 `Path.replace` 원자성 (추정)**  
-    `atomic_write_json`은 같은 볼륨 replace를 전제한다. 대상 파일이 다른 프로세스로 열려 있으면 Windows에서 실패할 수 있다. 테스트(`tests/test_atomic_json_write.py`)가 있으나 OS 잠금 시나리오는 **추정**으로 약하다.
-
-12. **헤드리스 `XPathExplorer`는 `require_qt()`만 호출 (확정)**  
-    Qt 없는 CI에서 클래스 생성 시 즉시 실패하도록 되어 있다. 의도로 보이며, 그 결과 메인 윈도우 통합 테스트가 거의 없다.
-
-13. **문서 공백 (확정)**  
-    `CLAUDE.md` 없음. 에이전트/개발 규칙을 README + `docs/PROJECT_STRUCTURE_ANALYSIS.md` + 스크립트에 분산.
-
-14. **레거시 archive가 검색/그래프를 오염 (확정)**  
-    동명 `XPathExplorer`/`BrowserManager`가 archive에 남아 CodeGraph가 현재 구현과 레거시를 섞어 반환한다. 유지보수 시 잘못된 파일을 고칠 위험이 있다.
-
----
-
-## 5. Recommended Fix Plan
-
-### 1단계 — 즉시 수정 (사용자 기능/비밀)
-
-1. **오버레이 모드**  
-   JS에 플래그를 연결하거나, 체크박스를 제거하고 문서를 “클릭은 항상 선택 전용”으로 통일.
-2. **종료/열기 시 미저장 확인**  
-   dirty 감지 + 저장 다이얼로그. 가능하면 `~/.xpath_explorer/autosave.json`에 원자적 스냅샷.
-3. **Playwright 항목 검증 경로**  
-   `source_engine=playwright`이면 `pw_manager`로 validate/highlight/count. 매니저가 꺼져 있으면 명확한 에러.
-4. **비밀 저장**  
-   API 키: 파일에 평문 저장 중단, env 우선 또는 OS keyring.  
-   쿠키: 저장 경고 + 도메인 필터 + sameSite 호환 + atomic write.
-5. **라이브 미리보기 중첩**  
-   cancel 후 wait, 또는 단일 워커. 피커 활성 중 미리보기 정지.
-
-### 2단계 — 안정성
-
-1. 시나리오 wait/popup timeout 상한 및 로드 시 액션 화이트리스트.
-2. URL 스킴 화이트리스트 (`http(s)`, `about`, 선택적 `file`).
-3. CSV 수식 이스케이프를 파일 내보내기/배치 리포트에 적용.
-4. Picker `innerHTML` 제거.
-5. 워커 동시 실행 정책: Validate/Batch/Preview/Picker 중 하나만 드라이버를 소유.
-6. `SiteConfig.from_dict`에서 `items` 타입 오류를 침묵하지 말고 실패시킬 것.
-7. QSettings 식별자 정리 및 구버전 키 마이그레이션.
-
-### 3단계 — 구조
-
-1. Selenium `selenium_*.py` 재포맷/재인코딩. archive는 그래프에서 제외하거나 `archive/`를 인덱스 제외.
-2. 브라우저 세션 파사드 하나로 Selenium/Playwright를 감싸 창·프레임·검증 API를 통일.
-3. Undo 제한을 UI/README에 명시. 세션 복구와 파일 저장을 분리.
-4. `CLAUDE.md`(또는 `AGENTS.md`)에 실행 경로, 품질 게이트, “archive는 런타임 아님”을 고정.
-5. mixin 거대 파일의 순환 import/`getattr` 디스패치를 줄여 정적 추적 가능하게.
+* **위치:** `xpath_explorer/core/paths.py::atomic_write_json`, `xpath_explorer/mixins/data/cookies.py::_save_cookies`
+* **우선순위:** Medium
+* **신뢰도:** Confirmed
+* **문제:** `atomic_write_json`은 교체 전 기존 파일을 `.bak`으로 복사한다. 쿠키 저장(`_save_cookies`)은 대상 파일에만 `chmod 0o600`을 시도하고, `.bak`(이전 쿠키 전문)에는 권한을 걸지 않으며 삭제하지도 않는다. Windows에서는 `chmod`가 사실상 무효라 경고 다이얼로그("암호화 없이 저장")가 유일한 보호가 된다. 즉 로그인 세션이 평문 2벌(본체+백업)로 남는다.
+* **발생 조건:** 같은 경로에 쿠키를 2회 이상 저장한 경우 항상. 대상 파일이 없어 첫 저장만 한 경우는 `.bak`이 없다.
+* **영향:** 세션 탈취에 쓸 수 있는 쿠키가 사용자 의식 밖에 하나 더 남는다. 백업·동기화·공유 PC에서 노출면이 2배다. 일반 설정 JSON의 `.bak`은 무해에 가깝지만 쿠키는 민감하다.
+* **근거:** `paths.py:56,64-71` — 백업 복사 후 권한·정리 없음. `cookies.py:56-60` — `chmod`는 저장 본체에만, 실패 무시. Windows `chmod` 한계는 표준 동작이다.
+* **반증 확인:** 저장 전 경고·도메인 분리·원자적 쓰기(v4.3 수정)는 확인했다. 그러나 `.bak` 잔류와 Windows 권한 한계는 코드상 그대로이므로 반증되지 않는다. 통계·AI 설정의 `.bak`은 민감도가 낮아 쿠키가 핵심이다.
+* **호출/영향 범위:** `atomic_write_json` 호출자 11곳 중 민감 파일을 쓰는 곳은 쿠키 저장. 영향은 쿠키 저장 사용자의 디스크.
+* **권장 수정 방향:** `atomic_write_json`에 `backup: bool = True` 옵션을 두고 쿠키 저장에서는 `backup=False`로 호출하거나, 백업에도 동일 `chmod`를 적용 후 다음 저장 성공 시 이전 `.bak`을 삭제한다. 저장 다이얼로그 경고에 ".bak 백업도 함께 남을 수 있음"(또는 남지 않음 — 선택한 구현대로) 한 줄을 반영한다.
+* **필요한 회귀 테스트:** (Unit) 쿠키 2회 저장 시나리오에서 `.bak` 정책(없음 또는 0o600)이 지켜지는지(POSIX). (Unit) Windows 스킵 조건에서 경고 문구가 백업을 언급하는지(문서 동기화 테스트 확장).
 
 ---
 
-## 6. Test Recommendations
+## 5. Potential Functional Gaps
 
-기존 테스트는 워커 취소, 설정 스키마, 경로, DOM 리포트, AI 설정 저장, 히스토리 매니저 등 **순수 로직**에 강하다. 아래는 이번 감사에서 구멍이 확인된 부분이다.
+추정은 추정으로만 표기한다. 버그처럼 단정하지 않는다.
 
-### 반드시 추가
-
-| 테스트 | 왜 |
-|--------|----|
-| `start_picker(overlay_mode=True/False)`가 JS 주입 인자/`window.__pickerOverlay`를 바꾸는지 | 3.1. 현재 시그니처만 있고 동작이 없음 |
-| Picker JS: overlay off일 때 `preventDefault` 여부 | 체크박스 계약 |
-| Playwright 스캔 항목에 대해 `_test_xpath` / live preview가 `pw_manager`를 쓰는지, Selenium-only일 때 에러 메시지 | 3.2 |
-| `_load_cookies`: list가 아닌 JSON 거부(이미 일부 있음), 도메인 불일치 시 실패 집계, `sameSite` 필드가 있어도 크래시 없음 | 3.4, 쿠키 mixin 테스트 전무 |
-| `closeEvent` 또는 dirty helper: 변경된 config에서 저장 확인이 필요한지 | 3.5. Qt 테스트로 분리 |
-| LivePreview: 이전 워커 `isRunning()` 중 재시작 시 `wait`/`request_id` 및 프레임 복구 순서 | 3.6. 현재 테스트는 동기 `run()`만 |
-| `load_ai_config`: 키가 파일에 쓰이지 않거나 env가 이기도록 정책을 바꾸면 기존 `test_ai_config_precedence`도 함께 수정 | 3.3 |
-
-### 보강
-
-| 테스트 | 왜 |
-|--------|----|
-| `_navigate`: `example.com` → https 부여, `file://`/`about:blank`/`javascript:` 각각 | 3.9 |
-| 시나리오 JSON: 미지원 액션, 음수 retries, 과대 `seconds` clamp, 빈 steps | 3.10, `tests/test_batch_scenario_worker.py` 확장 |
-| CSV export: `=cmd\|'/c calc'` 형태 셀이 이스케이프되는지 | 3.8, `tests/test_batch_report_exports.py`에 파일 내보내기도 |
-| `SiteConfig.from_dict`: `items`가 dict/None일 때 실패 | 3. 잠재 갭 7 |
-| `atomic_write_json`: 대상 파일이 읽기 전용/잠금일 때 원본 보존 (Windows) | 3. 잠재 갭 11 |
-| Picker tooltip escape: `<img onerror=...>` 텍스트가 innerHTML로 안 들어가는지 | 3.7 |
-
-### 통합/회귀 (가능하면 `pytest.mark.qt`)
-
-- 피커 실행 중 라이브 미리보기/F5가 거부되거나 직렬화되는지.
-- 시나리오 실행 중 다이얼로그를 닫으면 `scenario_worker`가 정리되는지 (`on_dialog_close`는 있으나 테스트 없음).
-- `XPathExplorer` 생성 후 메뉴 액션 이름/단축키가 README 표와 같은지 (문서 동기화 스크립트 확장).
-
-### 테스트 시 주의
-
-- `archive/`의 동명 클래스를 import하지 말 것. CodeGraph도 이쪽을 자주 가리킨다.
-- Qt가 필요한 테스트는 기존처럼 `pytest.mark.qt`로 분리.
-- 실 사이트/실 쿠키/실 API 키를 쓰는 테스트는 넣지 말 것.
+1. **쿠키 도구가 Selenium 전용 (Likely Gap).** `_save_cookies`·`_load_cookies`는 `self.browser.driver`(Selenium)만 쓴다. `PlaywrightStorageMixin`에 저장/로드 API는 있으나 UI 연결을 찾지 못했다. Playwright 세션으로 로그인한 사용자는 쿠키를 저장·복원할 수 없다. README의 "쿠키 관리" 설명은 엔진을 구분하지 않는다.
+2. **시나리오에 클릭/입력 액션이 없음 (Confirmed Gap).** 지원 액션은 `validate_item`·`validate_xpath`·`wait/sleep`·`wait_for_popup`·창 전환 3종뿐이다(`scenario_worker.py:311-383`, 기본 예제 `scenario.py:80-82`). v4.4에 클릭 테스트 버튼이 생겼지만 시나리오에서 클릭 스텝은 여전히 불가다. README 표현("팝업/대기 액션") 자체는 정확하나, 매크로 수준 재현을 기대하면 빈 기능이다.
+3. **시나리오 `retries` 상한 없음 (Confirmed Gap, Low).** `wait_seconds`는 60초 상한이 있으나 `retries`는 무제한이다. 취소는 attempt마다 체크되어 무한 점유는 아니다(`_run_validate_with_retry:180-193` 확인). 과대한 값은 실행 시간만 늘린다. 상한(예: 10) + 로드 시 경고를 권장한다.
+4. **비정상 종료 복구 없음 (Confirmed Gap).** 정상 종료의 미저장 확인은 있으나 자동저장·크래시 복구 스냅샷이 없다. `atomic_write_json`·`resolve_storage_dir` 인프라가 있는데 목록 자동저장에는 미사용이다.
+5. **내보내기(CSV/HTM/코드)가 비원자적 쓰기 (Confirmed Gap, Low).** 설정 저장과 달리 `open(..., "w")` 직접 쓰기라 크래시 시 반쪽 파일이 남는다. 재내보내기로 복구 가능해 심각도는 낮다.
+6. **AI 네트워크 호출에 명시적 timeout 없음 (추정).** `assistant.py`의 OpenAI·Gemini 호출에 timeout 인자가 없다. AI 워커 스레드라 UI는 안 막히고, 종료 시 `wait(WORKER_WAIT_TIMEOUT)` 후 진행하므로 먹통 가능성은 낮다. 사용 중인 SDK의 기본 timeout을 확인하지 못했으므로 추정으로만 둔다. 명시적 timeout(예: 30초) + 실패 시 폴백 유지를 권장한다.
+7. **`atomic_write_json` tmp 이름이 pidのみ (추정, Low).** 같은 프로세스·같은 파일에 대한 동시 호출이 같은 tmp 경로를 쓴다. 현재 호출자는 UI 스레드·통계 라이터가 이벤트로 직렬화되어 실제 경합은 확인되지 않았다. 스레드 식별자 포함을 고려할 수 있다.
+8. **설정 기본 파일명에 `config.name` 원문 사용 (추정, Low).** `files.py:95`의 `f"{self.config.name}.json"` — `from_dict`가 name의 경로 문자를 소독하지 않는다. 다이얼로그에서 사용자가 고치면 되나, `/`·`..` 포함 이름은 기본 경로가 엉뚱해진다.
+9. **AI 메모리 내 키가 provider 전환 후에도 남음 (Likely Gap, Low).** `configure()`는 현재 provider 키만 갱신하고 이전 provider 키를 메모리 config에서 지우지 않는다. 디스크에는 기록되지 않으므로 노출은 없으나, 세션 중 provider를 바꾸면 이전 키가 메모리에 잔류한다.
+10. **DOM 번들 내 원본 HTML을 직접 열면 페이지 스크립트가 동작 (Likely Gap, Low).** 리포트 HTM은 전역 이스케이프(`_safe`, `dom_export.py:137` 등)라 안전함을 확인했다. 그러나 번들 속 `documents/*.html`은 재분석용 원본이라 브라우저로 열면 스크립트가 실행될 수 있다. 사용자 본인이 캡처한 페이지라 위험은 낮지만, 번들에 "원본 HTML 직접 열기 주의" 한 줄을 권장한다.
 
 ---
 
-## Appendix: 문서 vs 구현 대조
+## 6. Documentation Mismatches
 
-| README 주장 | 실제 |
-|-------------|------|
-| 오버레이 모드로 실수 클릭 방지 | 체크박스는 전달만 하고 미사용. 클릭은 JS가 항상 차단 |
-| 무제한 Undo/Redo | `HISTORY_MAX_SIZE = 50` |
-| 작업 손실 완벽 방지 (`atomic_write_json`) | 파일 저장/AI 설정/통계에만 적용. 목록 오토세이브·종료 확인 없음 |
-| AI 키: 다이얼로그 또는 env | 파일 `ai_config.json`이 env를 덮어씀 |
-| Playwright 스캔 후 편집기/검증 | 스캔은 Playwright, 검증/미리보기는 Selenium |
-| CLAUDE.md 개발 규칙 | 파일 없음 |
-| 쿠키로 로그인 상태 유지 | 평문 JSON + 도메인 불일치 시 부분 적용 |
+README·CLAUDE·코드를 대조했다. v4.3 감사 때의 불일치(오버레이·무제한 Undo·키 저장·엔진 단절)는 모두 해소된 것을 확인했다.
+
+1. **`AGENTS.md` 없음.** 작업 지시 기준으로 확인할 문서 목록에 있으나 저장소에 없다. `CLAUDE.md`→`docs/claude.md` 체계가 대신하므로 실무 문제는 없다. 없음을 명시한다.
+2. **"Playwright 세션으로 검증" 표현의 적용 범위.** README의 "Playwright에서 가져온 항목은 Playwright 세션이 살아 있을 때 그 엔진으로 검증/하이라이트합니다"는 단건·전체·배치·미리보기에서 구현을 확인했다. 그러나 시나리오의 창/팝업 액션(ISSUE-001)과 Diff 항목 분석(ISSUE-004)은 Selenium 전용이라, "시나리오 자동화"·"검증" 일반 표현까지 같은 보장을 읽으면 어긋난다. 해당 2개 경로의 엔진 제약을 문서에 한 줄씩 추가해야 한다.
+3. **"API 키 미저장"과 레거시 파일.** README·CHANGELOG 표현은 신규 저장 기준으로는 정확하다. 다만 ISSUE-003처럼 구버전 파일의 키는 계속 사용되므로, "v4.3 이전에 저장된 키는 첫 실행 시 자동 파기(예정)" 같은 이행 문구가 필요하다(현재 없음).
+4. **품질 게이트의 실행 전제.** README의 `pytest -q`는 PyQt6·Selenium이 없는 환경에서 15개 모듈 수집 에러를 낸다(본 감사 환경에서 확인). 게이트 자체는 틀리지 않았으나 "전체 의존성 설치 후" 전제가 설치 절과 멀리 떨어져 있다. 의존성 미설치 시 `pytest -q`가 아닌 순수 로직 subset 명령을 문서에 덧붙이면 재현성이 좋아진다.
+5. 그 외 모델명(`gpt-5.4`·`gemini-flash-latest`), Undo 50단계 상한, 쿠키 경고·도메인 분리, 시나리오 60초 상한, QSettings 이관, 원자적 저장 적용 범위는 문서와 일치한다.
 
 ---
 
-## Appendix: CodeGraph 사용 한계
+## 7. Recommended Fix Plan
 
-- 인덱스가 `archive/251221 xpath 조사기(모든 티켓 사이트).py`의 거대 클래스를 현재 패키지와 동등한 심볼로 묶어, blast radius/호출자가 부풀었다.
-- `selenium_*.py`는 포맷이 깨져 있어 그래프 출력이 읽기 어렵다. 본문은 디스크에서 재확인했다.
-- 동적 경계: `getattr(..., "begin_validation_session")`, `getattr(..., "wait_for_popup")` 등. 워커는 구 시그니처 `TypeError` 폴백을 갖고 있어 정적 추적만으로는 실제 분기 누락을 단정하기 어렵다.
+실제 코드는 수정하지 않는다. 아래는 순서 제안이다.
 
-감사 범위 밖의 항목(성능 튜닝, UI 스타일, 레거시 파일 삭제 여부)은 기능 리스크로 승격하지 않았다.
+### Phase 1 — Immediate
+
+데이터·주요 기능·보안 직결. ISSUE-001/002/003이다.
+
+1. 시나리오 엔진 게이트·윈도우 액션 라우팅(ISSUE-001). 다이얼로그와 워커의 허용 조건을 일치시키고, Playwright 창/팝업 액션을 지원하거나 명확히 실패시킨다.
+2. 클릭 테스트 확인 절차(ISSUE-002). 확인 다이얼로그 기본 켜짐 + 클릭 후 창/프레임 갱신.
+3. 레거시 평문 키 정리(ISSUE-003). 로드 시 파일 유래 키 무시 + 1회 자동 파기 + 로그·문서 반영.
+
+### Phase 2 — Stability
+
+예외 처리, 입력 검증, 상태 관리, OS 호환성. ISSUE-004/005 + 확정 갭이다.
+
+1. Diff 분석에 alive 검사·드라이버 바쁨 가드·엔진 라우팅(ISSUE-004).
+2. 쿠키 `.bak` 정책(백업 제외 또는 권한·정리) + Windows 한계 문서화(ISSUE-005).
+3. 쿠키 도구의 Playwright 세션 지원(Likely Gap 1).
+4. 시나리오 `retries` 상한 + 과대값 경고(Gap 3).
+5. 비정상 종료 대비 자동저장 스냅샷(Gap 4, `atomic_write_json` 재사용).
+6. 내보내기 경로 원자적 쓰기 확대(Gap 5).
+
+### Phase 3 — Structural
+
+1. AI 호출 명시적 timeout·재시도 정책(Gap 6).
+2. 설정명 파일명 소독 + provider 전환 시 메모리 키 정리(Gap 8·9).
+3. Qt 의존 코드를 UI 뒤로 격리해 headless 테스트 가능 영역 확대(현재 Qt 테스트는 환경 의존).
+4. `archive/`를 인덱스·검색 기본 범위에서 제외해 CodeGraph 오염 방지(감사 한계에서 확인된 문제).
+
+---
+
+## 8. Test Recommendations
+
+"테스트 추가"가 아니라 입력 조건과 기대 결과를 명시한다. Qt/Selenium 의존은 `pytest.mark.qt` 분리 유지, 실사이트·실쿠키·실키는 쓰지 않는다.
+
+### Unit
+
+| 대상 | 입력 조건 | 기대 결과 |
+|---|---|---|
+| 시나리오 게이트 | Selenium dead + Playwright alive, playwright 스텝 1개 | 스텝이 실행되고 `completed(results≠[], ...)` |
+| 시나리오 창 액션 | Playwright 팝업 존재 + `wait_for_popup` 스텝 | 팝업 검출 성공(또는 엔진 미지원 명시 실패) |
+| 클릭 확인 | 다이얼로그 `No` 선택 | Fake `click_element` 호출 0회 |
+| 클릭 후 갱신 | 다이얼로그 `Yes` + 가짜 내비게이션 | `_refresh_windows`·`_scan_frames` 호출 |
+| 레거시 키 | 파일에만 구키 + env 없음 → `load_ai_config` | 반환에 키 없음 + 파일에서 키 제거 |
+| 레거시 키(env) | 파일 구키 + env 신키 | env 키 사용 + 파일 키 제거 |
+| Diff 가드 | validate/batch/scenario Fake 가동 중 분석 시작 | 거부 토스트, 워커 미시작 |
+| Diff 엔진 | Selenium dead + Playwright alive | 안내 메시지(또는 PW 경로 결과) |
+| 쿠키 백업 | 동일 경로 2회 저장(POSIX) | `.bak` 없음 또는 0o600 |
+| retries 상한 | `retries: 10^9` 시나리오 로드 | 상한 클램프 + 경고(또는 명시 실패) |
+| URL | `file:///C:/a.html`·`about:blank`·`javascript:alert(1)` | 허용·허용·거부 메시지 |
+
+### Integration
+
+- F5 전체 검증: Selenium/Playwright 혼합 목록에서 항목별 엔진으로 검증되고, PW 세션 종료 항목은 `browser_not_connected`로 명확히 실패한다.
+- 배치 리포트: `=cmd`·`+sum`·`@link` 선행 셀이 `'` 접두로 무력화되어 저장된다(기존 `test_batch_report_exports.py` 확장).
+- 종료 흐름: dirty 상태에서 `Save` 선택 후 다이얼로그 취소 → 종료 중단(`a0.ignore`); 저장 성공 → 종료 진행.
+- 시나리오 다이얼로그를 닫으면 워커가 cancel+wait로 정리된다(`on_dialog_close` 경로 테스트 없음 — 신규).
+
+### End-to-End (수동, 실브라우저)
+
+- Playwright만 켠 상태: 스캔 → 편집기 적용 → Ctrl+T 검증 → F5 → 시나리오(팝업 포함) → Diff 분석까지 끊김 없이 수행된다.
+- 클릭 테스트 후 페이지가 이동해도 후속 검증·창 목록이 정상이다.
+
+### Concurrency
+
+- 미리보기 입력 중 F5: 이전 미리보기 워커가 `wait`로 정리된 뒤 검증이 시작된다(현재 `wait` 추가됨 — 경합 재발 방지 회귀).
+- 배치 실행 중 Diff 분석·피커 시작이 거부된다.
+- AI 생성 중 앱 종료: `WORKER_WAIT_TIMEOUT` 내 정리되고 스레드 누수 없이 종료된다.
+
+### Regression
+
+- v4.3 수정 11종(오버레이·미저장 확인·엔진별 검증·키 미저장·쿠키 경고/도메인·미리보기 wait·CSV·URL·시나리오 60초·스키마 거부·QSettings 이관)에 대한 기존 테스트를 유지하고, 본 감사의 ISSUE-001~005 테스트를 같은 파일군에 추가한다.
+
+### Platform-specific
+
+- Windows 잠금 파일에 `atomic_write_json` 실패 시 원본 보존(기존 테스트는 덤프 실패 케이스만 — OS 잠금 케이스 추가).
+- `chmod 0o600` 무효 환경(Windows)에서 쿠키 경고 문구가 백업 잔류를 고지하는지.
+- 한글 포함 경로(레거시 래퍼 파일명 등)에서 설정 저장·내보내기가 정상 동작하는지.
+
+---
+
+## 9. Final Assessment
+
+| 영역 | 평가 | 근거 |
+|---|---|---|
+| Functional Correctness | Needs Work | 단건·전체·배치 검증과 스캔·피커·쿠키·AI 기본 흐름은 견고하나, 시나리오(ISSUE-001)와 Diff 분석(ISSUE-004)에 엔진 라우팅 잔재가 있다 |
+| Runtime Stability | Acceptable | 워커 가드·미리보기 wait·세션 복구·종료 정리가 갖춰져 있다. AI timeout 명시 같은 잔여가 있다 |
+| Data Integrity | Acceptable | dirty 확인·원자적 저장·스키마 검증이 있다. 크래시 복구 부재와 쿠키 `.bak` 잔류가 감점이다 |
+| Error Resilience | Acceptable | 폴백(AI)·실패 집계(쿠키)·세션 힌트 무효화가 있다. 시나리오 빈 완료 표시처럼 실패를 성공처럼 보이는 1건이 있다 |
+| Cross-platform Robustness | Acceptable | URL 스킴·인코딩 검사가 깨끗하다. `chmod` Windows 한계와 Qt/Selenium 미설치 시 테스트 불가 구조가 감점이다 |
+| Test Confidence | Needs Work | 순수 로직 140개 수집·33개 실행 통과·문서/인코딩 게이트 통과이나, Qt·브라우저 의존 핵심 경로(검증·배치·시나리오 워커)는 본 환경에서 미실행이다 |
+
+**실제로 먼저 수정할 문제 3개:**
+
+1. **[ISSUE-001] 시나리오 Playwright 게이트·창 액션 라우팅 (High)** — 주요 기능이 조건부로 동작하지 않는 유일한 High다.
+2. **[ISSUE-003] 레거시 평문 API 키 자동 파기 (Medium)** — 런타임 확정 + 수정이 작고(로드 1곳) 보안 효과가 크다.
+3. **[ISSUE-002] 클릭 테스트 확인 절차 (Medium)** — 티켓 도메인 특성상 한 번의 사고 비용이 크고 수정이 다이얼로그 1개 수준이다.

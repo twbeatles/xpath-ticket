@@ -31,3 +31,13 @@ def test_atomic_write_json_keeps_existing_file_when_dump_fails(monkeypatch, tmp_
     assert json.loads(target.read_text(encoding="utf-8")) == {"old": True}
     assert not list(tmp_path.glob("*.tmp"))
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_atomic_write_json_skips_backup_when_disabled(tmp_path):
+    target = tmp_path / "cookies.json"
+    target.write_text('[{"name": "session"}]', encoding="utf-8")
+
+    atomic_write_json(target, [{"name": "fresh"}], backup=False)
+
+    assert json.loads(target.read_text(encoding="utf-8")) == [{"name": "fresh"}]
+    assert not list(tmp_path.glob("*.bak"))

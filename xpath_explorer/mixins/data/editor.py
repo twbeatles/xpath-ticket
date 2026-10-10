@@ -241,6 +241,7 @@ class ExplorerDataEditorMixin:
         self._update_undo_redo_actions()
         self.history_manager.sync_current_state(self.config.items)
         self._editing_original_name = name
+        self._autosave_snapshot()
         self._show_toast(f"'{name}' 저장 완료", 'success')
 
     def _delete_item(self, name):
@@ -260,6 +261,7 @@ class ExplorerDataEditorMixin:
             self._update_undo_redo_actions()  # v4.0
             # 히스토리 현재 상태 동기화 (변경 후)
             self.history_manager.sync_current_state(self.config.items)
+            self._autosave_snapshot()
 
     def _show_toast(self, message, toast_type="info", duration=3000):
         toast = getattr(self, "toast", None)

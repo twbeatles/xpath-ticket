@@ -348,3 +348,124 @@ def test_batch_scenario_worker_clamps_wait_seconds():
         [{"action": "wait", "seconds": 99999, "name": "long"}]
     )
     assert steps[0]["wait_seconds"] == SCENARIO_MAX_WAIT_SECONDS
+
+
+def test_batch_scenario_worker_clamps_retries():
+    from xpath_explorer.core.constants import SCENARIO_MAX_RETRIES
+
+    steps = BatchScenarioWorker._normalize_steps(
+        [
+            {"action": "validate_xpath", "xpath": "//a", "retries": 10**9},
+            {"action": "validate_xpath", "xpath": "//b", "retries": -5},
+        ]
+    )
+    assert steps[0]["retries"] == SCENARIO_MAX_RETRIES
+    assert steps[1]["retries"] == 0
+
+
+class _DeadBrowser(_FakeBrowser):
+    def is_alive(self):
+        return False
+
+
+class _FakePlaywright:
+    def __init__(self):
+        self.validate_calls = []
+        self.current_frame_path = ""
+
+    def is_alive(self):
+        return True
+
+    def validate_xpath(self, xpath):
+        self.validate_calls.append(xpath)
+        if xpath == "//pw-ok":
+            return {"found": True, "msg": "", "frame_path": "main", "count": 1,
+                    "tag": "button", "window_handle": "pw-page",
+                    "window_title": "PW", "window_url": "https://pw.example"}
+        return {"found": False, "msg": "not found", "frame_path": "main", "count": 0}
+
+    def get_current_window_metadata(self):
+        return {"handle": "pw-page", "title": "PW",
+                "url": "https://pw.example", "is_popup": False}
+
+
+class _DeadPlaywright(_FakePlaywright):
+    def is_alive(self):
+        return False
+
+
+def _run_worker(browser, items, scenario, playwright=None):
+    _ensure_qt_app()
+    outcome = {}
+    worker = BatchScenarioWorker(browser, items, scenario, playwright=playwright)
+    worker.completed.connect(
+        lambda results, cancelled, name: outcome.update(
+            kind="completed", results=results, cancelled=cancelled)
+    )
+    worker.failed.connect(lambda message: outcome.update(kind="failed", message=message))
+    worker.run()
+    return outcome
+
+
+def test_scenario_playwright_only_runs_playwright_item_steps():
+    browser = _DeadBrowser()
+    playwright = _FakePlaywright()
+    items = [XPathItem(name="pw_btn", xpath="//pw-ok", category="booking",
+                       source_engine="playwright")]
+    scenario = {
+        "name": "pw-only",
+        "steps": [
+            {"name": "pw check", "action": "validate_item", "item": "pw_btn"},
+            {"name": "pause", "action": "wait", "seconds": 0.01},
+        ],
+    }
+
+    outcome = _run_worker(browser, items, scenario, playwright=playwright)
+
+    assert outcome["kind"] == "completed"
+    assert len(outcome["results"]) == 2
+    assert outcome["results"][0]["success"] is True
+    assert playwright.validate_calls == ["//pw-ok"]
+    assert browser.validate_calls == []
+
+
+def test_scenario_playwright_only_fails_fast_on_selenium_steps():
+    browser = _DeadBrowser()
+    playwright = _FakePlaywright()
+    scenario = {
+        "name": "pw-only-popup",
+        "steps": [{"name": "popup", "action": "wait_for_popup", "seconds": 0.01}],
+    }
+
+    outcome = _run_worker(browser, [], scenario, playwright=playwright)
+
+    assert outcome["kind"] == "failed"
+    assert "Selenium" in outcome["message"]
+
+
+def test_scenario_both_dead_fails_fast_instead_of_empty_completed():
+    outcome = _run_worker(
+        _DeadBrowser(), [],
+        {"name": "dead", "steps": [{"name": "x", "action": "validate_xpath",
+                                    "xpath": "//ok"}]},
+        playwright=_DeadPlaywright(),
+    )
+
+    assert outcome["kind"] == "failed"
+    assert "Selenium" in outcome["message"]
+
+
+def test_scenario_playwright_item_falls_back_to_selenium():
+    browser = _FakeBrowser()
+    items = [XPathItem(name="pw_btn", xpath="//ok", category="booking",
+                       source_engine="playwright")]
+    scenario = {
+        "name": "fallback",
+        "steps": [{"name": "pw check", "action": "validate_item", "item": "pw_btn"}],
+    }
+
+    outcome = _run_worker(browser, items, scenario, playwright=_DeadPlaywright())
+
+    assert outcome["kind"] == "completed"
+    assert outcome["results"][0]["success"] is True
+    assert browser.validate_calls

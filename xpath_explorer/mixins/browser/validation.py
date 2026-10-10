@@ -137,6 +137,19 @@ class ExplorerBrowserValidationMixin:
             last_error = getattr(engine_browser, "last_error", "")
             self._show_toast(last_error or "하이라이트 실패", "error")
 
+    def _confirm_click_test(self) -> bool:
+        """실클릭 전 확인. 테스트 용이성을 위해 별도 메서드로 분리."""
+        reply = QMessageBox.question(
+            self,
+            "클릭 테스트",
+            "실제 브라우저에서 요소를 클릭합니다.\n"
+            "예매·결제·삭제 등 상태 변경으로 이어질 수 있습니다.\n"
+            "계속할까요?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
     def _click_test_xpath(self):
         """현재 XPath 요소 클릭 테스트 (Selenium/Playwright 공용)."""
         xpath = self.input_xpath.toPlainText().strip()
@@ -154,6 +167,8 @@ class ExplorerBrowserValidationMixin:
             error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
             self.txt_result.setPlainText(f"❌ 클릭 실패\n{error_msg}")
             self._show_toast(error_msg, "error")
+            return
+        if not self._confirm_click_test():
             return
         frame_path = self._resolve_active_frame_path()
         click = getattr(engine_browser, "click_element", None)
@@ -175,6 +190,11 @@ class ExplorerBrowserValidationMixin:
         if ok:
             self.txt_result.setPlainText(f"🖱️ 클릭 성공\n{xpath}")
             self._show_toast("요소를 클릭했습니다.", "success")
+            if engine_name != "playwright":
+                try:
+                    self._refresh_windows()
+                except Exception:
+                    pass
         else:
             last_error = str(getattr(engine_browser, "last_error", "") or "클릭 실패")
             self.txt_result.setPlainText(f"❌ 클릭 실패\n{last_error}")

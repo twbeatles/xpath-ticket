@@ -11,6 +11,7 @@ from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import (
     PICKER_POLL_INTERVAL_MS,
     PICKER_ACTIVE_CHECK_TICKS,
+    SCENARIO_MAX_RETRIES,
     SCENARIO_MAX_WAIT_SECONDS,
 )
 from xpath_explorer.tools.ai import XPathAIAssistant
@@ -27,6 +28,26 @@ from xpath_explorer.workers.worker_shared import (
     _switch_browser_to_item_window,
     _window_context_from_item,
 )
+
+#: Actions that always run against the Selenium browser. Playwright exposes no
+#: popup/window-switch API, so these steps require a live Selenium session.
+SELENIUM_ONLY_ACTIONS = frozenset({
+    "wait_for_popup",
+    "switch_latest_popup",
+    "switch_window_by_title",
+    "switch_root_window",
+})
+
+
+def _engine_alive(engine: Any) -> bool:
+    """Return True when the engine exposes a working is_alive()."""
+    is_alive = getattr(engine, "is_alive", None)
+    if not callable(is_alive):
+        return False
+    try:
+        return bool(is_alive())
+    except Exception:
+        return False
 
 class BatchScenarioWorker(QThread):
     """JSON 기반 배치 시나리오 실행 워커."""
@@ -102,7 +123,7 @@ class BatchScenarioWorker(QThread):
                 "frame_path": str(raw.get("frame_path") or ""),
                 "title": str(raw.get("title") or ""),
                 "wait_seconds": min(SCENARIO_MAX_WAIT_SECONDS, max(0.0, wait_seconds)),
-                "retries": max(0, cls._to_int(raw.get("retries", 0), default=0)),
+                "retries": min(SCENARIO_MAX_RETRIES, max(0, cls._to_int(raw.get("retries", 0), default=0))),
             }
             steps.append(step)
         return steps
@@ -214,6 +235,9 @@ class BatchScenarioWorker(QThread):
         return last_outcome
 
     def _run_window_action(self, action: str, title: str, timeout_seconds: float) -> Dict[str, Any]:
+        # Window/popup actions are Selenium-only (see SELENIUM_ONLY_ACTIONS).
+        if not _engine_alive(self.browser):
+            return {"success": False, "msg": "Selenium 브라우저가 연결되어 있지 않아 창 액션을 수행할 수 없습니다."}
         if action == "wait_for_popup":
             wait_for_popup = getattr(self.browser, "wait_for_popup", None)
             if not callable(wait_for_popup):
@@ -254,6 +278,35 @@ class BatchScenarioWorker(QThread):
 
         return {"success": False, "msg": f"unsupported action: {action}"}
 
+    def _missing_required_engine(self, steps: List[Dict[str, Any]]) -> str:
+        """Name the dead engine a scenario needs, or "" when runnable.
+
+        Raw XPath steps and window/popup actions always use Selenium.
+        Item steps use the item's source engine, except Playwright items fall
+        back to Selenium through _engine_browser_for_item, so a dead
+        Playwright session alone never blocks them.
+        """
+        selenium_needed = False
+        for step in steps:
+            action = str(step.get("action", ""))
+            if action in ("validate_item", "item"):
+                item = self._item_map.get(str(step.get("item_name", "")))
+                if item is None:
+                    continue
+                engine = str(getattr(item, "source_engine", "") or "").lower()
+                if engine == "playwright" and _engine_alive(self.playwright):
+                    continue
+                selenium_needed = True
+            elif action in ("validate_xpath", "xpath", "validate"):
+                selenium_needed = True
+            elif action in SELENIUM_ONLY_ACTIONS:
+                selenium_needed = True
+        if selenium_needed and not _engine_alive(self.browser):
+            return ("Selenium 브라우저가 연결되어 있지 않습니다. "
+                    "일반 XPath·팝업/창 전환 스텝에 필요합니다. "
+                    "Playwright 항목만 실행하려면 해당 스텝만 남기세요.")
+        return ""
+
     def run(self):
         scenario_name = str(self.scenario.get("name") or "시나리오")
         steps = self._normalize_steps(self.scenario.get("steps"))
@@ -261,11 +314,12 @@ class BatchScenarioWorker(QThread):
         results: List[Dict[str, Any]] = []
         cancelled = False
 
-        if not self.browser.is_alive():
-            self.completed.emit(results, False, scenario_name)
-            return
         if not steps:
             self.completed.emit(results, False, scenario_name)
+            return
+        missing_engine = self._missing_required_engine(steps)
+        if missing_engine:
+            self.failed.emit(missing_engine)
             return
 
         original_window = _get_browser_window_metadata(self.browser)

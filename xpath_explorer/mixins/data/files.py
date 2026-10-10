@@ -3,7 +3,9 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 import csv
+import io
 import json
+import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -29,13 +31,73 @@ from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_l
 from xpath_explorer.core.config import XPathItem, SiteConfig
 from xpath_explorer.core.config_state import config_fingerprint, is_config_dirty
 from xpath_explorer.core.perf import perf_span
-from xpath_explorer.core.paths import atomic_write_json
+from xpath_explorer.core.paths import atomic_write_json, atomic_write_text
 from xpath_explorer.tools.csv_safety import sanitize_csv_value
+
+
+def _safe_config_filename(name: str) -> str:
+    """Strip path separators/control chars for the save-dialog default name."""
+    safe = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name or "").strip().strip(".")
+    return safe or "xpath_config"
 
 
 class ExplorerDataFilesMixin:
     def _mark_config_clean(self):
         self._saved_config_fingerprint = config_fingerprint(self.config)
+
+    def _autosave_snapshot(self):
+        """Best-effort crash-recovery snapshot after structural edits."""
+        try:
+            from xpath_explorer.core import autosave as autosave_module
+
+            autosave_module.write_autosave(self.config)
+        except Exception:
+            pass
+
+    def _clear_autosave(self):
+        try:
+            from xpath_explorer.core import autosave as autosave_module
+
+            autosave_module.clear_autosave()
+        except Exception:
+            pass
+
+    def _maybe_restore_autosave(self):
+        """Offer to restore an autosave left by a session that never saved."""
+        try:
+            from xpath_explorer.core import autosave as autosave_module
+
+            payload = autosave_module.read_autosave()
+            if payload is None:
+                return
+            if not autosave_module.is_autosave_restorable(self.config, payload):
+                autosave_module.clear_autosave()
+                return
+            reply = QMessageBox.question(
+                self,
+                "작업 복원",
+                "이전에 저장하지 않고 끝난 작업이 있습니다.\n복원할까요?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                autosave_module.clear_autosave()
+                return
+            try:
+                restored = SiteConfig.from_dict(payload.get("config") or {})
+            except Exception as e:
+                autosave_module.clear_autosave()
+                self._show_toast(f"자동 저장 복원 실패: {e}", "error")
+                return
+            self.config = restored
+            self._editing_original_name = ''
+            self._table_data_dirty = True
+            self._filter_options_dirty = True
+            self._refresh_table(refresh_filters=True)
+            self._reset_history_baseline()
+            self._show_toast("이전 작업을 복원했습니다. 저장(Ctrl+S)하세요.", "success")
+        except Exception:
+            pass
 
     def _is_config_dirty(self) -> bool:
         return is_config_dirty(self.config, getattr(self, "_saved_config_fingerprint", None))
@@ -71,6 +133,7 @@ class ExplorerDataFilesMixin:
             self._clear_editor()
             self._reset_history_baseline()
             self._mark_config_clean()
+            self._clear_autosave()
 
     def _open_config(self):
         if not self._confirm_discard_unsaved("설정 열기"):
@@ -87,16 +150,18 @@ class ExplorerDataFilesMixin:
                     self._refresh_table(refresh_filters=True)
                     self._reset_history_baseline()
                     self._mark_config_clean()
+                    self._clear_autosave()
                     self._show_toast("설정을 불러왔습니다.", "success")
             except Exception as e:
                 self._show_toast(f"로드 실패: {e}", "error")
 
     def _save_config(self):
-        fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{self.config.name}.json", 'JSON 파일 (*.json)')
+        fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{_safe_config_filename(self.config.name)}.json", 'JSON 파일 (*.json)')
         if fname:
             try:
                 atomic_write_json(Path(fname), self.config.to_dict())
                 self._mark_config_clean()
+                self._clear_autosave()
                 self._show_toast("저장되었습니다.", "success")
             except Exception as e:
                 self._show_toast(f"저장 실패: {e}", "error")
@@ -116,16 +181,17 @@ class ExplorerDataFilesMixin:
                 data = [item.to_dict() for item in self.config.items]
                 atomic_write_json(Path(fname), data)
             elif fmt == 'csv':
-                with open(fname, 'w', encoding='utf-8', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(['이름', 'XPath', '카테고리', '설명'])
-                    for item in self.config.items:
-                        writer.writerow([
-                            sanitize_csv_value(item.name),
-                            sanitize_csv_value(item.xpath),
-                            sanitize_csv_value(item.category),
-                            sanitize_csv_value(item.description),
-                        ])
+                buffer = io.StringIO(newline='')
+                writer = csv.writer(buffer)
+                writer.writerow(['이름', 'XPath', '카테고리', '설명'])
+                for item in self.config.items:
+                    writer.writerow([
+                        sanitize_csv_value(item.name),
+                        sanitize_csv_value(item.xpath),
+                        sanitize_csv_value(item.category),
+                        sanitize_csv_value(item.description),
+                    ])
+                atomic_write_text(Path(fname), buffer.getvalue())
             elif fmt == 'python':
                 content = '# Selenium XPaths\n\nclass XPaths:\n'
                 used_names: Dict[str, int] = {}
@@ -138,8 +204,7 @@ class ExplorerDataFilesMixin:
                     desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
                     content += f'    {safe_name} = {xpath_literal}  # {desc_comment}\n'
                 compile(content, '<xpath_export>', 'exec')
-                with open(fname, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                atomic_write_text(Path(fname), content)
             elif fmt == 'javascript':
                 content = 'const XPaths = {\n'
                 for item in self.config.items:
@@ -148,8 +213,7 @@ class ExplorerDataFilesMixin:
                     desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
                     content += f'    {name_literal}: {xpath_literal}, // {desc_comment}\n'
                 content += '};'
-                with open(fname, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                atomic_write_text(Path(fname), content)
 
             self._show_toast(f'{fmt.upper()} 내보내기 성공', 'success')
 

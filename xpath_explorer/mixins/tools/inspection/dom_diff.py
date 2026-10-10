@@ -6,6 +6,7 @@ import csv
 import json
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from xpath_explorer.qt_compat import (
@@ -65,6 +66,7 @@ from xpath_explorer.browser.dom_export import (
     render_dom_diff_report_htm,
     diff_dom_snapshots,
 )
+from xpath_explorer.core.paths import atomic_write_text
 
 from xpath_explorer.runtime import logger, error_telemetry
 
@@ -126,8 +128,7 @@ class DomDiffInspectionMixin:
                 snapshots,
                 source_label=f"{source} DOM",
             )
-            with open(fname, "w", encoding="utf-8") as f:
-                f.write(report)
+            atomic_write_text(Path(fname), report)
 
             changes = diff_dom_snapshots(baseline, snapshots)
             changed_count = len(changes)

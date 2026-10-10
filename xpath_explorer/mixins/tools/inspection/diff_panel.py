@@ -71,9 +71,15 @@ from xpath_explorer.runtime import logger, error_telemetry
 
 class DiffInspectionMixin:
     def _show_diff_analyzer(self):
-        """Diff 분석 다이얼로그"""
+        """Diff 분석 다이얼로그 (Selenium 전용: 항목 조회가 Selenium 드라이버 기준)."""
         if not self.browser.is_alive():
-            self._show_toast("브라우저를 먼저 연결하세요.", "warning")
+            self._show_toast(
+                "Selenium 브라우저를 먼저 연결하세요. Diff 항목 분석은 Selenium 연결이 필요합니다.",
+                "warning",
+            )
+            return
+
+        if self._abort_if_driver_busy("Diff 분석"):
             return
 
         if not self.config.items:

@@ -138,6 +138,10 @@ class ExplorerHistoryToolsMixin:
             restored_items.append(item)
         self.config.replace_items(restored_items)
         self._table_data_dirty = True
+        try:
+            self._autosave_snapshot()
+        except Exception:
+            pass
 
     def _save_item_with_history(self):
         """항목 저장 (히스토리 기록 포함)"""

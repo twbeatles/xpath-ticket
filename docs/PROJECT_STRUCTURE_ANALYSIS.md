@@ -111,7 +111,7 @@ xpath_explorer/
 - `mixins/ui/`, `mixins/browser/`, `mixins/data/`, `mixins/tools/`: 세부 책임별 partial mixin
 - `mixins/*/deps.py`: monkeypatch 안정성을 위한 patch seam
 - `browser/engine_router.py`: Playwright/Selenium 항목별 검증 엔진 선택
-- `core/url_safety.py`, `core/cookie_safety.py`, `core/config_state.py`: URL 스킴, 쿠키 도메인, 미저장 dirty 판별
+- `core/url_safety.py`, `core/cookie_safety.py`, `core/config_state.py`: URL 스킴, 쿠키 도메인, 미저장 dirty 판별, `core/autosave.py`: 크래시 복구 스냅샷 읽기/쓰기/삭제
 - `tools/csv_safety.py`: CSV 수식 주입 무력화
 - `workers/driver_guard.py`: 피커/검증/배치/시나리오 드라이버 점유 가드
 - `browser/browser.py`: Selenium facade
@@ -126,7 +126,7 @@ xpath_explorer/
 - `mixins/tools/batch_tools.py`: 배치 facade, `mixins/tools/batch/`: runner/scenario/report/export 구현
 - `ui/widgets.py`, `ui/styles.py`: UI facade, `ui/components/`, `ui/theme/`: 실제 widget/style 구현
 - `runtime.py`: 로거, 오류 텔레메트리, 경로 폴백 로깅
-- `core/paths.py`: 저장 경로 폴백과 `atomic_write_json()` 기반 JSON 저장 안정성 제공
+- `core/paths.py`: 저장 경로 폴백과 `atomic_write_json()` 기반 JSON 저장 안정성 제공, `atomic_write_text()` 기반 텍스트/리포트 원자적 저장, 민감 파일용 `backup=False` 옵션
 
 ## 5. 품질 게이트
 

@@ -34,12 +34,33 @@ from xpath_explorer.core.perf import perf_span
 
 
 class ExplorerDataCookiesMixin:
+    def _cookie_engine(self):
+        """Return (kind, engine) for cookie work: Selenium first, then Playwright."""
+        browser = getattr(self, "browser", None)
+        if browser is not None:
+            try:
+                if browser.is_alive():
+                    return "selenium", browser
+            except Exception:
+                pass
+        pw_manager = getattr(self, "pw_manager", None)
+        if pw_manager is not None:
+            try:
+                if pw_manager.is_alive():
+                    return "playwright", pw_manager
+            except Exception:
+                pass
+        return None, None
+
     def _save_cookies(self):
-        """쿠키 저장"""
-        if not self.browser.is_alive(): return
-        driver = self.browser.driver
-        if driver is None:
+        """쿠키 저장 (Selenium 우선, 없으면 Playwright 세션)."""
+        kind, engine = self._cookie_engine()
+        if engine is None:
             return
+        if kind == "selenium":
+            driver = engine.driver
+            if driver is None:
+                return
         reply = QMessageBox.warning(
             self,
             "쿠키 저장",
@@ -52,8 +73,11 @@ class ExplorerDataCookiesMixin:
         fname, _ = QFileDialog.getSaveFileName(self, '쿠키 저장', 'cookies.json', 'JSON 파일 (*.json)')
         if fname:
             try:
-                cookies = driver.get_cookies()
-                atomic_write_json(Path(fname), cookies)
+                if kind == "selenium":
+                    cookies = driver.get_cookies()
+                else:
+                    cookies = engine.get_cookies()
+                atomic_write_json(Path(fname), cookies, backup=False)
                 try:
                     Path(fname).chmod(0o600)
                 except Exception:
@@ -62,13 +86,31 @@ class ExplorerDataCookiesMixin:
             except Exception as e:
                 self._show_toast(f"실패: {e}", "error")
 
+    def _report_cookie_load(self, total: int, success_count: int, failures: Counter) -> None:
+        fail_count = max(0, total - success_count)
+        if fail_count > 0:
+            top_failures = ', '.join(
+                f'{label}({count})' for label, count in failures.most_common(3)
+            )
+            summary = f'Cookie load complete: success {success_count}, failed {fail_count}'
+            if top_failures:
+                summary += f' | Top failures: {top_failures}'
+            self._show_toast(summary, 'warning', 5000)
+        else:
+            self._show_toast(f'Cookie load complete: {success_count}', 'success')
+
     def _load_cookies(self):
-        """Load cookies from JSON and report success/failure counts."""
-        if not self.browser.is_alive():
+        """Load cookies from JSON and report success/failure counts.
+
+        Selenium 우선, 없으면 Playwright 세션에 주입한다.
+        """
+        kind, engine = self._cookie_engine()
+        if engine is None:
             return
-        driver = self.browser.driver
-        if driver is None:
-            return
+        if kind == "selenium":
+            driver = engine.driver
+            if driver is None:
+                return
         fname, _ = QFileDialog.getOpenFileName(self, 'Open Cookies', '', 'JSON Files (*.json)')
         if fname:
             try:
@@ -78,10 +120,16 @@ class ExplorerDataCookiesMixin:
                     self._show_toast('Invalid cookie file format.', 'error')
                     return
 
-                try:
-                    page_url = str(driver.current_url or "")
-                except Exception:
-                    page_url = ""
+                if kind == "selenium":
+                    try:
+                        page_url = str(driver.current_url or "")
+                    except Exception:
+                        page_url = ""
+                else:
+                    try:
+                        page_url = str((engine.get_current_window_metadata() or {}).get("url", "") or "")
+                    except Exception:
+                        page_url = ""
                 accepted, rejected = partition_cookies_for_url(cookies, page_url)
 
                 success_count = 0
@@ -93,32 +141,42 @@ class ExplorerDataCookiesMixin:
                     failures[key or 'domain-mismatch'] += 1
                 for cookie in accepted:
                     try:
-                        driver.add_cookie(cookie)
+                        if kind == "selenium":
+                            driver.add_cookie(cookie)
+                        else:
+                            engine.set_cookies([cookie])
                         success_count += 1
                     except Exception:
                         key = str(cookie.get('name', '') or cookie.get('domain', ''))
                         failures[key or 'unknown'] += 1
 
-                fail_count = max(0, len(cookies) - success_count)
-                if fail_count > 0:
-                    top_failures = ', '.join(
-                        f'{label}({count})' for label, count in failures.most_common(3)
-                    )
-                    summary = f'Cookie load complete: success {success_count}, failed {fail_count}'
-                    if top_failures:
-                        summary += f' | Top failures: {top_failures}'
-                    self._show_toast(summary, 'warning', 5000)
-                else:
-                    self._show_toast(f'Cookie load complete: {success_count}', 'success')
+                self._report_cookie_load(len(cookies), success_count, failures)
 
-                driver.refresh()
+                if kind == "selenium":
+                    driver.refresh()
+                else:
+                    try:
+                        reloader = getattr(engine, "reload_current_page", None)
+                        if callable(reloader):
+                            reloader()
+                    except Exception:
+                        pass
             except Exception as e:
                 self._show_toast(f'Failure: {e}', 'error')
 
     def _clear_cookies(self):
-        if self.browser.is_alive():
-            driver = self.browser.driver
+        kind, engine = self._cookie_engine()
+        if engine is None:
+            return
+        if kind == "selenium":
+            driver = engine.driver
             if driver is None:
                 return
             driver.delete_all_cookies()
-            self._show_toast("모든 쿠키가 삭제되었습니다.", "success")
+        else:
+            try:
+                engine.clear_cookies()
+            except Exception as e:
+                self._show_toast(f"실패: {e}", "error")
+                return
+        self._show_toast("모든 쿠키가 삭제되었습니다.", "success")

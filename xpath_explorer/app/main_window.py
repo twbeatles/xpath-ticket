@@ -121,6 +121,7 @@ if QT_AVAILABLE:
             self._refresh_table(refresh_filters=True)
             self._reset_history_baseline()
             self._mark_config_clean()
+            self._maybe_restore_autosave()
 
         def init_settings(self):
             from xpath_explorer.core.constants import (

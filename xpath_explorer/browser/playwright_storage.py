@@ -88,6 +88,18 @@ class PlaywrightStorageMixin:
         """모든 쿠키 삭제"""
         if self._context:
             self._context.clear_cookies()
+
+    def reload_current_page(self) -> bool:
+        """현재 페이지를 새로고침합니다. 쿠키 적용 후 세션 반영용."""
+        try:
+            getter = getattr(self, "_get_current_page", None)
+            page = getter() if callable(getter) else getattr(self, "_page", None)
+            if page is None:
+                return False
+            page.reload()
+            return True
+        except Exception:
+            return False
     
     # =========================================================================
     # 로컬 스토리지

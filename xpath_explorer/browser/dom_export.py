@@ -388,11 +388,21 @@ def save_dom_bundle(
         "documents": records,
     }
 
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
-        bundle.writestr("report.htm", report)
-        bundle.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        for record, snap in zip(records, snapshots):
-            bundle.writestr(record["file"], snap.html or "")
+    # Atomic bundle write: a crash mid-zip must not leave a partial .zip behind.
+    tmp_out = out.with_name(f".{out.name}.tmp")
+    try:
+        with zipfile.ZipFile(tmp_out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr("report.htm", report)
+            bundle.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            for record, snap in zip(records, snapshots):
+                bundle.writestr(record["file"], snap.html or "")
+        tmp_out.replace(out)
+    finally:
+        try:
+            if tmp_out.exists():
+                tmp_out.unlink()
+        except Exception:
+            pass
 
     return {
         "path": str(out),

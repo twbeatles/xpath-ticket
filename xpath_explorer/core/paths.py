@@ -48,26 +48,53 @@ def resolve_storage_file(filename: str) -> Tuple[Optional[Path], str]:
     return base_dir / filename, source
 
 
-def atomic_write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
-    """Write JSON without leaving a partially-written target behind."""
+def atomic_write_json(path: Path, payload: Any, *, indent: int = 2, backup: bool = True) -> None:
+    """Write JSON without leaving a partially-written target behind.
+
+    Set backup=False for sensitive payloads (e.g. cookies) so no plaintext
+    copy lingers next to the target.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_name(f".{target.name}.{os.getpid()}.tmp")
     backup_path = target.with_suffix(f"{target.suffix}.bak")
 
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8", newline="") as f:
             json.dump(payload, f, ensure_ascii=False, indent=indent)
             f.flush()
             os.fsync(f.fileno())
 
-        if target.exists():
+        if backup and target.exists():
             try:
                 shutil.copy2(target, backup_path)
             except Exception:
                 # The backup is best-effort; the atomic replace below still
                 # protects the existing target from partial writes.
                 pass
+        tmp_path.replace(target)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write text without leaving a partially-written target behind.
+
+    No backup copy is kept; newline characters are preserved byte-for-byte.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+
+    try:
+        with open(tmp_path, "w", encoding=encoding, newline="") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
         tmp_path.replace(target)
     finally:
         try:
