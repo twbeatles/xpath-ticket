@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -23,9 +23,9 @@ from xpath_explorer.workers.worker_shared import (
 
 class DiffAnalyzeWorker(QThread):
     """DOM diff 분석 워커."""
-    progress = pyqtSignal(int, str)
-    completed = pyqtSignal(list)
-    failed = pyqtSignal(str)
+    progress = Signal(int, str)
+    completed = Signal(list)
+    failed = Signal(str)
 
     def __init__(self, items: List[XPathItem], browser: Any, analyzer: XPathDiffAnalyzer):
         super().__init__()

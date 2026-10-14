@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication
 
 import pytest
 

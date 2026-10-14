@@ -20,11 +20,11 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 
-# HiDPI 지원을 위한 환경변수 설정 (PyQt6 초기화 전에 설정)
+# HiDPI 지원을 위한 환경변수 설정 (PySide6 초기화 전에 설정)
 os.environ['QT_ENABLE_HIGHDPI_SCALING'] = '1'
 os.environ['QT_SCALE_FACTOR_ROUNDING_POLICY'] = 'PassThrough'
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit, QComboBox, QCheckBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QSplitter, QGroupBox,
@@ -34,8 +34,8 @@ from PyQt6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QPlainTextEdit, QStackedWidget,
     QToolButton, QGridLayout, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QShortcut, QKeySequence
 
 # Selenium
 try:
@@ -2300,8 +2300,8 @@ class BrowserManager:
 class PickerWatcher(QThread):
     """요소 선택 감시"""
     
-    picked = pyqtSignal(dict)
-    cancelled = pyqtSignal()
+    picked = Signal(dict)
+    cancelled = Signal()
     
     def __init__(self, browser: BrowserManager):
         super().__init__()
@@ -2331,9 +2331,9 @@ class PickerWatcher(QThread):
 class ValidateWorker(QThread):
     """검증 워커"""
     
-    progress = pyqtSignal(int, str)
-    validated = pyqtSignal(str, dict)
-    finished = pyqtSignal(int, int)  # found, total
+    progress = Signal(int, str)
+    validated = Signal(str, dict)
+    finished = Signal(int, int)  # found, total
     
     def __init__(self, browser: BrowserManager, items: List[XPathItem], handles: List[str]):
         super().__init__()
@@ -3765,7 +3765,7 @@ class XPathExplorer(QMainWindow):
         </ul>
         <p style='color: #778da9;'>
         Selenium + undetected_chromedriver 기반<br>
-        PyQt6 UI
+        PySide6 UI
         </p>
         """
         
@@ -3810,7 +3810,7 @@ class XPathExplorer(QMainWindow):
 
 def main():
     # HiDPI 스케일링 정책 설정
-    from PyQt6.QtCore import Qt
+    from PySide6.QtCore import Qt
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )

@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -23,8 +23,8 @@ from xpath_explorer.workers.worker_shared import (
 
 class PickerWatcher(QThread):
     """요소 선택 감시 워커 (스레드 안전)."""
-    picked = pyqtSignal(dict)
-    cancelled = pyqtSignal()
+    picked = Signal(dict)
+    cancelled = Signal()
     
     def __init__(self, browser: Any):
         super().__init__()

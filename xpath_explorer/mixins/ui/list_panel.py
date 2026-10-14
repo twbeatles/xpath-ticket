@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit, QComboBox, QCheckBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QSplitter, QGroupBox,
@@ -21,8 +21,8 @@ from PyQt6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QPlainTextEdit, QStackedWidget, QMenuBar,
     QToolButton, QGridLayout, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve, QMimeData
-from PyQt6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySequence, QDrag
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize, QSettings, QPropertyAnimation, QEasingCurve, QMimeData
+from PySide6.QtGui import QFont, QColor, QAction, QPalette, QIcon, QPixmap, QKeySequence, QDrag
 
 from xpath_explorer.core.constants import (
     APP_TITLE, APP_VERSION, SITE_PRESETS,

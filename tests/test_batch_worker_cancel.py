@@ -1,5 +1,5 @@
 import pytest
-from PyQt6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.workers.background import BatchTestWorker

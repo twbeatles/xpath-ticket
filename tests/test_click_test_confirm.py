@@ -4,7 +4,7 @@
 
 from types import SimpleNamespace
 
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from xpath_explorer.mixins.browser import validation as validation_module
 from xpath_explorer.mixins.browser.context import ExplorerBrowserContextMixin

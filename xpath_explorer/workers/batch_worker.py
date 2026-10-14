@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -26,10 +26,10 @@ from xpath_explorer.workers.worker_shared import (
 
 class BatchTestWorker(QThread):
     """배치 테스트 워커"""
-    progress = pyqtSignal(int, str)
-    item_tested = pyqtSignal(str, bool, str, str)  # name, success, xpath, msg
-    item_validated = pyqtSignal(str, dict)  # name, full result dict
-    completed = pyqtSignal(list, bool)  # results, cancelled
+    progress = Signal(int, str)
+    item_tested = Signal(str, bool, str, str)  # name, success, xpath, msg
+    item_validated = Signal(str, dict)  # name, full result dict
+    completed = Signal(list, bool)  # results, cancelled
 
     def __init__(self, browser: Any, items: List[XPathItem], playwright: Any = None):
         super().__init__()

@@ -3,7 +3,7 @@
 XPath item filter proxy model.
 """
 
-from PyQt6.QtCore import QSortFilterProxyModel, QModelIndex
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex
 
 from xpath_explorer.ui.table_model import XPathItemTableModel
 

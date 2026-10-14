@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -25,8 +25,8 @@ from xpath_explorer.workers.worker_shared import (
 
 class LivePreviewWorker(QThread):
     """실시간 미리보기용 요소 카운트 워커."""
-    counted = pyqtSignal(int, int)  # request_id, count
-    failed = pyqtSignal(int, str)   # request_id, error
+    counted = Signal(int, int)  # request_id, count
+    failed = Signal(int, str)   # request_id, error
 
     def __init__(
         self,

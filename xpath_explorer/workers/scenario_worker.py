@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import (
@@ -52,10 +52,10 @@ def _engine_alive(engine: Any) -> bool:
 class BatchScenarioWorker(QThread):
     """JSON 기반 배치 시나리오 실행 워커."""
 
-    progress = pyqtSignal(int, str)
-    step_completed = pyqtSignal(dict)
-    completed = pyqtSignal(list, bool, str)  # results, cancelled, scenario_name
-    failed = pyqtSignal(str)
+    progress = Signal(int, str)
+    step_completed = Signal(dict)
+    completed = Signal(list, bool, str)  # results, cancelled, scenario_name
+    failed = Signal(str)
 
     def __init__(self, browser: Any, items: List[XPathItem], scenario: Dict[str, Any], playwright: Any = None):
         super().__init__()

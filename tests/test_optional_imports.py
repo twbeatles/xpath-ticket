@@ -32,15 +32,15 @@ def test_import_optional_returns_module_when_available(monkeypatch):
     assert result is sentinel
 
 
-def test_workers_import_through_qt_compat_without_pyqt6():
+def test_workers_import_through_qt_compat_without_pyside6():
     script = r'''
 import builtins
 
 real_import = builtins.__import__
 
 def blocked_import(name, *args, **kwargs):
-    if name == "PyQt6" or name.startswith("PyQt6."):
-        raise ImportError("blocked PyQt6")
+    if name == "PySide6" or name.startswith("PySide6."):
+        raise ImportError("blocked PySide6")
     return real_import(name, *args, **kwargs)
 
 builtins.__import__ = blocked_import

@@ -8,15 +8,15 @@ XPath Explorer Widgets v3.6
 - ModernSearchInput with focus animation
 """
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect,
     QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
     QWidget, QSizePolicy, QToolButton
 )
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QObject, pyqtSignal
-from PyQt6.QtGui import QColor, QWheelEvent
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QObject, Signal
+from PySide6.QtGui import QColor, QWheelEvent
 
 class ToastWidget(QFrame):
     """

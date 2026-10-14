@@ -5,7 +5,7 @@ import time
 import logging
 from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, pyqtSignal
+from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
@@ -23,8 +23,8 @@ from xpath_explorer.workers.worker_shared import (
 
 class AIGenerateWorker(QThread):
     """AI XPath 생성 워커."""
-    generated = pyqtSignal(int, object)  # request_id, XPathSuggestion
-    failed = pyqtSignal(int, str)        # request_id, error
+    generated = Signal(int, object)  # request_id, XPathSuggestion
+    failed = Signal(int, str)        # request_id, error
 
     def __init__(self, assistant: XPathAIAssistant, description: str, request_id: int):
         super().__init__()

@@ -4,7 +4,7 @@
 import json
 from types import SimpleNamespace
 
-from PyQt6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from xpath_explorer.mixins.data.cookies import ExplorerDataCookiesMixin
 

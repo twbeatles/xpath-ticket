@@ -1,4 +1,4 @@
-"""Minimal PyQt6 compatibility layer for headless test environments."""
+"""Minimal PySide6 compatibility layer for headless test environments."""
 # pyright: reportAssignmentType=false
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ QT_AVAILABLE = True
 QT_IMPORT_ERROR: ImportError | None = None
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import (
+    from PySide6.QtCore import (
         QEasingCurve,
         QMimeData,
         QAbstractTableModel,
@@ -24,10 +24,10 @@ if TYPE_CHECKING:
         Qt,
         QThread,
         QTimer,
-        pyqtSignal,
+        Signal,
     )
-    from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
-    from PyQt6.QtWidgets import (
+    from PySide6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
+    from PySide6.QtWidgets import (
         QApplication,
         QAbstractItemView,
         QCheckBox,
@@ -75,7 +75,7 @@ if TYPE_CHECKING:
     )
 else:
     try:
-        from PyQt6.QtCore import (
+        from PySide6.QtCore import (
             QEasingCurve,
             QMimeData,
             QAbstractTableModel,
@@ -90,10 +90,10 @@ else:
             Qt,
             QThread,
             QTimer,
-            pyqtSignal,
+            Signal,
         )
-        from PyQt6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
-        from PyQt6.QtWidgets import (
+        from PySide6.QtGui import QAction, QColor, QDrag, QFont, QIcon, QKeySequence, QPalette, QPixmap, QWheelEvent
+        from PySide6.QtWidgets import (
             QApplication,
             QAbstractItemView,
             QCheckBox,
@@ -151,7 +151,7 @@ if not QT_AVAILABLE:
         def emit(self, *_args, **_kwargs):
             return None
 
-    def pyqtSignal(*_args, **_kwargs):
+    def Signal(*_args, **_kwargs):
         return _Signal()
 
     class _QtStub:
@@ -283,5 +283,5 @@ def require_qt() -> None:
     """Raise a clear error when GUI code is used without a working Qt runtime."""
     if QT_IMPORT_ERROR is not None:
         raise RuntimeError(
-            "PyQt6 GUI components are unavailable in this environment."
+            "PySide6 GUI components are unavailable in this environment."
         ) from QT_IMPORT_ERROR

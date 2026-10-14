@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from xpath_explorer.qt_compat import QT_AVAILABLE, require_qt
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QSettings, QTimer
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PySide6.QtCore import QSettings, QTimer
+    from PySide6.QtWidgets import QApplication, QMainWindow
     from xpath_explorer.analysis.diff import XPathDiffAnalyzer
     from xpath_explorer.analysis.statistics import StatisticsManager
     from xpath_explorer.browser.browser import BrowserManager
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel
     from xpath_explorer.ui.table_model import XPathItemTableModel
 elif QT_AVAILABLE:
-    from PyQt6.QtCore import QSettings, QTimer
-    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from PySide6.QtCore import QSettings, QTimer
+    from PySide6.QtWidgets import QApplication, QMainWindow
     from xpath_explorer.analysis.diff import XPathDiffAnalyzer
     from xpath_explorer.analysis.statistics import StatisticsManager
     from xpath_explorer.browser.browser import BrowserManager

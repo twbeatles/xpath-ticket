@@ -5,8 +5,8 @@ XPath item table model (Model/View optimization).
 
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PyQt6.QtGui import QColor
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide6.QtGui import QColor
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import category_to_label

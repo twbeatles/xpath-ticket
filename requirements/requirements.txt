@@ -1,4 +1,4 @@
-PyQt6
+PySide6==6.12.0
 selenium
 undetected-chromedriver
 webdriver-manager

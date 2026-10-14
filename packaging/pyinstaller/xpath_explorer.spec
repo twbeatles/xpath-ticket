@@ -95,8 +95,8 @@ hiddenimports = [
     'xpath_explorer.analysis.statistics',
     'xpath_explorer.ui.table_model',
     'xpath_explorer.ui.filter_proxy',
-    # PyQt6 (필수)
-    'PyQt6.QtWidgets', 'PyQt6.QtCore', 'PyQt6.QtGui',
+    # PySide6 (필수)
+    'PySide6.QtWidgets', 'PySide6.QtCore', 'PySide6.QtGui',
 
     # Selenium (필수)
     'selenium.webdriver', 'selenium.webdriver.chrome.service',
@@ -146,7 +146,7 @@ excludes = [
     'IPython', 'notebook', 'jupyter', 'pytest', 'unittest', 'sphinx',
 
     # 다른 GUI
-    'tkinter', 'wx', 'PySide6', 'PyQt5',
+    'tkinter', 'wx', 'PyQt6', 'PyQt5',
 
     # 웹 프레임워크
     'flask', 'django', 'fastapi', 'aiohttp', 'uvicorn',
