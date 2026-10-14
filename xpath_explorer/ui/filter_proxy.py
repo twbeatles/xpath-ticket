@@ -3,7 +3,9 @@
 XPath item filter proxy model.
 """
 
-from PySide6.QtCore import QSortFilterProxyModel, QModelIndex
+from typing import cast
+
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, Qt
 
 from xpath_explorer.ui.table_model import XPathItemTableModel
 
@@ -80,7 +82,8 @@ class XPathFilterProxyModel(QSortFilterProxyModel):
 
         if self._search_text:
             search_index = model.index(source_row, XPathItemTableModel.COLUMN_NAME, source_parent)
-            raw_haystack = model.data(search_index, XPathItemTableModel.ROLE_SEARCH_TEXT)
+            raw_haystack = model.data(
+                search_index, cast(Qt.ItemDataRole, XPathItemTableModel.ROLE_SEARCH_TEXT))
             haystack = str(raw_haystack or "")
             if self._search_text not in haystack:
                 return False

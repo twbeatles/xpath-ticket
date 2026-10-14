@@ -117,6 +117,8 @@ class ModernSearchInput(QFrame):
         event = a1
         if event is None:
             return False
+        if obj is None:
+            return False
         if obj == self.input:
             if event.type() == QEvent.Type.FocusIn:
                 self.setStyleSheet("""
