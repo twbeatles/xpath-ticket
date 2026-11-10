@@ -9,14 +9,12 @@ XPath Explorer Widgets v3.6
 """
 
 from PySide6.QtWidgets import (
-    QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect,
-    QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
-    QWidget, QSizePolicy, QToolButton
+    QLabel, QFrame, QHBoxLayout, QPushButton, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit
 )
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QObject, Signal
-from PySide6.QtGui import QColor, QWheelEvent
+from PySide6.QtCore import Qt, QEvent, QObject
+from PySide6.QtGui import QWheelEvent
 
 class NoWheelComboBox(QComboBox):
     """휠 스크롤로 값이 변경되지 않는 ComboBox"""

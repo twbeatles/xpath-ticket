@@ -1,25 +1,16 @@
 # -*- coding: utf-8 -*-
 """XPath Explorer worker support imports."""
 
-import time
 import logging
-from typing import List, Optional, Any, Dict, cast
+from typing import Any
 from threading import Event
 from xpath_explorer.qt_compat import QThread, Signal
 
-from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
-from xpath_explorer.tools.ai import XPathAIAssistant
-from xpath_explorer.analysis.diff import XPathDiffAnalyzer
-from xpath_explorer.core.perf import perf_span
+
 
 logger = logging.getLogger('XPathExplorer')
 
-from xpath_explorer.workers.worker_shared import (
-    _get_browser_window_metadata,
-    _switch_browser_to_item_window,
-    _window_context_from_item,
-)
 
 class PickerWatcher(QThread):
     """요소 선택 감시 워커 (스레드 안전)."""

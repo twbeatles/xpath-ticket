@@ -2,31 +2,20 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-import csv
-import json
-from collections import Counter
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from xpath_explorer.qt_compat import (
-    QAction,
-    QApplication,
     QAbstractItemView,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QHeaderView,
-    QMenu,
     QMessageBox,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
     QVBoxLayout,
 )
 
-from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_label, category_to_value
-from xpath_explorer.core.config import XPathItem, SiteConfig
-from xpath_explorer.core.perf import perf_span
 
 
 class ExplorerDataHistoryMixin:
@@ -120,11 +109,11 @@ class ExplorerDataHistoryMixin:
 
     def _use_history_item(self, table, dialog):
         selected = table.selectedItems()
-        if not selected: return
+        if not selected:
+            return
         
         row = selected[0].row()
         xpath = table.item(row, 2).text()
-        frame = table.item(row, 3).text()
         
         self.input_xpath.setPlainText(xpath)
         self._show_toast("히스토리에서 불러왔습니다.", "success")

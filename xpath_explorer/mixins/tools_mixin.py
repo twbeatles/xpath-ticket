@@ -11,7 +11,7 @@ from xpath_explorer.mixins.tools import (
     ExplorerLifecycleToolsMixin,
     ExplorerPlaywrightToolsMixin,
 )
-from xpath_explorer.mixins.tools.deps import InstallChromiumWorker, QMessageBox
+from xpath_explorer.mixins.tools.deps import InstallChromiumWorker, QMessageBox  # noqa: F401 -- patched via mixins.tools_mixin in toggle tests
 
 
 class ExplorerToolsMixin(

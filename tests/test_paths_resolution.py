@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from xpath_explorer.core import paths
 

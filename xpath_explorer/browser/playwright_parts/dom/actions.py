@@ -7,26 +7,14 @@ Playwright 기반 브라우저 관리 및 자동 탐색 기능
 """
 
 import logging
-import asyncio
-import random
-import json
-import re
-import subprocess
-import sys
-from typing import List, Dict, Optional, Any, Callable, Union, TypeAlias, Literal, Sequence, cast
-from dataclasses import dataclass, field
-from pathlib import Path
+from typing import List, Dict, Optional, Any, Literal
 
 # 상수 임포트
-from xpath_explorer.core.constants import USER_AGENTS, STEALTH_SCRIPT, SCAN_SELECTORS
-from xpath_explorer.browser.dom_export import DomSnapshot
-from xpath_explorer.core.perf import perf_span
+
+from xpath_explorer.browser import playwright_deps as deps
 
 logger = logging.getLogger('XPathExplorer')
 
-PlaywrightBrowserType: TypeAlias = Any
-PlaywrightBrowserContextType: TypeAlias = Any
-PlaywrightPageType: TypeAlias = Any
 
 # Playwright 가용성 확인
 try:
@@ -40,14 +28,6 @@ except ImportError:
     logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
 
 
-from xpath_explorer.browser.playwright_models import (
-    NetworkRequest,
-    PlaywrightBrowserContextType,
-    PlaywrightBrowserType,
-    PlaywrightPageType,
-    ScannedElement,
-)
-from xpath_explorer.browser import playwright_deps as deps
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
 sync_playwright = deps.sync_playwright

@@ -10,7 +10,7 @@ from xpath_explorer.mixins.data import (
     ExplorerDataHistoryMixin,
     ExplorerDataSettingsMixin,
 )
-from xpath_explorer.mixins.data.deps import QFileDialog
+from xpath_explorer.mixins.data.deps import QFileDialog  # noqa: F401 -- patched via mixins.data_mixin in review-fix tests
 
 
 class ExplorerDataMixin(

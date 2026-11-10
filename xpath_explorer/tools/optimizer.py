@@ -97,7 +97,7 @@ class XPathOptimizer:
                 xpath=f'//*[{xpath_attr_equals("id", elem_id)}]',
                 strategy="id",
                 robustness_score=self.strategy_weights["id"] - 2,
-                description=f"ID만 사용 (태그 무관)"
+                description="ID만 사용 (태그 무관)"
             ))
         
         # 2. data-* 속성 기반
@@ -129,7 +129,7 @@ class XPathOptimizer:
                     xpath=f'//{tag}[{xpath_attr_equals("class", elem_class)}]',
                     strategy="class",
                     robustness_score=self.strategy_weights["class"],
-                    description=f"정확한 class 일치"
+                    description="정확한 class 일치"
                 ))
             
             # contains로 주요 class 매칭
@@ -189,7 +189,7 @@ class XPathOptimizer:
                     xpath=f'//*[{xpath_attr_equals("id", parent_id)}]//{tag}[{xpath_attr_contains("class", first_class)}]',
                     strategy="ancestor",
                     robustness_score=self.strategy_weights["ancestor"] + 5,
-                    description=f"부모 ID + class 조합"
+                    description="부모 ID + class 조합"
                 ))
         
         if parent_tag and parent_class:
@@ -198,7 +198,7 @@ class XPathOptimizer:
                 xpath=f'//{parent_tag}[{xpath_attr_contains("class", first_parent_class)}]//{tag}',
                 strategy="ancestor",
                 robustness_score=self.strategy_weights["ancestor"],
-                description=f"부모 태그+class 기준"
+                description="부모 태그+class 기준"
             ))
         
         # 7. 여러 속성 조합

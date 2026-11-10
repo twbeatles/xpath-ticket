@@ -6,31 +6,16 @@ import csv
 import io
 import json
 import re
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
 from xpath_explorer.qt_compat import (
-    QAction,
-    QApplication,
-    QAbstractItemView,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QHeaderView,
-    QMenu,
     QMessageBox,
-    QTableWidget,
-    QTableWidgetItem,
-    Qt,
-    QVBoxLayout,
 )
 
-from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_label, category_to_value
-from xpath_explorer.core.config import XPathItem, SiteConfig
+from xpath_explorer.core.config import SiteConfig
 from xpath_explorer.core.config_state import config_fingerprint, is_config_dirty
-from xpath_explorer.core.perf import perf_span
 from xpath_explorer.core.paths import atomic_write_json, atomic_write_text
 from xpath_explorer.tools.csv_safety import sanitize_csv_value
 

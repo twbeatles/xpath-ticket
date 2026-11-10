@@ -10,13 +10,11 @@ XPath Explorer Widgets v3.6
 
 from PySide6.QtWidgets import (
     QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect,
-    QGraphicsDropShadowEffect, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
-    QWidget, QSizePolicy, QToolButton
+    QGraphicsDropShadowEffect
 )
-from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent, QObject, Signal
-from PySide6.QtGui import QColor, QWheelEvent
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
+from PySide6.QtGui import QColor
 
 class ToastWidget(QFrame):
     """

@@ -3,22 +3,15 @@
 
 import time
 import logging
-from typing import List, Optional, Any, Dict, cast
+from typing import List, Optional, Any, Dict
 from threading import Event
 from xpath_explorer.qt_compat import QThread, Signal
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import (
-    PICKER_POLL_INTERVAL_MS,
-    PICKER_ACTIVE_CHECK_TICKS,
     SCENARIO_MAX_RETRIES,
     SCENARIO_MAX_WAIT_SECONDS,
 )
-from xpath_explorer.tools.ai import XPathAIAssistant
-from xpath_explorer.analysis.diff import XPathDiffAnalyzer
-from xpath_explorer.core.perf import perf_span
-
-logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
     _engine_browser_for_item,
@@ -26,8 +19,10 @@ from xpath_explorer.workers.worker_shared import (
     _get_browser_window_metadata,
     _restore_browser_context,
     _switch_browser_to_item_window,
-    _window_context_from_item,
 )
+
+logger = logging.getLogger('XPathExplorer')
+
 
 #: Actions that always run against the Selenium browser. Playwright exposes no
 #: popup/window-switch API, so these steps require a live Selenium session.

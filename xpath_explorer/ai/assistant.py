@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, cast
 from xpath_explorer.ai.config import load_ai_config, persistable_ai_config
 from xpath_explorer.ai.models import AIConfigResult, XPathSuggestion
 from xpath_explorer.ai.providers import (
-    DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_MODEL,
     SUPPORTED_PROVIDERS,
     default_model_for_provider,

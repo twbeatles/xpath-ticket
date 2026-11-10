@@ -180,7 +180,7 @@ class XPathDiffAnalyzer:
         changes = []
         
         # 요소를 찾지 못한 경우
-        if not current_element_info or current_element_info.get('found') == False:
+        if not current_element_info or current_element_info.get('found') is False:
             return DiffResult(
                 item_name=item_name,
                 xpath=xpath,
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     }
     
     result = analyzer.compare_element(stored, current)
-    print(f"=== Test 1: 변경 없음 ===")
+    print("=== Test 1: 변경 없음 ===")
     print(f"Status: {result.status_icon} {result.status}")
     print(f"Changes: {result.changes}")
     
@@ -412,7 +412,7 @@ if __name__ == "__main__":
     }
     
     result2 = analyzer.compare_element(stored, current2)
-    print(f"\n=== Test 2: Class 변경 ===")
+    print("\n=== Test 2: Class 변경 ===")
     print(f"Status: {result2.status_icon} {result2.status}")
     print(f"Changes: {result2.changes}")
     
@@ -420,6 +420,6 @@ if __name__ == "__main__":
     current3 = {'found': False, 'msg': '요소를 찾을 수 없음'}
     
     result3 = analyzer.compare_element(stored, current3)
-    print(f"\n=== Test 3: 요소 없음 ===")
+    print("\n=== Test 3: 요소 없음 ===")
     print(f"Status: {result3.status_icon} {result3.status}")
     print(f"Changes: {result3.changes}")

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-import pytest
 from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
 from selenium.webdriver.common.by import By
 

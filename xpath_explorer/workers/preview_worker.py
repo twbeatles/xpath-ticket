@@ -1,27 +1,20 @@
 # -*- coding: utf-8 -*-
 """XPath Explorer worker support imports."""
 
-import time
 import logging
-from typing import List, Optional, Any, Dict, cast
+from typing import Optional, Any, Dict
 from threading import Event
 from xpath_explorer.qt_compat import QThread, Signal
 
-from xpath_explorer.core.config import XPathItem
-from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
-from xpath_explorer.tools.ai import XPathAIAssistant
-from xpath_explorer.analysis.diff import XPathDiffAnalyzer
-from xpath_explorer.core.perf import perf_span
-
-logger = logging.getLogger('XPathExplorer')
 
 from xpath_explorer.workers.worker_shared import (
     _get_browser_frame_path,
     _get_browser_window_metadata,
     _restore_browser_context,
-    _switch_browser_to_item_window,
-    _window_context_from_item,
 )
+
+logger = logging.getLogger('XPathExplorer')
+
 
 class LivePreviewWorker(QThread):
     """실시간 미리보기용 요소 카운트 워커."""

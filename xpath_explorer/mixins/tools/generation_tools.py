@@ -2,73 +2,34 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-import csv
-import json
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List
 
 from xpath_explorer.qt_compat import (
-    QAction,
     QApplication,
     QAbstractItemView,
     QColor,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QMenu,
-    QMessageBox,
     QPlainTextEdit,
-    QProgressBar,
     QPushButton,
-    QScrollArea,
-    QSpinBox,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     Qt,
-    QTimer,
     QVBoxLayout,
-    QWidget,
 )
 
 from xpath_explorer.core.constants import (
-    WORKER_WAIT_TIMEOUT,
     category_to_label,
 )
-from xpath_explorer.core.config import XPathItem
-from xpath_explorer.workers.background import (
-    PickerWatcher,
-    ValidateWorker,
-    LivePreviewWorker,
-    AIGenerateWorker,
-    DiffAnalyzeWorker,
-    BatchTestWorker,
-    BatchScenarioWorker,
-    InstallChromiumWorker,
-)
-from xpath_explorer.core.perf import perf_span, log_perf_summary
 from xpath_explorer.tools.codegen import CodeTemplate, XPathTemplate
-from xpath_explorer.browser.dom_export import (
-    render_dom_report_htm,
-    render_dom_diff_report_htm,
-    diff_dom_snapshots,
-)
 
 from xpath_explorer.core.paths import atomic_write_text
-from xpath_explorer.runtime import logger, error_telemetry
 
 
 class ExplorerGenerationToolsMixin:
@@ -129,7 +90,6 @@ class ExplorerGenerationToolsMixin:
         
         btn_save = QPushButton("💾 파일로 저장")
         def save_code():
-            ext = ".py" if combo_template.currentIndex() < 2 else ".py"
             fname, _ = QFileDialog.getSaveFileName(dialog, "코드 저장", "macro_script", "파이썬 파일 (*.py)")
             if fname:
                 atomic_write_text(Path(fname), txt_code.toPlainText())

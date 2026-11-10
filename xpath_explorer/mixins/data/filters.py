@@ -2,30 +2,14 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-import csv
-import json
-from collections import Counter
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from xpath_explorer.qt_compat import (
-    QAction,
-    QApplication,
-    QAbstractItemView,
-    QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QHeaderView,
-    QMenu,
-    QMessageBox,
-    QTableWidget,
-    QTableWidgetItem,
     Qt,
-    QVBoxLayout,
 )
 
-from xpath_explorer.core.constants import APP_TITLE, SITE_PRESETS, category_to_label, category_to_value
-from xpath_explorer.core.config import XPathItem, SiteConfig
+from xpath_explorer.core.constants import category_to_label, category_to_value
+from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.perf import perf_span
 
 

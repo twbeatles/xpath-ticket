@@ -4,20 +4,14 @@
 XPath Explorer Browser Manager
 """
 
-import time 
 import logging 
 from contextlib import contextmanager 
 from threading import RLock 
-from typing import List ,Dict ,Optional ,Any ,Tuple ,Set ,cast ,Literal 
+from typing import Dict ,Optional ,Any ,Tuple
 
 from xpath_explorer .core .constants import (
-PICKER_SCRIPT ,
-MAX_FRAME_DEPTH ,
 FRAME_CACHE_DURATION ,
-VALIDATION_MISS_TTL_SECONDS ,
 )
-from xpath_explorer .browser .dom_export import DomSnapshot 
-from xpath_explorer .core .perf import perf_span 
 
 # 로거 설정
 logger =logging .getLogger ('XPathExplorer')
@@ -42,16 +36,8 @@ try :
     from selenium .webdriver .chrome .service import Service 
     from selenium .webdriver .chrome .options import Options 
     from selenium .webdriver .common .by import By 
-    from selenium .webdriver .common .keys import Keys 
-    from selenium .webdriver .common .action_chains import ActionChains 
-    from selenium .webdriver .support .ui import WebDriverWait 
-    from selenium .webdriver .support import expected_conditions as EC 
     from selenium .common .exceptions import (
-    InvalidSelectorException ,
-    NoSuchElementException ,
-    NoSuchFrameException ,
     NoSuchWindowException ,
-    StaleElementReferenceException ,
     WebDriverException ,
     )
     SELENIUM_AVAILABLE =True 
