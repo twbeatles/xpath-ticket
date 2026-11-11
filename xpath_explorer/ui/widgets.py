@@ -3,8 +3,18 @@
 
 from xpath_explorer.ui.components.buttons import GradientButton, IconButton
 from xpath_explorer.ui.components.containers import CollapsibleBox
-from xpath_explorer.ui.components.feedback import AnimatedStatusIndicator, EmptyStateWidget, StatusIndicator, ToastWidget
-from xpath_explorer.ui.components.inputs import ModernSearchInput, NoWheelComboBox, NoWheelDoubleSpinBox, NoWheelSpinBox
+from xpath_explorer.ui.components.feedback import (
+    AnimatedStatusIndicator,
+    EmptyStateWidget,
+    StatusIndicator,
+    ToastWidget,
+)
+from xpath_explorer.ui.components.inputs import (
+    ModernSearchInput,
+    NoWheelComboBox,
+    NoWheelDoubleSpinBox,
+    NoWheelSpinBox,
+)
 
 __all__ = [
     "NoWheelComboBox",

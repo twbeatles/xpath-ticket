@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-
 import xpath_explorer.tools.ai as ai_module
 from xpath_explorer.tools.ai import XPathAIAssistant
 

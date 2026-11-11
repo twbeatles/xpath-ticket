@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 """XPath Explorer worker support imports."""
 
-import time
 import logging
-from typing import List, Optional, Any, Dict
+import time
 from threading import Event
-from xpath_explorer.qt_compat import QThread, Signal
+from typing import Any, Dict, List, Optional
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.constants import (
     SCENARIO_MAX_RETRIES,
     SCENARIO_MAX_WAIT_SECONDS,
 )
-
+from xpath_explorer.qt_compat import QThread, Signal
 from xpath_explorer.workers.worker_shared import (
     _engine_browser_for_item,
     _get_browser_frame_path,

@@ -3,17 +3,20 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QLabel, QPushButton, QMenu, QFrame, QToolButton
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QToolButton,
+)
 
 from xpath_explorer.core.constants import (
     SITE_PRESETS,
 )
-from xpath_explorer.ui.widgets import NoWheelComboBox, AnimatedStatusIndicator
-
+from xpath_explorer.ui.widgets import AnimatedStatusIndicator, NoWheelComboBox
 
 
 class ExplorerUIBrowserPanelMixin:

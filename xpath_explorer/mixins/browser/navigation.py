@@ -4,12 +4,10 @@
 
 from typing import List
 
-
 from xpath_explorer.core.constants import (
     WORKER_WAIT_TIMEOUT,
 )
 from xpath_explorer.core.perf import perf_span
-
 
 
 class ExplorerBrowserNavigationMixin:

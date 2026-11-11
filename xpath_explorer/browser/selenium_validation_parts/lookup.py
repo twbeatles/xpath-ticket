@@ -5,10 +5,10 @@ XPath Explorer Browser Manager
 """
 
 import logging
-from typing import List ,Dict ,Optional ,Any ,Set
+from typing import Any, Dict, List, Optional, Set
 
 from xpath_explorer .core .constants import (
-MAX_FRAME_DEPTH ,
+    MAX_FRAME_DEPTH,
 )
 from xpath_explorer .core .perf import perf_span
 
@@ -31,10 +31,10 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception
 InvalidSelectorException =Exception
 try :
-    from selenium .webdriver .common .by import By
     from selenium .common .exceptions import (
-    InvalidSelectorException ,
+        InvalidSelectorException,
     )
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True
 except ImportError :
     SELENIUM_AVAILABLE =False

@@ -8,13 +8,18 @@ XPath Explorer Widgets v3.6
 - ModernSearchInput with focus animation
 """
 
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QLabel, QFrame, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect,
-    QGraphicsDropShadowEffect
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
 )
 
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
-from PySide6.QtGui import QColor
 
 class ToastWidget(QFrame):
     """

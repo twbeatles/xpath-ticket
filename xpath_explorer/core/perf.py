@@ -3,12 +3,12 @@
 XPath Explorer Performance Utilities
 """
 
-from contextlib import contextmanager
 import logging
 import time
-from typing import Optional
 from collections import defaultdict
+from contextlib import contextmanager
 from threading import Lock
+from typing import Optional
 
 from xpath_explorer.core.constants import PERF_LOG_SLOW_MS
 

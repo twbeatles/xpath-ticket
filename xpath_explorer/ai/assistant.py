@@ -6,8 +6,8 @@ AI 기반 XPath 추천 모듈 (Google GenAI 통합)
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from typing import Any, Dict, List, Optional, cast
 
 from xpath_explorer.ai.config import load_ai_config, persistable_ai_config

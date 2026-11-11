@@ -4,10 +4,9 @@
 XPath Explorer Browser Manager
 """
 
-import time
 import logging
-from typing import Optional ,Any
-
+import time
+from typing import Any, Optional
 
 # 로거 설정
 logger =logging .getLogger ('XPathExplorer')
@@ -28,12 +27,12 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception
 InvalidSelectorException =Exception
 try :
-    from selenium .webdriver .common .by import By
-    from selenium .webdriver .common .action_chains import ActionChains
     from selenium .common .exceptions import (
-    InvalidSelectorException ,
-    NoSuchElementException ,
+        InvalidSelectorException,
+        NoSuchElementException,
     )
+    from selenium .webdriver .common .action_chains import ActionChains
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True
 except ImportError :
     SELENIUM_AVAILABLE =False

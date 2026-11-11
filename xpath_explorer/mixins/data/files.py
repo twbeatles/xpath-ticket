@@ -9,14 +9,13 @@ import re
 from pathlib import Path
 from typing import Dict
 
+from xpath_explorer.core.config import SiteConfig
+from xpath_explorer.core.config_state import config_fingerprint, is_config_dirty
+from xpath_explorer.core.paths import atomic_write_json, atomic_write_text
 from xpath_explorer.qt_compat import (
     QFileDialog,
     QMessageBox,
 )
-
-from xpath_explorer.core.config import SiteConfig
-from xpath_explorer.core.config_state import config_fingerprint, is_config_dirty
-from xpath_explorer.core.paths import atomic_write_json, atomic_write_text
 from xpath_explorer.tools.csv_safety import sanitize_csv_value
 
 

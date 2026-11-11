@@ -3,14 +3,10 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
-from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout,
-    QPushButton, QLineEdit
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QWidget
 
 from xpath_explorer.ui.widgets import CollapsibleBox
-
 
 
 class ExplorerUIUrlPanelMixin:

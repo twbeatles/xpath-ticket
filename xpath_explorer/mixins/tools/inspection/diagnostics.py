@@ -8,8 +8,6 @@ from typing import Any, List
 from xpath_explorer.qt_compat import (
     QFileDialog,
 )
-
-
 from xpath_explorer.runtime import error_telemetry
 
 

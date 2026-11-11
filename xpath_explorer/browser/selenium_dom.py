@@ -4,10 +4,10 @@
 XPath Explorer Browser Manager
 """
 
-import logging 
-from typing import List ,Any ,Tuple ,Literal
+import logging
+from typing import Any, List, Literal, Tuple
 
-from xpath_explorer .browser .dom_export import DomSnapshot 
+from xpath_explorer .browser .dom_export import DomSnapshot
 
 # 로거 설정
 logger =logging .getLogger ('XPathExplorer')
@@ -28,7 +28,7 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception 
 InvalidSelectorException =Exception 
 try :
-    from selenium .webdriver .common .by import By 
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True 
 except ImportError :
     SELENIUM_AVAILABLE =False 

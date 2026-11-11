@@ -17,7 +17,6 @@ from xpath_explorer.qt_compat import (
 )
 
 
-
 class ExplorerDataHistoryMixin:
     def _show_xpath_history(self):
         """[BUG-005] 히스토리 중복 제거된 목록 표시"""

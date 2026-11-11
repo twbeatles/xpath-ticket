@@ -3,13 +3,12 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
+from xpath_explorer.core.config import SiteConfig
+from xpath_explorer.core.constants import SITE_PRESETS
 from xpath_explorer.qt_compat import (
     QApplication,
     QMessageBox,
 )
-
-from xpath_explorer.core.constants import SITE_PRESETS
-from xpath_explorer.core.config import SiteConfig
 
 
 class ExplorerDataSettingsMixin:

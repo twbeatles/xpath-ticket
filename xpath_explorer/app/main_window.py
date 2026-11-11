@@ -11,11 +11,15 @@ from xpath_explorer.qt_compat import QT_AVAILABLE, require_qt
 if TYPE_CHECKING:
     from PySide6.QtCore import QSettings, QTimer
     from PySide6.QtWidgets import QApplication, QMainWindow
+
     from xpath_explorer.analysis.diff import XPathDiffAnalyzer
     from xpath_explorer.analysis.statistics import StatisticsManager
     from xpath_explorer.browser.browser import BrowserManager
     from xpath_explorer.core.config import SiteConfig
-    from xpath_explorer.core.constants import LIVE_PREVIEW_DEBOUNCE_MS, SEARCH_DEBOUNCE_MS
+    from xpath_explorer.core.constants import (
+        LIVE_PREVIEW_DEBOUNCE_MS,
+        SEARCH_DEBOUNCE_MS,
+    )
     from xpath_explorer.mixins.browser_mixin import ExplorerBrowserMixin
     from xpath_explorer.mixins.data_mixin import ExplorerDataMixin
     from xpath_explorer.mixins.tools_mixin import ExplorerToolsMixin
@@ -29,11 +33,15 @@ if TYPE_CHECKING:
 elif QT_AVAILABLE:
     from PySide6.QtCore import QSettings, QTimer
     from PySide6.QtWidgets import QApplication, QMainWindow
+
     from xpath_explorer.analysis.diff import XPathDiffAnalyzer
     from xpath_explorer.analysis.statistics import StatisticsManager
     from xpath_explorer.browser.browser import BrowserManager
     from xpath_explorer.core.config import SiteConfig
-    from xpath_explorer.core.constants import LIVE_PREVIEW_DEBOUNCE_MS, SEARCH_DEBOUNCE_MS
+    from xpath_explorer.core.constants import (
+        LIVE_PREVIEW_DEBOUNCE_MS,
+        SEARCH_DEBOUNCE_MS,
+    )
     from xpath_explorer.mixins.browser_mixin import ExplorerBrowserMixin
     from xpath_explorer.mixins.data_mixin import ExplorerDataMixin
     from xpath_explorer.mixins.tools_mixin import ExplorerToolsMixin

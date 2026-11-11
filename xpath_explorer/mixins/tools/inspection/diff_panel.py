@@ -8,16 +8,14 @@ from xpath_explorer.qt_compat import (
     QHeaderView,
     QLabel,
     QPushButton,
+    Qt,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
     QVBoxLayout,
 )
-
 from xpath_explorer.workers.background import (
     DiffAnalyzeWorker,
 )
-
 
 
 class DiffInspectionMixin:

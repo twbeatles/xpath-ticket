@@ -8,25 +8,25 @@ Playwright 기반 브라우저 관리 및 자동 탐색 기능
 
 import logging
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+from xpath_explorer.browser import playwright_deps as deps
+from xpath_explorer.browser.playwright_models import (
+    ScannedElement,
+)
 
 # 상수 임포트
 from xpath_explorer.core.constants import SCAN_SELECTORS
 from xpath_explorer.core.perf import perf_span
 from xpath_explorer.tools.xpath_safety import xpath_attr_equals, xpath_literal
 
-from xpath_explorer.browser.playwright_models import (
-    ScannedElement,
-)
-from xpath_explorer.browser import playwright_deps as deps
-
 logger = logging.getLogger('XPathExplorer')
 
 
 # Playwright 가용성 확인
 try:
-    from playwright.sync_api import sync_playwright
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False

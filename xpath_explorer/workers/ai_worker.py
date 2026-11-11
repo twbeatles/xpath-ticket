@@ -3,10 +3,9 @@
 
 import logging
 from threading import Event
+
 from xpath_explorer.qt_compat import QThread, Signal
-
 from xpath_explorer.tools.ai import XPathAIAssistant
-
 
 logger = logging.getLogger('XPathExplorer')
 

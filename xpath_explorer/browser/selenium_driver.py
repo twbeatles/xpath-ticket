@@ -4,13 +4,13 @@
 XPath Explorer Browser Manager
 """
 
-import logging 
-from contextlib import contextmanager 
-from threading import RLock 
-from typing import Dict ,Optional ,Any ,Tuple
+import logging
+from contextlib import contextmanager
+from threading import RLock
+from typing import Any, Dict, Optional, Tuple
 
 from xpath_explorer .core .constants import (
-FRAME_CACHE_DURATION ,
+    FRAME_CACHE_DURATION,
 )
 
 # 로거 설정
@@ -32,14 +32,14 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception 
 InvalidSelectorException =Exception 
 try :
-    from selenium import webdriver 
-    from selenium .webdriver .chrome .service import Service 
-    from selenium .webdriver .chrome .options import Options 
-    from selenium .webdriver .common .by import By 
+    from selenium import webdriver
     from selenium .common .exceptions import (
-    NoSuchWindowException ,
-    WebDriverException ,
+        NoSuchWindowException,
+        WebDriverException,
     )
+    from selenium .webdriver .chrome .options import Options
+    from selenium .webdriver .chrome .service import Service
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True 
 except ImportError :
     SELENIUM_AVAILABLE =False 
@@ -51,14 +51,14 @@ except ImportError :
 
 uc :Any =None 
 try :
-    import undetected_chromedriver as uc 
+    import undetected_chromedriver as uc
     UC_AVAILABLE =True 
 except ImportError :
     UC_AVAILABLE =False 
 
 ChromeDriverManager :Any =None 
 try :
-    from webdriver_manager .chrome import ChromeDriverManager 
+    from webdriver_manager .chrome import ChromeDriverManager
     WDM_AVAILABLE =True 
 except ImportError :
     WDM_AVAILABLE =False 

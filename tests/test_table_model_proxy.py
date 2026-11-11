@@ -1,6 +1,5 @@
-from PySide6.QtCore import QCoreApplication
-
 import pytest
+from PySide6.QtCore import QCoreApplication
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.ui.filter_proxy import XPathFilterProxyModel

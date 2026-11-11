@@ -8,11 +8,9 @@ XPath Explorer Widgets v3.6
 - ModernSearchInput with focus animation
 """
 
-from PySide6.QtWidgets import (
-    QVBoxLayout, QWidget, QSizePolicy, QToolButton
-)
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
+from PySide6.QtWidgets import QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Signal
 
 class CollapsibleBox(QWidget):
     """

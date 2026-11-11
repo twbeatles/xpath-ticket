@@ -7,11 +7,9 @@ from typing import Any, Dict, Optional
 from xpath_explorer.qt_compat import (
     QInputDialog,
 )
-
 from xpath_explorer.workers.background import (
     BatchTestWorker,
 )
-
 
 
 class BatchRunnerMixin:

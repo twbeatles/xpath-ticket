@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
-
 REQUIRED_DOC_FILES: Tuple[str, ...] = (
     "README.md",
     "docs/claude.md",

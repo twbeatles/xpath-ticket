@@ -2,12 +2,14 @@
 """XPath Explorer worker support imports."""
 
 import logging
-from typing import Any
 from threading import Event
+from typing import Any
+
+from xpath_explorer.core.constants import (
+    PICKER_ACTIVE_CHECK_TICKS,
+    PICKER_POLL_INTERVAL_MS,
+)
 from xpath_explorer.qt_compat import QThread, Signal
-
-from xpath_explorer.core.constants import PICKER_POLL_INTERVAL_MS, PICKER_ACTIVE_CHECK_TICKS
-
 
 logger = logging.getLogger('XPathExplorer')
 

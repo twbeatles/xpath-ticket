@@ -4,10 +4,10 @@ XPath Explorer Diff Analyzer v4.0
 XPath 비교 도구 모듈
 """
 
-from typing import List, Dict, Optional, Any
+import difflib
 from dataclasses import dataclass, field
 from datetime import datetime
-import difflib
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

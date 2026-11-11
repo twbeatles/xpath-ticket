@@ -4,12 +4,12 @@
 XPath Explorer Browser Manager
 """
 
-import time
 import logging
-from typing import List ,Dict ,Optional ,Any
+import time
+from typing import Any, Dict, List, Optional
 
 from xpath_explorer .core .constants import (
-VALIDATION_MISS_TTL_SECONDS ,
+    VALIDATION_MISS_TTL_SECONDS,
 )
 
 # 로거 설정

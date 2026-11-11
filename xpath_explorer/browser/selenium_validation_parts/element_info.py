@@ -5,10 +5,10 @@ XPath Explorer Browser Manager
 """
 
 import logging
-from typing import Dict ,Optional ,Any
+from typing import Any, Dict, Optional
 
 from xpath_explorer .core .constants import (
-MAX_FRAME_DEPTH ,
+    MAX_FRAME_DEPTH,
 )
 
 # 로거 설정
@@ -30,10 +30,10 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception
 InvalidSelectorException =Exception
 try :
-    from selenium .webdriver .common .by import By
     from selenium .common .exceptions import (
-    NoSuchElementException ,
+        NoSuchElementException,
     )
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True
 except ImportError :
     SELENIUM_AVAILABLE =False

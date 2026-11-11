@@ -2,11 +2,10 @@
 """XPath Explorer worker support imports."""
 
 import logging
-from typing import Optional, Any, Dict
 from threading import Event
+from typing import Any, Dict, Optional
+
 from xpath_explorer.qt_compat import QThread, Signal
-
-
 from xpath_explorer.workers.worker_shared import (
     _get_browser_frame_path,
     _get_browser_window_metadata,

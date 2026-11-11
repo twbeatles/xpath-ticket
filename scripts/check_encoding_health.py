@@ -12,7 +12,6 @@ import tokenize
 from pathlib import Path
 from typing import Iterator, List, Sequence, Tuple
 
-
 TEXT_SUFFIXES = {
     ".py",
     ".pyi",

@@ -8,11 +8,9 @@ XPath Explorer Widgets v3.6
 - ModernSearchInput with focus animation
 """
 
-from PySide6.QtWidgets import (
-    QPushButton
-)
-
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QPushButton
+
 
 class GradientButton(QPushButton):
     """

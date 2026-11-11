@@ -4,15 +4,18 @@
 
 from typing import Optional
 
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.core.constants import (
+    APP_TITLE,
+    category_to_label,
+    category_to_value,
+)
 from xpath_explorer.qt_compat import (
     QAction,
     QApplication,
     QMenu,
     QMessageBox,
 )
-
-from xpath_explorer.core.constants import APP_TITLE, category_to_label, category_to_value
-from xpath_explorer.core.config import XPathItem
 
 
 class ExplorerDataEditorMixin:

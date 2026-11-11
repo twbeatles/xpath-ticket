@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from html import escape
 import difflib
 import json
 import zipfile
+from dataclasses import dataclass
+from datetime import datetime
+from html import escape
 
 
 @dataclass

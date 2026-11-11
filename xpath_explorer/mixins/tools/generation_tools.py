@@ -5,9 +5,13 @@
 from pathlib import Path
 from typing import List
 
+from xpath_explorer.core.constants import (
+    category_to_label,
+)
+from xpath_explorer.core.paths import atomic_write_text
 from xpath_explorer.qt_compat import (
-    QApplication,
     QAbstractItemView,
+    QApplication,
     QColor,
     QComboBox,
     QDialog,
@@ -18,18 +22,12 @@ from xpath_explorer.qt_compat import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    Qt,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
     QVBoxLayout,
 )
-
-from xpath_explorer.core.constants import (
-    category_to_label,
-)
 from xpath_explorer.tools.codegen import CodeTemplate, XPathTemplate
-
-from xpath_explorer.core.paths import atomic_write_text
 
 
 class ExplorerGenerationToolsMixin:

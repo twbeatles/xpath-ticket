@@ -4,12 +4,10 @@
 
 from typing import Dict
 
-
 from xpath_explorer.core.constants import (
     WORKER_WAIT_TIMEOUT,
 )
 from xpath_explorer.core.perf import perf_span
-
 
 
 class ExplorerBrowserPreviewMixin:
@@ -27,7 +25,9 @@ class ExplorerBrowserPreviewMixin:
                 self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
                 return
             
-            from xpath_explorer.workers.driver_guard import exclusive_driver_worker_running
+            from xpath_explorer.workers.driver_guard import (
+                exclusive_driver_worker_running,
+            )
 
             engine_browser, engine_name = self._active_validation_browser()
             if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():

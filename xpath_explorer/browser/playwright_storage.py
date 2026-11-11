@@ -6,12 +6,11 @@ Playwright 기반 브라우저 관리 및 자동 탐색 기능
 탐지 우회 기술 포함
 """
 
-import logging
 import json
-from typing import List, Dict, Any, Sequence, cast
+import logging
+from typing import Any, Dict, List, Sequence, cast
 
 # 상수 임포트
-
 from xpath_explorer.browser import playwright_deps as deps
 
 logger = logging.getLogger('XPathExplorer')
@@ -19,8 +18,8 @@ logger = logging.getLogger('XPathExplorer')
 
 # Playwright 가용성 확인
 try:
-    from playwright.sync_api import sync_playwright
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False

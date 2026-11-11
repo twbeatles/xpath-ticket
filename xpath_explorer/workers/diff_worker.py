@@ -2,13 +2,12 @@
 """XPath Explorer worker support imports."""
 
 import logging
-from typing import List, Any
 from threading import Event
-from xpath_explorer.qt_compat import QThread, Signal
+from typing import Any, List
 
-from xpath_explorer.core.config import XPathItem
 from xpath_explorer.analysis.diff import XPathDiffAnalyzer
-
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.qt_compat import QThread, Signal
 
 logger = logging.getLogger('XPathExplorer')
 

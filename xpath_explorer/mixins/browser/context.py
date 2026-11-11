@@ -4,9 +4,7 @@
 
 from typing import Any, Dict, Optional, cast
 
-
 from xpath_explorer.core.config import XPathItem
-
 
 
 class ExplorerBrowserContextMixin:

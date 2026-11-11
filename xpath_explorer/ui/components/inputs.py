@@ -8,13 +8,21 @@ XPath Explorer Widgets v3.6
 - ModernSearchInput with focus animation
 """
 
-from PySide6.QtWidgets import (
-    QLabel, QFrame, QHBoxLayout, QPushButton, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit
-)
 from typing import Optional
 
-from PySide6.QtCore import Qt, QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QWheelEvent
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+)
+
 
 class NoWheelComboBox(QComboBox):
     """휠 스크롤로 값이 변경되지 않는 ComboBox"""

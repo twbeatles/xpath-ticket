@@ -15,13 +15,11 @@ from xpath_explorer.qt_compat import (
     QHeaderView,
     QLabel,
     QPlainTextEdit,
+    Qt,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
     QVBoxLayout,
 )
-
-
 from xpath_explorer.runtime import error_telemetry
 from xpath_explorer.tools.csv_safety import sanitize_csv_value
 

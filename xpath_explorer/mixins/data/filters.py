@@ -4,13 +4,12 @@
 
 from typing import List
 
+from xpath_explorer.core.config import XPathItem
+from xpath_explorer.core.constants import category_to_label, category_to_value
+from xpath_explorer.core.perf import perf_span
 from xpath_explorer.qt_compat import (
     Qt,
 )
-
-from xpath_explorer.core.constants import category_to_label, category_to_value
-from xpath_explorer.core.config import XPathItem
-from xpath_explorer.core.perf import perf_span
 
 
 class ExplorerDataFiltersMixin:

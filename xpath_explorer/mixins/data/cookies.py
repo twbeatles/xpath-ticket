@@ -4,16 +4,14 @@
 
 import json
 from collections import Counter
-
-from xpath_explorer.qt_compat import (
-    QFileDialog,
-    QMessageBox,
-)
-
 from pathlib import Path
 
 from xpath_explorer.core.cookie_safety import partition_cookies_for_url
 from xpath_explorer.core.paths import atomic_write_json
+from xpath_explorer.qt_compat import (
+    QFileDialog,
+    QMessageBox,
+)
 
 
 class ExplorerDataCookiesMixin:

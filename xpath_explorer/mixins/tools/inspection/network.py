@@ -17,8 +17,6 @@ from xpath_explorer.qt_compat import (
 )
 
 
-
-
 class NetworkInspectionMixin:
     def _show_network_analyzer(self):
         """네트워크 분석 다이얼로그"""

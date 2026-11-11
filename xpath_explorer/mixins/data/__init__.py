@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from .filters import ExplorerDataFiltersMixin
+from .cookies import ExplorerDataCookiesMixin
 from .editor import ExplorerDataEditorMixin
 from .files import ExplorerDataFilesMixin
+from .filters import ExplorerDataFiltersMixin
 from .history import ExplorerDataHistoryMixin
 from .settings import ExplorerDataSettingsMixin
-from .cookies import ExplorerDataCookiesMixin
 
 __all__ = [
     "ExplorerDataFiltersMixin",

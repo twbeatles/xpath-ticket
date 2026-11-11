@@ -1,6 +1,5 @@
-from PySide6.QtCore import QCoreApplication
-
 import pytest
+from PySide6.QtCore import QCoreApplication
 
 from xpath_explorer.workers.background import LivePreviewWorker
 

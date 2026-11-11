@@ -4,15 +4,13 @@
 
 from typing import Any
 
-from xpath_explorer.qt_compat import (
-    Qt,
-)
-
 from xpath_explorer.core.constants import (
     WORKER_WAIT_TIMEOUT,
 )
 from xpath_explorer.core.perf import log_perf_summary
-
+from xpath_explorer.qt_compat import (
+    Qt,
+)
 from xpath_explorer.runtime import logger
 from xpath_explorer.workers.driver_guard import exclusive_driver_worker_running
 

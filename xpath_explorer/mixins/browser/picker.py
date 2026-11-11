@@ -12,7 +12,6 @@ from xpath_explorer.workers.background import (
 )
 
 
-
 class ExplorerBrowserPickerMixin:
     def _start_picker(self):
         """요소 선택기 시작"""

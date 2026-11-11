@@ -3,6 +3,7 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
+from xpath_explorer.core.perf import perf_span
 from xpath_explorer.qt_compat import (
     QComboBox,
     QDialog,
@@ -14,12 +15,9 @@ from xpath_explorer.qt_compat import (
     Qt,
     QVBoxLayout,
 )
-
 from xpath_explorer.workers.background import (
     AIGenerateWorker,
 )
-from xpath_explorer.core.perf import perf_span
-
 
 
 class ExplorerAIToolsMixin:

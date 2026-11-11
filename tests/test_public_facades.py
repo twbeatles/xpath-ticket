@@ -1,6 +1,11 @@
 from xpath_explorer.browser.browser import BrowserManager
 from xpath_explorer.browser.playwright import NetworkAnalyzer, PlaywrightManager
-from xpath_explorer.core.constants import APP_TITLE, PICKER_SCRIPT, SITE_PRESETS, WORKER_WAIT_TIMEOUT
+from xpath_explorer.core.constants import (
+    APP_TITLE,
+    PICKER_SCRIPT,
+    SITE_PRESETS,
+    WORKER_WAIT_TIMEOUT,
+)
 from xpath_explorer.mixins.browser_mixin import ExplorerBrowserMixin
 from xpath_explorer.mixins.data_mixin import ExplorerDataMixin
 from xpath_explorer.mixins.tools_mixin import ExplorerToolsMixin

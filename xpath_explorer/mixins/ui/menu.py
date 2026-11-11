@@ -4,12 +4,8 @@
 
 from typing import cast
 
-from PySide6.QtWidgets import (
-    QMenu, QMenuBar
-)
 from PySide6.QtGui import QAction
-
-
+from PySide6.QtWidgets import QMenu, QMenuBar
 
 
 class ExplorerUIMenuMixin:

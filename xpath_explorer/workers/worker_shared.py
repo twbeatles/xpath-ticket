@@ -4,7 +4,6 @@
 import logging
 from typing import Any, Dict
 
-
 logger = logging.getLogger('XPathExplorer')
 
 def _engine_browser_for_item(selenium: Any, playwright: Any, item: Any) -> tuple[Any, str]:

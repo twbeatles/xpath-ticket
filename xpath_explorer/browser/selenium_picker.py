@@ -4,14 +4,14 @@
 XPath Explorer Browser Manager
 """
 
-import logging 
-from typing import List ,Dict ,Optional ,Any
+import logging
+from typing import Any, Dict, List, Optional
 
-from xpath_explorer .core .constants import (
-PICKER_SCRIPT ,
-MAX_FRAME_DEPTH ,
-)
 from xpath_explorer .core .browser_assets .picker import picker_overlay_bootstrap
+from xpath_explorer .core .constants import (
+    MAX_FRAME_DEPTH,
+    PICKER_SCRIPT,
+)
 
 # 로거 설정
 logger =logging .getLogger ('XPathExplorer')
@@ -32,10 +32,10 @@ StaleElementReferenceException =Exception
 NoSuchElementException =Exception 
 InvalidSelectorException =Exception 
 try :
-    from selenium .webdriver .common .by import By 
     from selenium .common .exceptions import (
-    NoSuchWindowException ,
+        NoSuchWindowException,
     )
+    from selenium .webdriver .common .by import By
     SELENIUM_AVAILABLE =True 
 except ImportError :
     SELENIUM_AVAILABLE =False 

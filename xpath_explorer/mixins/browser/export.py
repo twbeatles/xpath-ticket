@@ -4,15 +4,12 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import cast, Literal
+from typing import Literal, cast
 
-from PySide6.QtWidgets import (
-    QWidget, QFileDialog
-)
+from PySide6.QtWidgets import QFileDialog, QWidget
 
 from xpath_explorer.browser.dom_export import render_dom_report_htm, save_dom_bundle
 from xpath_explorer.core.paths import atomic_write_text
-
 from xpath_explorer.runtime import logger
 
 

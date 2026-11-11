@@ -15,16 +15,14 @@ from xpath_explorer.qt_compat import (
     QListWidget,
     QPushButton,
     QSpinBox,
-    QTabWidget,
+    Qt,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
+    QTabWidget,
     QTimer,
     QVBoxLayout,
     QWidget,
 )
-
-
 
 
 class StatisticsInspectionMixin:

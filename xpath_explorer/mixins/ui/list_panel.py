@@ -3,17 +3,23 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QLineEdit, QCheckBox,
-    QGroupBox,
-    QHeaderView,
-    QAbstractItemView, QScrollArea, QTableView
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
 
 from xpath_explorer.ui.widgets import NoWheelComboBox
-
 
 
 class ExplorerUIListPanelMixin:

@@ -3,9 +3,10 @@
 XPath Explorer Configuration
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Any, List, Dict, Optional
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from xpath_explorer.core.constants import SITE_PRESETS
 
 CONFIG_SCHEMA_VERSION = 3

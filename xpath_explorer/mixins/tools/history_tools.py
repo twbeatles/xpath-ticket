@@ -7,7 +7,6 @@
 from xpath_explorer.core.config import XPathItem
 
 
-
 class ExplorerHistoryToolsMixin:
     def _reset_history_baseline(self):
         """현재 항목 목록을 Undo/Redo 기준 상태로 재설정."""

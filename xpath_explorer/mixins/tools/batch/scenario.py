@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from xpath_explorer.core.constants import (
+    WORKER_WAIT_TIMEOUT,
+)
+from xpath_explorer.core.paths import atomic_write_text
 from xpath_explorer.qt_compat import (
     QDialog,
     QFileDialog,
@@ -15,20 +19,14 @@ from xpath_explorer.qt_compat import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    Qt,
     QTableWidget,
     QTableWidgetItem,
-    Qt,
     QVBoxLayout,
-)
-
-from xpath_explorer.core.constants import (
-    WORKER_WAIT_TIMEOUT,
 )
 from xpath_explorer.workers.background import (
     BatchScenarioWorker,
 )
-
-from xpath_explorer.core.paths import atomic_write_text
 
 
 class BatchScenarioMixin:

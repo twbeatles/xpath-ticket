@@ -6,16 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Tuple
 
+from xpath_explorer.browser.dom_export import (
+    diff_dom_snapshots,
+    render_dom_diff_report_htm,
+)
+from xpath_explorer.core.paths import atomic_write_text
 from xpath_explorer.qt_compat import (
     QFileDialog,
 )
-
-from xpath_explorer.browser.dom_export import (
-    render_dom_diff_report_htm,
-    diff_dom_snapshots,
-)
-from xpath_explorer.core.paths import atomic_write_text
-
 from xpath_explorer.runtime import logger
 
 

@@ -4,14 +4,11 @@
 
 from typing import Any, Dict, cast
 
-from PySide6.QtWidgets import (
-    QMessageBox
-)
+from PySide6.QtWidgets import QMessageBox
 
 from xpath_explorer.workers.background import (
     ValidateWorker,
 )
-
 
 
 class ExplorerBrowserValidationMixin:

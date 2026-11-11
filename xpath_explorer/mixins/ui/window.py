@@ -3,17 +3,14 @@
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QSplitter
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
 from xpath_explorer.core.constants import (
     APP_TITLE,
 )
 from xpath_explorer.ui.styles import STYLE
 from xpath_explorer.ui.widgets import ToastWidget
-
 
 
 class ExplorerUIWindowMixin:

@@ -12,15 +12,13 @@ from xpath_explorer.qt_compat import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
-
-
-from xpath_explorer.runtime import logger, error_telemetry
+from xpath_explorer.runtime import error_telemetry, logger
 
 
 class TelemetryInspectionMixin:

@@ -5,7 +5,7 @@ XPath item filter proxy model.
 
 from typing import cast
 
-from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, Qt
+from PySide6.QtCore import QModelIndex, QSortFilterProxyModel, Qt
 
 from xpath_explorer.ui.table_model import XPathItemTableModel
 

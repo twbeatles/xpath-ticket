@@ -10,7 +10,7 @@ from xpath_explorer.mixins.browser import (
     ExplorerBrowserPreviewMixin,
     ExplorerBrowserValidationMixin,
 )
-from xpath_explorer.mixins.browser.deps import QFileDialog, LivePreviewWorker  # noqa: F401 -- patched via mixins.browser_mixin in frame-action tests
+from xpath_explorer.mixins.browser.deps import LivePreviewWorker, QFileDialog  # noqa: F401 -- patched via mixins.browser_mixin in frame-action tests
 
 
 class ExplorerBrowserMixin(

@@ -4,9 +4,9 @@ XPath Explorer Optimizer v4.0
 XPath 자동 최적화 및 대안 생성 모듈
 """
 
-from typing import List, Dict, Optional
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from xpath_explorer.tools.xpath_safety import (
     is_valid_xpath_attr_name,

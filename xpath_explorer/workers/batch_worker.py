@@ -2,13 +2,12 @@
 """XPath Explorer worker support imports."""
 
 import logging
-from typing import List, Optional, Any, Dict, cast
 from threading import Event
-from xpath_explorer.qt_compat import QThread, Signal
+from typing import Any, Dict, List, Optional, cast
 
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.core.perf import perf_span
-
+from xpath_explorer.qt_compat import QThread, Signal
 from xpath_explorer.workers.worker_shared import (
     _engine_browser_for_item,
     _get_browser_frame_path,
