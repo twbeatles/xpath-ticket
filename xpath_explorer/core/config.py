@@ -223,9 +223,9 @@ class SiteConfig:
                 updated_at=_coerce_str(data.get('updated_at', ''))
             )
         except KeyError as e:
-            raise ValueError(f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}")
+            raise ValueError(f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}") from e
         except TypeError as e:
-            raise ValueError(f"SiteConfig.from_dict: 데이터 형식 오류 - {e}")
+            raise ValueError(f"SiteConfig.from_dict: 데이터 형식 오류 - {e}") from e
     
     @classmethod
     def from_preset(cls, preset_name: str) -> 'SiteConfig':

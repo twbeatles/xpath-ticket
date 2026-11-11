@@ -394,7 +394,7 @@ def save_dom_bundle(
         with zipfile.ZipFile(tmp_out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
             bundle.writestr("report.htm", report)
             bundle.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-            for record, snap in zip(records, snapshots):
+            for record, snap in zip(records, snapshots, strict=True):
                 bundle.writestr(record["file"], snap.html or "")
         tmp_out.replace(out)
     finally:

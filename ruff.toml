@@ -1,5 +1,4 @@
-# XPath Ticket — Ruff S1 baseline (E4,E7,E9,F).
-# S2 (I) / S3 (B) / S4 (UP) intentionally deferred.
+# XPath Ticket — Ruff staged rollout: S1 (E4,E7,E9,F) -> S2 (I) -> S3 (B); S4 (UP) deferred.
 # `archive/` (frozen dated snapshots incl. E722/E701/F403/F405) is excluded,
 # mirroring pyrightconfig.json exclude. Owner action: none.
 # scripts/run_release_smoke_checks.py: REPO_ROOT sys.path bootstrap must
@@ -9,8 +8,12 @@ line-length = 88
 exclude = ["archive"]
 
 [lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B"]
 fixable = []
 
 [lint.per-file-ignores]
 "scripts/run_release_smoke_checks.py" = ["E402"]
+# B008 deferred: rowCount/columnCount parent=QModelIndex() is the Qt override
+# idiom (QAbstractTableModel). None-sentinel rewrite risks isValid-branch and
+# C++ signature drift; judged owner decision (groupware S3 precedent).
+"xpath_explorer/ui/table_model.py" = ["B008"]

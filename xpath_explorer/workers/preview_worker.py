@@ -61,7 +61,7 @@ class LivePreviewWorker(QThread):
                     if not ok:
                         message = str(getattr(self.browser, "last_error", "") or "window switch failed")
                         try:
-                            setattr(self.browser, "last_error", message)
+                            self.browser.last_error = message
                         except Exception:
                             pass
                         self.counted.emit(self.request_id, -1)

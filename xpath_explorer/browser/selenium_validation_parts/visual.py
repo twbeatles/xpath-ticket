@@ -198,8 +198,8 @@ class SeleniumValidationVisualMixin:
                             raise
                         try :
                             ActionChains (self .driver ).move_to_element (element ).click ().perform ()
-                        except Exception :
-                            raise click_error
+                        except Exception as fallback_error :
+                            raise click_error from fallback_error
 
                 self ._clear_last_error ()
                 return True

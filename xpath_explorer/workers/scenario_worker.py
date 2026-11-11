@@ -190,9 +190,9 @@ class BatchScenarioWorker(QThread):
             "window_title": "",
             "window_url": "",
         }
-        attempt = 1
+        _attempt = 1
 
-        for attempt in range(1, max_attempts + 1):
+        for _attempt in range(1, max_attempts + 1):
             if self._stop_event.is_set():
                 last_outcome = {
                     "success": False,
@@ -223,9 +223,9 @@ class BatchScenarioWorker(QThread):
             if last_outcome["success"]:
                 break
 
-        last_outcome["attempt"] = attempt
+        last_outcome["attempt"] = _attempt
         last_outcome["max_attempts"] = max_attempts
-        last_outcome["retry_count"] = max(0, attempt - 1)
+        last_outcome["retry_count"] = max(0, _attempt - 1)
         return last_outcome
 
     def _run_window_action(self, action: str, title: str, timeout_seconds: float) -> Dict[str, Any]:

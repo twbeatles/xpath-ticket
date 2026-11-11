@@ -134,7 +134,7 @@ class BrowserDriverMixin:
             try :
                 module_name =getattr (driver .__class__ ,"__module__","")
                 if module_name .startswith ("undetected_chromedriver"):
-                    setattr (driver ,"quit",lambda *args ,**kwargs :None )
+                    driver .quit =lambda *args ,**kwargs :None
             except Exception :
                 pass
 
@@ -216,7 +216,7 @@ class BrowserDriverMixin:
                     try :
                         module_name =getattr (driver .__class__ ,"__module__","")
                         if module_name .startswith ("undetected_chromedriver"):
-                            setattr (driver ,"quit",lambda *args ,**kwargs :None )
+                            driver .quit =lambda *args ,**kwargs :None
                     except Exception :
                         pass 
                 self .driver =None 

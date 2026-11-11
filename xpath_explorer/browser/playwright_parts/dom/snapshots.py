@@ -95,8 +95,8 @@ class PlaywrightDomSnapshotMixin:
 
             frame_targets: List[tuple[Any, str, str]] = []
 
-            def walk_frames(frame, path: str, label: str):
-                frame_targets.append((frame, path, label))
+            def walk_frames(frame, path: str, label: str, _targets=frame_targets):
+                _targets.append((frame, path, label))
                 if not include_frames:
                     return
                 try:
