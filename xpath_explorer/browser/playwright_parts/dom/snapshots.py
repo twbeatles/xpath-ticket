@@ -14,20 +14,22 @@ from xpath_explorer.browser import playwright_deps as deps
 # 상수 임포트
 from xpath_explorer.browser.dom_export import DomSnapshot
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -79,7 +81,9 @@ class PlaywrightDomSnapshotMixin:
                         document_url="",
                         html="",
                         error=error_text,
-                        error_type=self._classify_dom_error_type(error_text, page_level=True),
+                        error_type=self._classify_dom_error_type(
+                            error_text, page_level=True
+                        ),
                     )
                 )
                 continue
@@ -110,7 +114,9 @@ class PlaywrightDomSnapshotMixin:
                     except Exception:
                         child_name = ""
                     identifier = child_name or f"index={idx}"
-                    child_path = identifier if path in ("", "main") else f"{path}/{identifier}"
+                    child_path = (
+                        identifier if path in ("", "main") else f"{path}/{identifier}"
+                    )
                     walk_frames(child, child_path, identifier)
 
             try:
@@ -129,7 +135,9 @@ class PlaywrightDomSnapshotMixin:
                         document_url="",
                         html="",
                         error=error_text,
-                        error_type=self._classify_dom_error_type(error_text, page_level=True),
+                        error_type=self._classify_dom_error_type(
+                            error_text, page_level=True
+                        ),
                     )
                 )
                 continue

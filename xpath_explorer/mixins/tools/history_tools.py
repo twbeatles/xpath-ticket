@@ -1,8 +1,6 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
-
-
 
 from xpath_explorer.core.config import XPathItem
 
@@ -19,9 +17,11 @@ class ExplorerHistoryToolsMixin:
             return
         self.undo_action.setEnabled(self.history_manager.can_undo())
         self.redo_action.setEnabled(self.history_manager.can_redo())
-        
+
         if self.history_manager.can_undo():
-            self.undo_action.setText(f"↩️ 실행 취소 ({self.history_manager.get_undo_description()})")
+            self.undo_action.setText(
+                f"↩️ 실행 취소 ({self.history_manager.get_undo_description()})"
+            )
         else:
             self.undo_action.setText("↩️ 실행 취소")
 
@@ -50,28 +50,28 @@ class ExplorerHistoryToolsMixin:
         restored_items = []
         for d in item_dicts:
             item = XPathItem(
-                name=d.get('name', ''),
-                xpath=d.get('xpath', ''),
-                category=d.get('category', 'common'),
-                description=d.get('description', ''),
-                css_selector=d.get('css_selector', ''),
-                is_verified=d.get('is_verified', False),
-                element_tag=d.get('element_tag', ''),
-                element_text=d.get('element_text', ''),
-                found_window=d.get('found_window', ''),
-                found_window_title=d.get('found_window_title', ''),
-                found_window_url=d.get('found_window_url', ''),
-                found_frame=d.get('found_frame', ''),
-                is_favorite=d.get('is_favorite', False),
-                tags=d.get('tags', []),
-                test_count=d.get('test_count', 0),
-                success_count=d.get('success_count', 0),
-                last_tested=d.get('last_tested', ''),
-                sort_order=d.get('sort_order', 0),
-                alternatives=d.get('alternatives', []),
-                element_attributes=d.get('element_attributes', {}),
-                screenshot_path=d.get('screenshot_path', ''),
-                ai_generated=d.get('ai_generated', False)
+                name=d.get("name", ""),
+                xpath=d.get("xpath", ""),
+                category=d.get("category", "common"),
+                description=d.get("description", ""),
+                css_selector=d.get("css_selector", ""),
+                is_verified=d.get("is_verified", False),
+                element_tag=d.get("element_tag", ""),
+                element_text=d.get("element_text", ""),
+                found_window=d.get("found_window", ""),
+                found_window_title=d.get("found_window_title", ""),
+                found_window_url=d.get("found_window_url", ""),
+                found_frame=d.get("found_frame", ""),
+                is_favorite=d.get("is_favorite", False),
+                tags=d.get("tags", []),
+                test_count=d.get("test_count", 0),
+                success_count=d.get("success_count", 0),
+                last_tested=d.get("last_tested", ""),
+                sort_order=d.get("sort_order", 0),
+                alternatives=d.get("alternatives", []),
+                element_attributes=d.get("element_attributes", {}),
+                screenshot_path=d.get("screenshot_path", ""),
+                ai_generated=d.get("ai_generated", False),
             )
             restored_items.append(item)
         self.config.replace_items(restored_items)
@@ -86,13 +86,15 @@ class ExplorerHistoryToolsMixin:
         name = self.input_name.text().strip()
         existing = self.config.get_item(name)
         action = "update" if existing else "add"
-        
+
         # 변경 전 상태 저장
         self.history_manager.push_state(
-            self.config.items, action, name,
-            f"{name} 항목 {'수정' if existing else '추가'}"
+            self.config.items,
+            action,
+            name,
+            f"{name} 항목 {'수정' if existing else '추가'}",
         )
-        
+
         # 원래 저장 로직은 _save_item()에서 처리
         self._update_undo_redo_actions()
 
@@ -125,7 +127,11 @@ class ExplorerHistoryToolsMixin:
                 preset_name = str(combo_preset.currentText() or "").strip()
             except Exception:
                 preset_name = ""
-        if not preset_name and hasattr(self, "config") and getattr(self, "config", None) is not None:
+        if (
+            not preset_name
+            and hasattr(self, "config")
+            and getattr(self, "config", None) is not None
+        ):
             preset_name = str(getattr(self.config, "name", "") or "").strip()
         if preset_name:
             self.settings.setValue("ui/last_preset", preset_name)

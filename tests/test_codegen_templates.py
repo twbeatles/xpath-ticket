@@ -35,10 +35,15 @@ def test_codegen_actions_use_xpath_mapping_and_safe_literals():
 
     actions = [
         ActionStep(action="click", xpath=items[0].xpath, description="기존 항목 클릭"),
-        ActionStep(action="type", xpath='//input[@name="q"]', value='a"b\'c', description="검색어 입력"),
+        ActionStep(
+            action="type",
+            xpath='//input[@name="q"]',
+            value="a\"b'c",
+            description="검색어 입력",
+        ),
     ]
 
     code = generator.generate(items, CodeTemplate.SELENIUM_PYTHON, actions)
     ast.parse(code)
     assert "XPathConstants." in code
-    assert "//input[@name=\\\"q\\\"]" in code
+    assert '//input[@name=\\"q\\"]' in code

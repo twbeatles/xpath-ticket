@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
-
 from xpath_explorer.core.constants import (
     WORKER_WAIT_TIMEOUT,
 )
@@ -30,7 +28,7 @@ class ExplorerBrowserPickerMixin:
         self.picker_watcher = watcher
         watcher.picked.connect(self._on_picked)
         watcher.cancelled.connect(self._on_pick_cancelled)
-        
+
         self.browser.start_picker(overlay_mode=self.chk_overlay.isChecked())
         watcher.start()
         self._set_picker_action_enabled(True)
@@ -50,9 +48,15 @@ class ExplorerBrowserPickerMixin:
             self._show_toast("먼저 '요소 선택 시작'을 실행하세요.", "warning")
             return
         if self.browser.lock_picker_current():
-            self._show_toast("현재 요소를 고정했습니다. 브라우저에서 '이 요소 사용'을 눌러 캡처하세요.", "success")
+            self._show_toast(
+                "현재 요소를 고정했습니다. 브라우저에서 '이 요소 사용'을 눌러 캡처하세요.",
+                "success",
+            )
         else:
-            self._show_toast("고정할 요소를 찾지 못했습니다. 브라우저에서 대상 요소 위에 마우스를 올려주세요.", "warning")
+            self._show_toast(
+                "고정할 요소를 찾지 못했습니다. 브라우저에서 대상 요소 위에 마우스를 올려주세요.",
+                "warning",
+            )
 
     def _force_unlock_picker(self):
         """앱 버튼으로 현재 고정을 강제 해제."""
@@ -71,37 +75,39 @@ class ExplorerBrowserPickerMixin:
             self.picker_watcher.stop()
             self.picker_watcher.wait(WORKER_WAIT_TIMEOUT)
             self.picker_watcher = None
-        
+
         if not result or not isinstance(result, dict):
             return
 
-        xpath = result.get('xpath', '')
-        css = result.get('css', '')
-        tag = result.get('tag', '')
-        text = result.get('text', '')
-        frame = result.get('frame', 'main')
-        window_handle = str(result.get('window_handle', '') or '')
-        window_title = str(result.get('window_title', '') or '')
-        window_url = str(result.get('window_url', '') or '')
-        
+        xpath = result.get("xpath", "")
+        css = result.get("css", "")
+        tag = result.get("tag", "")
+        text = result.get("text", "")
+        frame = result.get("frame", "main")
+        window_handle = str(result.get("window_handle", "") or "")
+        window_title = str(result.get("window_title", "") or "")
+        window_url = str(result.get("window_url", "") or "")
+
         # 에디터 채우기
         self.input_xpath.setPlainText(xpath)
         self.input_css.setText(css)
         self.input_desc.setText(f"선택됨: {tag} ({text[:20]})")
-        
+
         # 결과창 업데이트
         window_desc = window_title or window_handle or "-"
-        self.txt_result.setPlainText(f"캡처 위치: {window_desc} / {frame}\n태그: {tag}\n텍스트: {text}")
-        
+        self.txt_result.setPlainText(
+            f"캡처 위치: {window_desc} / {frame}\n태그: {tag}\n텍스트: {text}"
+        )
+
         self._show_toast("요소 정보가 캡처되었습니다.", "success")
-        
+
         # 이름 자동 제안
         if not self.input_name.text():
             suggested_name = f"ui_{tag}"
             if "login" in text.lower() or "login" in xpath.lower():
                 suggested_name = "login_elem"
             self.input_name.setText(suggested_name)
-            
+
         # 히스토리 추가
         self._add_to_history(xpath, css, tag, frame)
 

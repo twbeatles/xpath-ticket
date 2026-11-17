@@ -101,7 +101,9 @@ class TelemetryInspectionMixin:
         btn_save = QPushButton("💾 리포트 저장")
 
         def save_report():
-            default_name = f"error_telemetry_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            default_name = (
+                f"error_telemetry_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            )
             fname, _ = QFileDialog.getSaveFileName(
                 self,
                 "오류 텔레메트리 리포트 저장",
@@ -113,7 +115,9 @@ class TelemetryInspectionMixin:
             if not fname.lower().endswith(".md"):
                 fname += ".md"
             try:
-                content = error_telemetry.render_markdown_report(top_n=30, recent_limit=200)
+                content = error_telemetry.render_markdown_report(
+                    top_n=30, recent_limit=200
+                )
                 with open(fname, "w", encoding="utf-8") as f:
                     f.write(content)
                 self._show_toast(f"오류 리포트 저장 완료: {fname}", "success")

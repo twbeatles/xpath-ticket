@@ -13,25 +13,28 @@ from typing import Any, Dict, List, Sequence, cast
 # 상수 임포트
 from xpath_explorer.browser import playwright_deps as deps
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
 sync_playwright = deps.sync_playwright
 PlaywrightTimeout = deps.PlaywrightTimeout
+
 
 class PlaywrightStorageMixin:
     def get_cookies(self) -> List[Dict[str, Any]]:
@@ -48,14 +51,14 @@ class PlaywrightStorageMixin:
     def save_cookies(self, filepath: str):
         """쿠키를 파일로 저장"""
         cookies = self.get_cookies()
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(cookies, f, indent=2, ensure_ascii=False)
         logger.info(f"쿠키 저장됨: {filepath}")
 
     def load_cookies(self, filepath: str) -> bool:
         """파일에서 쿠키 로드"""
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             self.set_cookies(cookies)
             logger.info(f"쿠키 로드됨: {filepath}")
@@ -80,7 +83,7 @@ class PlaywrightStorageMixin:
             return True
         except Exception:
             return False
-    
+
     # =========================================================================
     # 로컬 스토리지
     # =========================================================================
@@ -108,9 +111,9 @@ class PlaywrightStorageMixin:
         # XSS 취약점 방지: 파라미터로 데이터 전달
         page.evaluate(
             "(data) => { for (const [k, v] of Object.entries(data)) localStorage.setItem(k, v); }",
-            data
+            data,
         )
-    
+
     # =========================================================================
     # 자동 탐색 기능
     # =========================================================================

@@ -31,18 +31,24 @@ class NoWheelComboBox(QComboBox):
         # 휠 이벤트 무시 (부모에게 전달)
         if e is not None:
             e.ignore()
+
+
 class NoWheelSpinBox(QSpinBox):
     """휠 스크롤로 값이 변경되지 않는 SpinBox"""
 
     def wheelEvent(self, e: Optional[QWheelEvent]):
         if e is not None:
             e.ignore()
+
+
 class NoWheelDoubleSpinBox(QDoubleSpinBox):
     """휠 스크롤로 값이 변경되지 않는 DoubleSpinBox"""
 
     def wheelEvent(self, e: Optional[QWheelEvent]):
         if e is not None:
             e.ignore()
+
+
 class ModernSearchInput(QFrame):
     """
     모던 검색 입력창
@@ -61,7 +67,9 @@ class ModernSearchInput(QFrame):
 
         # 검색 아이콘
         self.lbl_icon = QLabel("🔍")
-        self.lbl_icon.setStyleSheet("font-size: 14px; background: transparent; color: #6c7086;")
+        self.lbl_icon.setStyleSheet(
+            "font-size: 14px; background: transparent; color: #6c7086;"
+        )
         layout.addWidget(self.lbl_icon)
 
         # 입력창

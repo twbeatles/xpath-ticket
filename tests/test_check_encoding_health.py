@@ -6,7 +6,9 @@ from pathlib import Path
 def _load_module():
     root = Path(__file__).resolve().parent.parent
     script_path = root / "scripts" / "check_encoding_health.py"
-    spec = importlib.util.spec_from_file_location("check_encoding_health_module", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "check_encoding_health_module", script_path
+    )
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -32,7 +34,9 @@ def test_check_file_ignores_question_mark_runs_in_non_python_text(tmp_path):
     module = _load_module()
     target = tmp_path / "sample.md"
     qmarks = "?" * 2
-    target.write_text(f"This is normal {qmarks} markdown punctuation.\n", encoding="utf-8")
+    target.write_text(
+        f"This is normal {qmarks} markdown punctuation.\n", encoding="utf-8"
+    )
 
     decode_error, suspicious = module.check_file(target)
 
@@ -44,8 +48,7 @@ def test_check_file_no_false_positive_on_clean_python(tmp_path):
     module = _load_module()
     target = tmp_path / "clean.py"
     target.write_text(
-        'def greet(name: str) -> str:\n'
-        '    return f"hello {name}"\n',
+        'def greet(name: str) -> str:\n    return f"hello {name}"\n',
         encoding="utf-8",
     )
 

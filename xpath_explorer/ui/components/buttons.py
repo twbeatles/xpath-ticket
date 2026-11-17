@@ -55,6 +55,8 @@ class GradientButton(QPushButton):
                 background: {c1};
             }}
         """)
+
+
 class IconButton(QPushButton):
     """
     아이콘 버튼 (호버 효과 강화)

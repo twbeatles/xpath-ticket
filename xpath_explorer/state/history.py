@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """XPath Explorer history manager."""
 
 from __future__ import annotations
@@ -48,7 +48,9 @@ class HistoryManager:
             self._undo_stack.clear()
             self._redo_stack.clear()
 
-    def push_state(self, items: List[Any], action: str, item_name: str, description: str = ""):
+    def push_state(
+        self, items: List[Any], action: str, item_name: str, description: str = ""
+    ):
         with self._lock:
             if self._current_state is not None:
                 state = HistoryState(

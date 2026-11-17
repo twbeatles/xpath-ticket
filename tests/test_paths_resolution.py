@@ -1,4 +1,3 @@
-
 from xpath_explorer.core import paths
 
 
@@ -37,7 +36,9 @@ def test_resolve_storage_dir_falls_back_to_temp(monkeypatch, tmp_path):
     assert resolved is not None and resolved.exists()
 
 
-def test_resolve_storage_dir_returns_memory_when_all_candidates_fail(monkeypatch, tmp_path):
+def test_resolve_storage_dir_returns_memory_when_all_candidates_fail(
+    monkeypatch, tmp_path
+):
     home_base = tmp_path / "home"
     temp_base = tmp_path / "temp"
 
@@ -52,4 +53,3 @@ def test_resolve_storage_dir_returns_memory_when_all_candidates_fail(monkeypatch
 
     assert resolved is None
     assert source == "memory"
-

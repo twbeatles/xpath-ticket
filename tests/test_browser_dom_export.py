@@ -37,7 +37,9 @@ class _FakeSwitchTo:
         else:
             target = str(frame_ref)
 
-        children = self._d._frame_tree[self._d._current_window].get(tuple(self._d._frame_stack), [])
+        children = self._d._frame_tree[self._d._current_window].get(
+            tuple(self._d._frame_stack), []
+        )
         for child in children:
             child_id = child.frame_id or child.frame_name
             if child_id == target:
@@ -55,8 +57,16 @@ class _FakeSwitchTo:
 class _FakeDriver:
     def __init__(self):
         self._windows = {
-            "main": {"title": "Main Window", "url": "https://main.example", "opener": False},
-            "popup": {"title": "Popup Window", "url": "https://popup.example", "opener": True},
+            "main": {
+                "title": "Main Window",
+                "url": "https://main.example",
+                "opener": False,
+            },
+            "popup": {
+                "title": "Popup Window",
+                "url": "https://popup.example",
+                "opener": True,
+            },
         }
         self._current_window = "main"
         self._frame_stack = []
@@ -91,7 +101,9 @@ class _FakeDriver:
 
     def find_elements(self, by, value):
         if by == By.TAG_NAME and value == "iframe":
-            return list(self._frame_tree[self._current_window].get(tuple(self._frame_stack), []))
+            return list(
+                self._frame_tree[self._current_window].get(tuple(self._frame_stack), [])
+            )
         return []
 
     def execute_script(self, script, *args):
@@ -101,7 +113,9 @@ class _FakeDriver:
             path = "/".join(self._frame_stack) if self._frame_stack else "main"
             return f"{self.current_url}#{path}"
         if "document.documentElement" in script and "outerHTML" in script:
-            if self._current_window == "popup" and tuple(self._frame_stack) == ("popf",):
+            if self._current_window == "popup" and tuple(self._frame_stack) == (
+                "popf",
+            ):
                 raise Exception("detached frame")
             path = "/".join(self._frame_stack) if self._frame_stack else "main"
             return f"<html><body>{self._current_window}:{path}</body></html>"
@@ -125,7 +139,9 @@ def test_collect_dom_snapshots_collects_popup_and_frames_and_restores_context():
     assert len(popup_docs) == 2
     assert all(s.is_popup for s in popup_docs)
 
-    main_nested = [s for s in snapshots if s.window_id == "main" and s.frame_path == "mainf/nested"]
+    main_nested = [
+        s for s in snapshots if s.window_id == "main" and s.frame_path == "mainf/nested"
+    ]
     assert len(main_nested) == 1
     assert main_nested[0].is_popup is False
     assert "main:mainf/nested" in main_nested[0].html

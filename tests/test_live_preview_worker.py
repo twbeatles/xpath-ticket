@@ -99,7 +99,11 @@ def test_live_preview_worker_uses_window_context_and_restores_context():
         "//first",
         404,
         frame_path="frame://seat",
-        window_context={"handle": "popup", "title": "Popup", "url": "https://popup.example"},
+        window_context={
+            "handle": "popup",
+            "title": "Popup",
+            "url": "https://popup.example",
+        },
     )
     worker.run()
 
@@ -120,7 +124,11 @@ def test_live_preview_worker_reports_negative_count_on_window_switch_failure():
         browser,
         "//first",
         505,
-        window_context={"handle": "missing", "title": "Missing", "url": "https://missing.example"},
+        window_context={
+            "handle": "missing",
+            "title": "Missing",
+            "url": "https://missing.example",
+        },
     )
     worker.counted.connect(lambda req_id, count: got.update(req_id=req_id, count=count))
     worker.run()

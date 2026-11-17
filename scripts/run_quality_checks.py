@@ -29,7 +29,9 @@ def _run_pyright(cwd: Path) -> int:
     fallback_cmd = ["pyright", "-p", "."]
     code = _run(fallback_cmd, cwd)
     if code != 0:
-        print("Pyright is not available. Install dev deps: pip install -r requirements/requirements-dev.txt")
+        print(
+            "Pyright is not available. Install dev deps: pip install -r requirements/requirements-dev.txt"
+        )
     return code
 
 
@@ -38,7 +40,9 @@ def _has_pytest_cov() -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run docs-sync + pytest coverage checks.")
+    parser = argparse.ArgumentParser(
+        description="Run docs-sync + pytest coverage checks."
+    )
     parser.add_argument(
         "--skip-tests",
         action="store_true",

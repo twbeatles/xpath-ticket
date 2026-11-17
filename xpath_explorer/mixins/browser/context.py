@@ -41,7 +41,9 @@ class ExplorerBrowserContextMixin:
             return data
         return ""
 
-    def _set_window_combo_handle(self, handle: Optional[str], explicit: Optional[bool] = None):
+    def _set_window_combo_handle(
+        self, handle: Optional[str], explicit: Optional[bool] = None
+    ):
         combo = self.__dict__.get("combo_windows")
         if combo is None:
             if explicit is not None:
@@ -63,7 +65,9 @@ class ExplorerBrowserContextMixin:
         if explicit is not None:
             self._window_selection_explicit = explicit
 
-    def _set_frame_combo_path(self, frame_path: Optional[str], explicit: Optional[bool] = None):
+    def _set_frame_combo_path(
+        self, frame_path: Optional[str], explicit: Optional[bool] = None
+    ):
         combo = self.__dict__.get("combo_frames")
         if combo is None:
             if explicit is not None:
@@ -103,7 +107,9 @@ class ExplorerBrowserContextMixin:
             return {"handle": combo_handle or "", "title": "", "url": ""}
 
         item = self._get_current_item()
-        if item is not None and (item.found_window or item.found_window_title or item.found_window_url):
+        if item is not None and (
+            item.found_window or item.found_window_title or item.found_window_url
+        ):
             return {
                 "handle": item.found_window or "",
                 "title": item.found_window_title or "",
@@ -127,11 +133,15 @@ class ExplorerBrowserContextMixin:
         )
         return browser, engine
 
-    def _highlight_on_browser(self, browser, xpath: str, frame_path: Optional[str] = None) -> bool:
+    def _highlight_on_browser(
+        self, browser, xpath: str, frame_path: Optional[str] = None
+    ) -> bool:
         if browser is None:
             return False
         if frame_path:
-            switch = getattr(browser, "switch_to_frame_by_path", None) or getattr(browser, "switch_to_frame", None)
+            switch = getattr(browser, "switch_to_frame_by_path", None) or getattr(
+                browser, "switch_to_frame", None
+            )
             if callable(switch):
                 try:
                     switch(frame_path)
@@ -166,7 +176,9 @@ class ExplorerBrowserContextMixin:
         if not ok:
             return False
 
-        get_current_window_metadata = getattr(self.browser, "get_current_window_metadata", None)
+        get_current_window_metadata = getattr(
+            self.browser, "get_current_window_metadata", None
+        )
         if callable(get_current_window_metadata):
             try:
                 current_window = get_current_window_metadata()
@@ -192,13 +204,17 @@ class ExplorerBrowserContextMixin:
             return combo_frame
         return None
 
-    def _validate_xpath_for_ui(self, xpath: str, frame_path: Optional[str]) -> Dict[str, Any]:
+    def _validate_xpath_for_ui(
+        self, xpath: str, frame_path: Optional[str]
+    ) -> Dict[str, Any]:
         if frame_path is None:
             return cast(Dict[str, Any], self.browser.validate_xpath(xpath))
 
         try:
             try:
-                info = self.browser.get_element_info(xpath, frame_path=frame_path, include_attributes=False)
+                info = self.browser.get_element_info(
+                    xpath, frame_path=frame_path, include_attributes=False
+                )
             except TypeError:
                 info = self.browser.get_element_info(xpath, frame_path=frame_path)
         except Exception as e:
@@ -207,8 +223,14 @@ class ExplorerBrowserContextMixin:
         if not info or not info.get("found"):
             return {
                 "found": False,
-                "msg": str((info or {}).get("msg") or getattr(self.browser, "last_error", "") or "요소를 찾을 수 없습니다."),
-                "frame_path": str((info or {}).get("frame_path", frame_path) or frame_path or ""),
+                "msg": str(
+                    (info or {}).get("msg")
+                    or getattr(self.browser, "last_error", "")
+                    or "요소를 찾을 수 없습니다."
+                ),
+                "frame_path": str(
+                    (info or {}).get("frame_path", frame_path) or frame_path or ""
+                ),
                 "window_handle": str((info or {}).get("window_handle", "") or ""),
                 "window_title": str((info or {}).get("window_title", "") or ""),
                 "window_url": str((info or {}).get("window_url", "") or ""),
@@ -219,7 +241,9 @@ class ExplorerBrowserContextMixin:
             "count": int(info.get("count", 1) or 1),
             "tag": info.get("tag", ""),
             "text": info.get("text", ""),
-            "frame_path": str(info.get("frame_path", frame_path) or frame_path or "main"),
+            "frame_path": str(
+                info.get("frame_path", frame_path) or frame_path or "main"
+            ),
             "window_handle": str(info.get("window_handle", "") or ""),
             "window_title": str(info.get("window_title", "") or ""),
             "window_url": str(info.get("window_url", "") or ""),

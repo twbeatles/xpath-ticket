@@ -1,5 +1,5 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false, reportRedeclaration=false
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 XPath Explorer Browser Manager
 """
@@ -7,48 +7,51 @@ XPath Explorer Browser Manager
 import logging
 from typing import Any, List, Literal, Tuple
 
-from xpath_explorer .browser .dom_export import DomSnapshot
+from xpath_explorer.browser.dom_export import DomSnapshot
 
 # 로거 설정
-logger =logging .getLogger ('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 # Selenium Imports
-webdriver :Any =None 
-Service :Any =None 
-Options :Any =None 
-By :Any =None 
-Keys :Any =None 
-ActionChains :Any =None 
-WebDriverWait :Any =None 
-EC :Any =None 
-NoSuchWindowException =Exception 
-WebDriverException =Exception 
-NoSuchFrameException =Exception 
-StaleElementReferenceException =Exception 
-NoSuchElementException =Exception 
-InvalidSelectorException =Exception 
-try :
-    from selenium .webdriver .common .by import By
-    SELENIUM_AVAILABLE =True 
-except ImportError :
-    SELENIUM_AVAILABLE =False 
-    logger .error ("Selenium 모듈이 설치되지 않았습니다.")
-    class _ByFallback :
-        TAG_NAME ="tag name"
-        XPATH ="xpath"
-    By =_ByFallback ()
+webdriver: Any = None
+Service: Any = None
+Options: Any = None
+By: Any = None
+Keys: Any = None
+ActionChains: Any = None
+WebDriverWait: Any = None
+EC: Any = None
+NoSuchWindowException = Exception
+WebDriverException = Exception
+NoSuchFrameException = Exception
+StaleElementReferenceException = Exception
+NoSuchElementException = Exception
+InvalidSelectorException = Exception
+try:
+    from selenium.webdriver.common.by import By
 
-uc :Any =None 
-try :
-    UC_AVAILABLE =True 
-except ImportError :
-    UC_AVAILABLE =False 
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    logger.error("Selenium 모듈이 설치되지 않았습니다.")
 
-ChromeDriverManager :Any =None 
-try :
-    WDM_AVAILABLE =True 
-except ImportError :
-    WDM_AVAILABLE =False 
+    class _ByFallback:
+        TAG_NAME = "tag name"
+        XPATH = "xpath"
+
+    By = _ByFallback()
+
+uc: Any = None
+try:
+    UC_AVAILABLE = True
+except ImportError:
+    UC_AVAILABLE = False
+
+ChromeDriverManager: Any = None
+try:
+    WDM_AVAILABLE = True
+except ImportError:
+    WDM_AVAILABLE = False
 
 
 class BrowserDomMixin:
@@ -72,17 +75,23 @@ class BrowserDomMixin:
             windows = self.get_windows()
             if scope == "current":
                 if current_handle:
-                    windows = [w for w in windows if str(w.get("handle") or "") == current_handle]
+                    windows = [
+                        w
+                        for w in windows
+                        if str(w.get("handle") or "") == current_handle
+                    ]
                 elif windows:
                     windows = windows[:1]
             if not windows and current_handle:
                 metadata = self.get_current_window_metadata()
-                windows = [{
-                    "handle": current_handle,
-                    "title": str(metadata.get("title", "") or ""),
-                    "url": str(metadata.get("url", "") or ""),
-                    "is_popup": bool(metadata.get("is_popup")),
-                }]
+                windows = [
+                    {
+                        "handle": current_handle,
+                        "title": str(metadata.get("title", "") or ""),
+                        "url": str(metadata.get("url", "") or ""),
+                        "is_popup": bool(metadata.get("is_popup")),
+                    }
+                ]
 
             for window in windows:
                 handle = str(window.get("handle") or "")
@@ -155,7 +164,9 @@ class BrowserDomMixin:
                     frame_targets = [("main", "main")]
 
                 for frame_path, frame_label in frame_targets:
-                    normalized_path = "main" if frame_path in ("", "main") else frame_path
+                    normalized_path = (
+                        "main" if frame_path in ("", "main") else frame_path
+                    )
                     normalized_label = frame_label or normalized_path
                     document_url = ""
                     html = ""

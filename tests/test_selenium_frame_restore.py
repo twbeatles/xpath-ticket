@@ -143,4 +143,3 @@ def test_get_picker_result_restores_original_frame_and_sets_frame_path():
     # restored
     assert bm.current_frame_path == "f1"
     assert bm.driver._frame_stack == ["f1"]
-

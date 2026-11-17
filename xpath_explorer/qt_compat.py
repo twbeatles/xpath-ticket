@@ -164,6 +164,7 @@ else:
         QT_IMPORT_ERROR = exc
 
 if not QT_AVAILABLE:
+
     class _Signal:
         def connect(self, *_args, **_kwargs):
             return None
@@ -286,16 +287,28 @@ if not QT_AVAILABLE:
         class ScrollBarPolicy:
             ScrollBarAlwaysOff = 0
 
-    QEasingCurve = QMimeData = QAbstractTableModel = QEvent = QModelIndex = QObject = QPoint = _QtStub
-    QPropertyAnimation = QSortFilterProxyModel = QSettings = QSize = QThread = QTimer = _QtStub
-    QAction = QColor = QDrag = QFont = QIcon = QKeySequence = QPalette = QPixmap = QWheelEvent = _QtStub
+    QEasingCurve = QMimeData = QAbstractTableModel = QEvent = QModelIndex = QObject = (
+        QPoint
+    ) = _QtStub
+    QPropertyAnimation = QSortFilterProxyModel = QSettings = QSize = QThread = (
+        QTimer
+    ) = _QtStub
+    QAction = QColor = QDrag = QFont = QIcon = QKeySequence = QPalette = QPixmap = (
+        QWheelEvent
+    ) = _QtStub
     QAbstractItemView = QCheckBox = QComboBox = QDialog = QFormLayout = QFrame = _QtStub
-    QGridLayout = QGroupBox = QGraphicsDropShadowEffect = QGraphicsOpacityEffect = _QtStub
+    QGridLayout = QGroupBox = QGraphicsDropShadowEffect = QGraphicsOpacityEffect = (
+        _QtStub
+    )
     QHBoxLayout = QLabel = QLineEdit = QListWidget = QDoubleSpinBox = _QtStub
-    QListWidgetItem = QInputDialog = QMainWindow = QMenu = QMenuBar = QPlainTextEdit = _QtStub
+    QListWidgetItem = QInputDialog = QMainWindow = QMenu = QMenuBar = QPlainTextEdit = (
+        _QtStub
+    )
     QProgressBar = QPushButton = QScrollArea = QSizePolicy = QSpinBox = _QtStub
     QSplitter = QStackedWidget = QTableView = QTableWidget = QTableWidgetItem = _QtStub
-    QTabWidget = QTextEdit = QToolBar = QToolButton = QTreeWidget = QTreeWidgetItem = _QtStub
+    QTabWidget = QTextEdit = QToolBar = QToolButton = QTreeWidget = QTreeWidgetItem = (
+        _QtStub
+    )
     QVBoxLayout = QWidget = _QtStub
 
 

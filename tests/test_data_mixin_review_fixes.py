@@ -101,9 +101,13 @@ class _CookieDriver:
 
 class _DataHost(ExplorerDataMixin):
     def __init__(self, items):
-        self.config = SiteConfig(name="test", url="https://example.com", items=list(items))
+        self.config = SiteConfig(
+            name="test", url="https://example.com", items=list(items)
+        )
         self.history_manager = _HistoryManager()
-        self.browser = SimpleNamespace(current_frame_path="", is_alive=lambda: True, driver=None)
+        self.browser = SimpleNamespace(
+            current_frame_path="", is_alive=lambda: True, driver=None
+        )
         self.code_generator = CodeGenerator()
         self.input_name = _LineEdit()
         self.input_xpath = _PlainTextEdit()
@@ -132,7 +136,9 @@ class _DataHost(ExplorerDataMixin):
 
 
 def _item(name: str, xpath: str) -> XPathItem:
-    return XPathItem(name=name, xpath=xpath, category="common", description=f"desc-{name}")
+    return XPathItem(
+        name=name, xpath=xpath, category="common", description=f"desc-{name}"
+    )
 
 
 def test_save_item_blocks_rename_conflict():
@@ -261,7 +267,10 @@ def test_export_python_compile_failure_aborts_write(tmp_path, monkeypatch):
         "xpath_explorer.mixins.data_mixin.QFileDialog.getSaveFileName",
         lambda *_args, **_kwargs: (str(target), ""),
     )
-    monkeypatch.setattr("builtins.compile", lambda *_args, **_kwargs: (_ for _ in ()).throw(SyntaxError("boom")))
+    monkeypatch.setattr(
+        "builtins.compile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(SyntaxError("boom")),
+    )
 
     host._export("python")
 
@@ -288,7 +297,9 @@ def test_load_xpath_history_data_handles_non_list():
 def test_load_cookies_reports_success_and_failures(tmp_path, monkeypatch):
     host = _DataHost([])
     driver = _CookieDriver(failing_names={"bad"}, failing_domains={"example.com"})
-    host.browser = SimpleNamespace(current_frame_path="", is_alive=lambda: True, driver=driver)
+    host.browser = SimpleNamespace(
+        current_frame_path="", is_alive=lambda: True, driver=driver
+    )
 
     cookie_path = tmp_path / "cookies.json"
     cookie_path.write_text(
@@ -321,7 +332,9 @@ def test_load_cookies_reports_success_and_failures(tmp_path, monkeypatch):
 def test_load_cookies_rejects_non_list_payload(tmp_path, monkeypatch):
     host = _DataHost([])
     driver = _CookieDriver()
-    host.browser = SimpleNamespace(current_frame_path="", is_alive=lambda: True, driver=driver)
+    host.browser = SimpleNamespace(
+        current_frame_path="", is_alive=lambda: True, driver=driver
+    )
 
     cookie_path = tmp_path / "bad_cookies.json"
     cookie_path.write_text(json.dumps({"name": "not-list"}), encoding="utf-8")

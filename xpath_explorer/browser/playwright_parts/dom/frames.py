@@ -12,20 +12,22 @@ from typing import Any, Dict, List
 # 상수 임포트
 from xpath_explorer.browser import playwright_deps as deps
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -43,11 +45,13 @@ class PlaywrightDomFrameMixin:
             return []
         frames: List[Dict[str, Any]] = []
         for frame in page.frames:
-            frames.append({
-                "name": frame.name or "(unnamed)",
-                "url": frame.url,
-                "is_main": frame == page.main_frame
-            })
+            frames.append(
+                {
+                    "name": frame.name or "(unnamed)",
+                    "url": frame.url,
+                    "is_main": frame == page.main_frame,
+                }
+            )
         return frames
 
     def switch_to_frame(self, frame_name: str) -> bool:
@@ -59,7 +63,7 @@ class PlaywrightDomFrameMixin:
             page = self._get_current_page()
             if page is None:
                 return False
-            if not frame_name or frame_name == 'main':
+            if not frame_name or frame_name == "main":
                 # 메인 프레임으로 복귀
                 self._current_frame = page.main_frame
                 return True

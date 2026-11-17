@@ -36,15 +36,7 @@ def _scan_expr():
 # Runtime JS for the 1-char double-quote token: tokens.push('"');
 FIXED_PUSH = "tokens.push(" + chr(39) + chr(34) + chr(39) + ");"
 # Broken runtime (unterminated string): tokens.push("'"'");
-BROKEN_PUSH = (
-    "tokens.push("
-    + chr(34)
-    + chr(39)
-    + chr(34)
-    + chr(39)
-    + chr(34)
-    + ");"
-)
+BROKEN_PUSH = "tokens.push(" + chr(34) + chr(39) + chr(34) + chr(39) + chr(34) + ");"
 # Runtime JS for prepending one backslash: return '\\' + ch;
 FIXED_ESCAPE = "return " + chr(39) + chr(92) * 2 + chr(39) + " + ch;"
 # Broken runtime (unterminated string): return '\'' + ch;

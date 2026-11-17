@@ -81,9 +81,13 @@ class XPathFilterProxyModel(QSortFilterProxyModel):
             return False
 
         if self._search_text:
-            search_index = model.index(source_row, XPathItemTableModel.COLUMN_NAME, source_parent)
+            search_index = model.index(
+                source_row, XPathItemTableModel.COLUMN_NAME, source_parent
+            )
             raw_haystack = model.data(
-                search_index, cast(Qt.ItemDataRole, XPathItemTableModel.ROLE_SEARCH_TEXT))
+                search_index,
+                cast(Qt.ItemDataRole, XPathItemTableModel.ROLE_SEARCH_TEXT),
+            )
             haystack = str(raw_haystack or "")
             if self._search_text not in haystack:
                 return False

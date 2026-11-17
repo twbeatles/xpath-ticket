@@ -26,23 +26,34 @@ class DomDiffInspectionMixin:
     ) -> Tuple[List[Any], str]:
         """현재 활성 브라우저(Selenium/Playwright)의 DOM 스냅샷 수집."""
         if self.browser.is_alive():
-            return self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope), "Selenium"
+            return self.browser.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            ), "Selenium"
         if self.pw_manager and self.pw_manager.is_alive():
-            return self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope), "Playwright"
+            return self.pw_manager.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            ), "Playwright"
         return [], ""
 
     def _export_dom_diff_report(self):
         """기준선 대비 현재 DOM 비교 리포트 생성/저장."""
         snapshots, source = self._collect_active_dom_snapshots()
         if not snapshots:
-            self._show_toast("활성 브라우저가 없습니다. Selenium 또는 Playwright를 먼저 연결하세요.", "warning")
+            self._show_toast(
+                "활성 브라우저가 없습니다. Selenium 또는 Playwright를 먼저 연결하세요.",
+                "warning",
+            )
             return
 
         baseline = list(getattr(self, "_dom_diff_baseline", []) or [])
         if not baseline:
             self._dom_diff_baseline = list(snapshots)
             self._dom_diff_source = source
-            self._show_toast("DOM 기준선을 저장했습니다. 변경 후 다시 실행하면 diff 리포트를 생성합니다.", "success", 3500)
+            self._show_toast(
+                "DOM 기준선을 저장했습니다. 변경 후 다시 실행하면 diff 리포트를 생성합니다.",
+                "success",
+                3500,
+            )
             return
 
         baseline_source = str(getattr(self, "_dom_diff_source", "") or "")

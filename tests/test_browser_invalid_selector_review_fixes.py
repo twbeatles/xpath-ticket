@@ -124,7 +124,9 @@ def test_validate_xpath_frame_level_invalid_selector_does_not_add_miss(monkeypat
             "frame_path": frame_path,
         },
     )
-    monkeypatch.setattr(bm, "_session_add_miss", lambda _session, xpath: miss_calls.append(xpath))
+    monkeypatch.setattr(
+        bm, "_session_add_miss", lambda _session, xpath: miss_calls.append(xpath)
+    )
 
     result = bm.validate_xpath("//x", session=session)
 

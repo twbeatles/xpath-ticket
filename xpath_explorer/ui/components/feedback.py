@@ -35,26 +35,26 @@ class ToastWidget(QFrame):
             "bg": "rgba(30, 60, 40, 0.95)",
             "accent": "#a6e3a1",
             "icon": "✅",
-            "glow": "rgba(166, 227, 161, 0.4)"
+            "glow": "rgba(166, 227, 161, 0.4)",
         },
         "warning": {
             "bg": "rgba(60, 45, 30, 0.95)",
             "accent": "#fab387",
             "icon": "⚠️",
-            "glow": "rgba(250, 179, 135, 0.4)"
+            "glow": "rgba(250, 179, 135, 0.4)",
         },
         "error": {
             "bg": "rgba(60, 30, 35, 0.95)",
             "accent": "#f38ba8",
             "icon": "❌",
-            "glow": "rgba(243, 139, 168, 0.4)"
+            "glow": "rgba(243, 139, 168, 0.4)",
         },
         "info": {
             "bg": "rgba(30, 40, 60, 0.95)",
             "accent": "#89b4fa",
             "icon": "ℹ️",
-            "glow": "rgba(137, 180, 250, 0.4)"
-        }
+            "glow": "rgba(137, 180, 250, 0.4)",
+        },
     }
 
     def __init__(self, parent=None):
@@ -167,9 +167,9 @@ class ToastWidget(QFrame):
         # 동적 스타일 적용
         self.setStyleSheet(f"""
             QFrame#toast_widget {{
-                background: {theme['bg']};
+                background: {theme["bg"]};
                 border-radius: 14px;
-                border: 2px solid {theme['accent']};
+                border: 2px solid {theme["accent"]};
             }}
             QLabel {{
                 color: #ffffff;
@@ -194,11 +194,11 @@ class ToastWidget(QFrame):
 
         # 그림자 색상 업데이트
         shadow = self._ensure_shadow_effect()
-        shadow.setColor(QColor(theme['glow']))
+        shadow.setColor(QColor(theme["glow"]))
         self.setGraphicsEffect(shadow)
 
         # 컨텐츠 설정
-        self.lbl_icon.setText(theme['icon'])
+        self.lbl_icon.setText(theme["icon"])
         self.label.setText(message)
 
         # 크기 조정
@@ -293,8 +293,12 @@ class ToastWidget(QFrame):
 
     def _cleanup_animations(self):
         """기존 애니메이션 정리 (메모리 누수 방지)"""
-        for anim in [self._fade_anim, self._slide_anim,
-                     self._fade_out_anim, self._slide_up_anim]:
+        for anim in [
+            self._fade_anim,
+            self._slide_anim,
+            self._fade_out_anim,
+            self._slide_up_anim,
+        ]:
             if anim is not None:
                 anim.stop()
                 anim.deleteLater()
@@ -308,6 +312,8 @@ class ToastWidget(QFrame):
         """Toast 즉시 닫기"""
         self._timer.stop()
         self._start_fade_out()
+
+
 class StatusIndicator(QFrame):
     """
     연결 상태 표시 인디케이터
@@ -342,6 +348,8 @@ class StatusIndicator(QFrame):
                 border: 2px solid {glow};
             }}
         """)
+
+
 class AnimatedStatusIndicator(QFrame):
     """
     펄스 애니메이션이 있는 상태 인디케이터
@@ -420,6 +428,8 @@ class AnimatedStatusIndicator(QFrame):
         """위젯 삭제 시 타이머 안전 정리"""
         self.cleanup()
         super().deleteLater()
+
+
 class EmptyStateWidget(QFrame):
     """
     빈 상태를 표시하는 위젯

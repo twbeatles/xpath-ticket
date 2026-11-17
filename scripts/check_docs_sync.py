@@ -130,7 +130,9 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _check_file_exists(repo_root: Path, relative_path: str, findings: List[Finding], code: str):
+def _check_file_exists(
+    repo_root: Path, relative_path: str, findings: List[Finding], code: str
+):
     if not (repo_root / relative_path).exists():
         findings.append(
             Finding(
@@ -192,8 +194,12 @@ def collect_findings(repo_root: Path) -> List[Finding]:
         findings,
         "MISSING_TOKEN",
     )
-    _check_required_tokens(doc_texts, DOC_REQUIRED_TOKENS, findings, "MISSING_DOC_TOKEN")
-    _check_required_tokens(test_texts, TEST_REQUIRED_TOKENS, findings, "MISSING_TEST_TOKEN")
+    _check_required_tokens(
+        doc_texts, DOC_REQUIRED_TOKENS, findings, "MISSING_DOC_TOKEN"
+    )
+    _check_required_tokens(
+        test_texts, TEST_REQUIRED_TOKENS, findings, "MISSING_TEST_TOKEN"
+    )
 
     for doc, patterns in LEGACY_WRAPPER_PATTERNS.items():
         content = doc_texts.get(doc, "")
@@ -259,7 +265,9 @@ def run_check(repo_root: Path, strict_warnings: bool = False) -> int:
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check docs/code consistency.")
     default_root = Path(__file__).resolve().parents[1]
-    parser.add_argument("--root", type=Path, default=default_root, help="Repository root path")
+    parser.add_argument(
+        "--root", type=Path, default=default_root, help="Repository root path"
+    )
     parser.add_argument(
         "--strict-warnings",
         action="store_true",

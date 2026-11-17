@@ -12,20 +12,22 @@ from typing import Any, Dict, Literal, Union
 # 상수 임포트
 from xpath_explorer.browser import playwright_deps as deps
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -66,7 +68,9 @@ class PlaywrightNavigationMixin:
         self,
         url: str,
         timeout: int = 30000,
-        wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "domcontentloaded",
+        wait_until: Literal[
+            "commit", "domcontentloaded", "load", "networkidle"
+        ] = "domcontentloaded",
     ) -> Union[bool, None]:
         """
         URL 이동

@@ -16,11 +16,12 @@ from xpath_explorer.workers.worker_shared import (
     _switch_browser_to_item_window,
 )
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 class BatchTestWorker(QThread):
     """배치 테스트 워커"""
+
     progress = Signal(int, str)
     item_tested = Signal(str, bool, str, str)  # name, success, xpath, msg
     item_validated = Signal(str, dict)  # name, full result dict
@@ -65,7 +66,9 @@ class BatchTestWorker(QThread):
                     cancelled = True
                     break
 
-                self.progress.emit(int((i / total) * 100), f"테스트 중: {item.name} ({i+1}/{total})")
+                self.progress.emit(
+                    int((i / total) * 100), f"테스트 중: {item.name} ({i + 1}/{total})"
+                )
 
                 try:
                     result: Dict[str, Any] = {}
@@ -76,15 +79,25 @@ class BatchTestWorker(QThread):
                     if engine_browser is None:
                         success = False
                         msg = "Playwright 브라우저가 연결되어 있지 않습니다."
-                        result = {"error_type": "browser_not_connected", "frame_path": item.found_frame or ""}
+                        result = {
+                            "error_type": "browser_not_connected",
+                            "frame_path": item.found_frame or "",
+                        }
                     else:
-                        ok, error_msg = _switch_browser_to_item_window(engine_browser, item)
+                        ok, error_msg = _switch_browser_to_item_window(
+                            engine_browser, item
+                        )
                         if not ok:
                             success = False
                             msg = error_msg
-                            result = {"error_type": "window_context", "frame_path": item.found_frame or ""}
+                            result = {
+                                "error_type": "window_context",
+                                "frame_path": item.found_frame or "",
+                            }
                         else:
-                            item_session = session if engine_name != "playwright" else None
+                            item_session = (
+                                session if engine_name != "playwright" else None
+                            )
                             with perf_span("worker.batch_validate_loop"):
                                 try:
                                     result = cast(
@@ -97,9 +110,12 @@ class BatchTestWorker(QThread):
                                     )
                                 except TypeError:
                                     # 구 시그니처(validate_xpath(xpath)) 호환
-                                    result = cast(Dict[str, Any], engine_browser.validate_xpath(item.xpath))
-                            success = bool(result.get('found', False))
-                            msg = result.get('msg', '')
+                                    result = cast(
+                                        Dict[str, Any],
+                                        engine_browser.validate_xpath(item.xpath),
+                                    )
+                            success = bool(result.get("found", False))
+                            msg = result.get("msg", "")
                     window_meta = _get_browser_window_metadata(self.browser)
                 except Exception as e:
                     success = False
@@ -108,17 +124,29 @@ class BatchTestWorker(QThread):
                     window_meta = _get_browser_window_metadata(self.browser)
 
                 row = {
-                    'name': item.name,
-                    'success': success,
-                    'xpath': item.xpath,
-                    'msg': msg,
-                    'frame_path': str(result.get('frame_path', '') or item.found_frame or ''),
-                    'window_handle': str(result.get('window_handle', '') or window_meta.get('handle', '') or ''),
-                    'window_title': str(result.get('window_title', '') or window_meta.get('title', '') or ''),
-                    'window_url': str(result.get('window_url', '') or window_meta.get('url', '') or ''),
-                    'tag': str(result.get('tag', '') or ''),
-                    'count': int(result.get('count', 1 if success else 0) or 0),
-                    'error_type': str(result.get('error_type', '') or ''),
+                    "name": item.name,
+                    "success": success,
+                    "xpath": item.xpath,
+                    "msg": msg,
+                    "frame_path": str(
+                        result.get("frame_path", "") or item.found_frame or ""
+                    ),
+                    "window_handle": str(
+                        result.get("window_handle", "")
+                        or window_meta.get("handle", "")
+                        or ""
+                    ),
+                    "window_title": str(
+                        result.get("window_title", "")
+                        or window_meta.get("title", "")
+                        or ""
+                    ),
+                    "window_url": str(
+                        result.get("window_url", "") or window_meta.get("url", "") or ""
+                    ),
+                    "tag": str(result.get("tag", "") or ""),
+                    "count": int(result.get("count", 1 if success else 0) or 0),
+                    "error_type": str(result.get("error_type", "") or ""),
                 }
                 results.append(row)
                 self.item_validated.emit(item.name, row)
@@ -135,7 +163,7 @@ class BatchTestWorker(QThread):
                     pass
             _restore_browser_context(
                 self.browser,
-                window_handle=str(original_window.get('handle', '') or ''),
+                window_handle=str(original_window.get("handle", "") or ""),
                 frame_path=original_frame,
             )
             self.completed.emit(results, cancelled)

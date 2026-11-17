@@ -163,7 +163,12 @@ def test_start_playwright_about_blank_skips_navigate():
 
 
 def test_toggle_playwright_launch_failure_triggers_install(monkeypatch):
-    manager = _PwManager(launch_ok=False, navigate_result=False, alive=False, last_error="missing chromium")
+    manager = _PwManager(
+        launch_ok=False,
+        navigate_result=False,
+        alive=False,
+        last_error="missing chromium",
+    )
     host = _Host(manager, url="https://tickets.example.com")
     captured: Dict[str, Optional[str]] = {"url": None}
 
@@ -227,7 +232,9 @@ def test_on_playwright_chromium_installed_failure_sets_disconnected():
 def test_begin_playwright_chromium_install_runs_worker(monkeypatch):
     host = _Host(_PwManager())
     _InstallWorker.next_result = (False, "x")
-    monkeypatch.setattr("xpath_explorer.mixins.tools_mixin.InstallChromiumWorker", _InstallWorker)
+    monkeypatch.setattr(
+        "xpath_explorer.mixins.tools_mixin.InstallChromiumWorker", _InstallWorker
+    )
 
     host._begin_playwright_chromium_install("https://example.com")
 

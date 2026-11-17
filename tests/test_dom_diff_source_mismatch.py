@@ -38,4 +38,3 @@ def test_dom_diff_source_mismatch_resets_baseline_without_rendering_report():
     assert host._dom_diff_baseline[0].html == "<html>new</html>"
     assert host._toasts
     assert host._toasts[-1][1] == "warning"
-

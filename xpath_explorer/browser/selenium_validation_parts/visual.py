@@ -1,5 +1,5 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false, reportRedeclaration=false
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 XPath Explorer Browser Manager
 """
@@ -9,83 +9,89 @@ import time
 from typing import Any, Optional
 
 # 로거 설정
-logger =logging .getLogger ('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 # Selenium Imports
-webdriver :Any =None
-Service :Any =None
-Options :Any =None
-By :Any =None
-Keys :Any =None
-ActionChains :Any =None
-WebDriverWait :Any =None
-EC :Any =None
-NoSuchWindowException =Exception
-WebDriverException =Exception
-NoSuchFrameException =Exception
-StaleElementReferenceException =Exception
-NoSuchElementException =Exception
-InvalidSelectorException =Exception
-try :
-    from selenium .common .exceptions import (
+webdriver: Any = None
+Service: Any = None
+Options: Any = None
+By: Any = None
+Keys: Any = None
+ActionChains: Any = None
+WebDriverWait: Any = None
+EC: Any = None
+NoSuchWindowException = Exception
+WebDriverException = Exception
+NoSuchFrameException = Exception
+StaleElementReferenceException = Exception
+NoSuchElementException = Exception
+InvalidSelectorException = Exception
+try:
+    from selenium.common.exceptions import (
         InvalidSelectorException,
         NoSuchElementException,
     )
-    from selenium .webdriver .common .action_chains import ActionChains
-    from selenium .webdriver .common .by import By
-    SELENIUM_AVAILABLE =True
-except ImportError :
-    SELENIUM_AVAILABLE =False
-    logger .error ("Selenium 모듈이 설치되지 않았습니다.")
-    class _ByFallback :
-        TAG_NAME ="tag name"
-        XPATH ="xpath"
-    By =_ByFallback ()
+    from selenium.webdriver.common.action_chains import ActionChains
+    from selenium.webdriver.common.by import By
 
-uc :Any =None
-try :
-    UC_AVAILABLE =True
-except ImportError :
-    UC_AVAILABLE =False
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    logger.error("Selenium 모듈이 설치되지 않았습니다.")
 
-ChromeDriverManager :Any =None
-try :
-    WDM_AVAILABLE =True
-except ImportError :
-    WDM_AVAILABLE =False
+    class _ByFallback:
+        TAG_NAME = "tag name"
+        XPATH = "xpath"
+
+    By = _ByFallback()
+
+uc: Any = None
+try:
+    UC_AVAILABLE = True
+except ImportError:
+    UC_AVAILABLE = False
+
+ChromeDriverManager: Any = None
+try:
+    WDM_AVAILABLE = True
+except ImportError:
+    WDM_AVAILABLE = False
 
 
 class SeleniumValidationVisualMixin:
-    def highlight (self ,xpath :str ,duration :int =2500 ,frame_path :Optional [str ]=None )->bool :
+    def highlight(
+        self, xpath: str, duration: int = 2500, frame_path: Optional[str] = None
+    ) -> bool:
         """Highlight matched element, including nested iframe context."""
-        with self .frame_context ():
-            self .ensure_valid_window ()
-            self ._clear_last_error ()
+        with self.frame_context():
+            self.ensure_valid_window()
+            self._clear_last_error()
 
-            try :
-                effective_frame =None
-                if frame_path :
-                    if self .switch_to_frame_by_path (frame_path ):
-                        effective_frame =frame_path
-                    else :
-                        effective_frame =None
+            try:
+                effective_frame = None
+                if frame_path:
+                    if self.switch_to_frame_by_path(frame_path):
+                        effective_frame = frame_path
+                    else:
+                        effective_frame = None
 
-                if not effective_frame :
-                    _ ,found_path =self .find_element_in_all_frames (xpath )
-                    if not found_path :
-                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                if not effective_frame:
+                    _, found_path = self.find_element_in_all_frames(xpath)
+                    if not found_path:
+                        self._set_last_error(f"요소를 찾을 수 없습니다: {xpath}")
                         return False
-                    effective_frame =found_path
+                    effective_frame = found_path
 
-                with self .frame_context (effective_frame ):
-                    try :
-                        el =self .driver .find_element (By .XPATH ,xpath )
-                    except NoSuchElementException :
-                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                with self.frame_context(effective_frame):
+                    try:
+                        el = self.driver.find_element(By.XPATH, xpath)
+                    except NoSuchElementException:
+                        self._set_last_error(f"요소를 찾을 수 없습니다: {xpath}")
                         return False
 
                         # 하이라이트 실행
-                    self .driver .execute_script ("""
+                    self.driver.execute_script(
+                        """
                         var el = arguments[0];
                         var original = el.style.outline;
                         var originalBg = el.style.backgroundColor;
@@ -100,116 +106,132 @@ class SeleniumValidationVisualMixin:
                             el.style.outline = original;
                             el.style.backgroundColor = originalBg;
                         }, arguments[1]);
-                    """,el ,duration )
+                    """,
+                        el,
+                        duration,
+                    )
 
-                self ._clear_last_error ()
+                self._clear_last_error()
                 return True
 
-            except Exception as e :
-                self ._set_last_error (f"하이라이트 오류: {e }")
-                logger .error (f"하이라이트 오류: {e }")
+            except Exception as e:
+                self._set_last_error(f"하이라이트 오류: {e}")
+                logger.error(f"하이라이트 오류: {e}")
                 return False
 
-    def screenshot_element (self ,xpath :str ,save_path :str ,frame_path :Optional [str ]=None )->bool :
+    def screenshot_element(
+        self, xpath: str, save_path: str, frame_path: Optional[str] = None
+    ) -> bool:
         """요소 스크린샷을 저장합니다."""
-        with self .frame_context ():
-            if not self .is_alive ():
-                self ._set_last_error ("브라우저가 연결되지 않았습니다.")
+        with self.frame_context():
+            if not self.is_alive():
+                self._set_last_error("브라우저가 연결되지 않았습니다.")
                 return False
 
-            self ._clear_last_error ()
+            self._clear_last_error()
 
-            try :
-                if frame_path is not None :
-                    if not self .switch_to_frame_by_path (frame_path ):
-                        self ._set_last_error (f"프레임 전환 실패: {frame_path }")
+            try:
+                if frame_path is not None:
+                    if not self.switch_to_frame_by_path(frame_path):
+                        self._set_last_error(f"프레임 전환 실패: {frame_path}")
                         return False
 
-                try :
-                    element =self .driver .find_element (By .XPATH ,xpath )
-                except NoSuchElementException :
-                    self ._set_last_error (f"스크린샷 대상 요소 없음: {xpath }")
-                    logger .error (f"스크린샷 대상 요소 없음: {xpath }")
+                try:
+                    element = self.driver.find_element(By.XPATH, xpath)
+                except NoSuchElementException:
+                    self._set_last_error(f"스크린샷 대상 요소 없음: {xpath}")
+                    logger.error(f"스크린샷 대상 요소 없음: {xpath}")
                     return False
 
-                self .driver .execute_script ("arguments[0].scrollIntoView({block: 'center'});",element )
-                time .sleep (0.3 )
+                self.driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});", element
+                )
+                time.sleep(0.3)
 
-                element .screenshot (save_path )
-                self ._clear_last_error ()
-                logger .info (f"요소 스크린샷 저장: {save_path }")
+                element.screenshot(save_path)
+                self._clear_last_error()
+                logger.info(f"요소 스크린샷 저장: {save_path}")
                 return True
 
-            except Exception as e :
-                self ._set_last_error (f"스크린샷 저장 실패: {e }")
-                logger .error (f"스크린샷 저장 실패: {e }")
+            except Exception as e:
+                self._set_last_error(f"스크린샷 저장 실패: {e}")
+                logger.error(f"스크린샷 저장 실패: {e}")
                 return False
 
-    def click_element (self ,xpath :str ,frame_path :Optional [str ]=None ,scroll :bool =True )->bool :
+    def click_element(
+        self, xpath: str, frame_path: Optional[str] = None, scroll: bool = True
+    ) -> bool:
         """XPath 요소 클릭. 프레임 전체 탐색 후 스크롤·일반 클릭·ActionChains 순으로 시도합니다."""
-        with self .frame_context ():
-            if not self .is_alive ():
-                self ._set_last_error ("브라우저가 연결되지 않았습니다.")
+        with self.frame_context():
+            if not self.is_alive():
+                self._set_last_error("브라우저가 연결되지 않았습니다.")
                 return False
 
-            self ._clear_last_error ()
+            self._clear_last_error()
 
-            try :
-                effective_frame =None
-                if frame_path :
-                    if self .switch_to_frame_by_path (frame_path ):
-                        effective_frame =frame_path
-                    else :
-                        self ._set_last_error (f"프레임 전환 실패: {frame_path }")
+            try:
+                effective_frame = None
+                if frame_path:
+                    if self.switch_to_frame_by_path(frame_path):
+                        effective_frame = frame_path
+                    else:
+                        self._set_last_error(f"프레임 전환 실패: {frame_path}")
                         return False
 
-                if not effective_frame :
-                    _ ,found_path =self .find_element_in_all_frames (xpath )
-                    if not found_path :
-                        self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                if not effective_frame:
+                    _, found_path = self.find_element_in_all_frames(xpath)
+                    if not found_path:
+                        self._set_last_error(f"요소를 찾을 수 없습니다: {xpath}")
                         return False
-                    effective_frame =found_path
+                    effective_frame = found_path
 
-                with self .frame_context (effective_frame ):
-                    element =None
-                    deadline =time .time ()+3.0
-                    while True :
-                        try :
-                            element =self .driver .find_element (By .XPATH ,xpath )
+                with self.frame_context(effective_frame):
+                    element = None
+                    deadline = time.time() + 3.0
+                    while True:
+                        try:
+                            element = self.driver.find_element(By.XPATH, xpath)
                             break
-                        except NoSuchElementException :
-                            if time .time ()>=deadline :
-                                self ._set_last_error (f"요소를 찾을 수 없습니다: {xpath }")
+                        except NoSuchElementException:
+                            if time.time() >= deadline:
+                                self._set_last_error(
+                                    f"요소를 찾을 수 없습니다: {xpath}"
+                                )
                                 return False
-                            time .sleep (0.25 )
+                            time.sleep(0.25)
 
-                    if scroll :
-                        try :
-                            self .driver .execute_script (
-                                "arguments[0].scrollIntoView({block: 'center'});",element )
-                            time .sleep (0.2 )
-                        except Exception :
+                    if scroll:
+                        try:
+                            self.driver.execute_script(
+                                "arguments[0].scrollIntoView({block: 'center'});",
+                                element,
+                            )
+                            time.sleep(0.2)
+                        except Exception:
                             pass
 
-                    try :
-                        element .click ()
-                    except Exception as click_error :
-                        if ActionChains is None :
+                    try:
+                        element.click()
+                    except Exception as click_error:
+                        if ActionChains is None:
                             raise
-                        try :
-                            ActionChains (self .driver ).move_to_element (element ).click ().perform ()
-                        except Exception as fallback_error :
+                        try:
+                            ActionChains(self.driver).move_to_element(
+                                element
+                            ).click().perform()
+                        except Exception as fallback_error:
                             raise click_error from fallback_error
 
-                self ._clear_last_error ()
+                self._clear_last_error()
                 return True
 
-            except InvalidSelectorException as e :
-                self ._set_last_error (
-                    f"Invalid XPath selector: {self ._short_webdriver_error (e )}")
-                logger .error (f"클릭 오류: {e }")
+            except InvalidSelectorException as e:
+                self._set_last_error(
+                    f"Invalid XPath selector: {self._short_webdriver_error(e)}"
+                )
+                logger.error(f"클릭 오류: {e}")
                 return False
-            except Exception as e :
-                self ._set_last_error (f"클릭 실패: {e }")
-                logger .error (f"클릭 실패: {e }")
+            except Exception as e:
+                self._set_last_error(f"클릭 실패: {e}")
+                logger.error(f"클릭 실패: {e}")
                 return False

@@ -45,4 +45,3 @@ def test_batch_results_markdown_export_escapes_pipe_characters():
     assert "# Result" in content
     assert "a\\|b" in content
     assert "ok\\|done" in content
-

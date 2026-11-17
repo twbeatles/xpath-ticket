@@ -17,7 +17,9 @@ class _Dead:
 def test_resolve_browser_for_item_uses_playwright_when_alive():
     selenium = _Alive()
     playwright = _Alive()
-    item = XPathItem(name="btn", xpath="//button", category="common", source_engine="playwright")
+    item = XPathItem(
+        name="btn", xpath="//button", category="common", source_engine="playwright"
+    )
 
     browser, engine = resolve_browser_for_item(selenium, playwright, item)
 

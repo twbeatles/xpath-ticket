@@ -14,7 +14,7 @@ class ExplorerBrowserNavigationMixin:
     def _check_browser(self):
         """브라우저 연결 상태 주기적 확인 (popup/window 변화 포함)."""
         is_alive = self.browser.is_alive()
-        current_state = getattr(self, '_last_browser_state', None)
+        current_state = getattr(self, "_last_browser_state", None)
 
         window_count = 0
         if is_alive and self.browser.driver is not None:
@@ -83,9 +83,9 @@ class ExplorerBrowserNavigationMixin:
             start_url = self.config.login_url or self.config.url
             if not start_url:
                 start_url = "about:blank"
-                
+
             self._show_toast("브라우저를 시작합니다...", "info", 5000)
-            
+
             if self.browser.create_driver():
                 self.browser.navigate(start_url)
                 self.input_url.setText(start_url)
@@ -93,7 +93,9 @@ class ExplorerBrowserNavigationMixin:
                 self._show_toast("브라우저가 실행되었습니다.", "success")
             else:
                 last_error = getattr(self.browser, "last_error", "")
-                self._show_toast(last_error or "브라우저 실행 실패. 드라이버를 확인하세요.", "error")
+                self._show_toast(
+                    last_error or "브라우저 실행 실패. 드라이버를 확인하세요.", "error"
+                )
 
     def _navigate(self):
         """URL 이동"""
@@ -106,7 +108,7 @@ class ExplorerBrowserNavigationMixin:
             return
         url = normalized
         self.input_url.setText(url)
-            
+
         if self.browser.is_alive():
             self.browser.navigate(url)
             self._show_toast(f"이동 중: {url}", "info")
@@ -147,19 +149,19 @@ class ExplorerBrowserNavigationMixin:
         current_handle = None
 
         for i, win in enumerate(windows):
-            title = win['title'] if win['title'] else f"창 {i+1}"
+            title = win["title"] if win["title"] else f"창 {i + 1}"
             if len(title) > 30:
                 title = title[:27] + "..."
 
             is_popup = bool(win.get("is_popup"))
             label_prefix = "[팝업] " if is_popup else ""
-            self.combo_windows.addItem(f"{label_prefix}{title}", win['handle'])
-            handles.append(win['handle'])
+            self.combo_windows.addItem(f"{label_prefix}{title}", win["handle"])
+            handles.append(win["handle"])
 
             if is_popup and popup_handle is None:
-                popup_handle = win['handle']
-            if win.get('current'):
-                current_handle = win['handle']
+                popup_handle = win["handle"]
+            if win.get("current"):
+                current_handle = win["handle"]
 
         target_handle = None
         if selected_handle in handles:
@@ -184,7 +186,9 @@ class ExplorerBrowserNavigationMixin:
         if target_handle:
             try:
                 driver = self.browser.driver
-                current_driver_handle = driver.current_window_handle if driver is not None else None
+                current_driver_handle = (
+                    driver.current_window_handle if driver is not None else None
+                )
             except Exception:
                 current_driver_handle = None
 
@@ -229,21 +233,25 @@ class ExplorerBrowserNavigationMixin:
     def _scan_frames(self):
         """iframe 목록 스캔"""
         with perf_span("ui.scan_frames"):
-            manual_target = self._get_frame_combo_path() if getattr(self, "_frame_selection_explicit", False) else None
+            manual_target = (
+                self._get_frame_combo_path()
+                if getattr(self, "_frame_selection_explicit", False)
+                else None
+            )
             self.combo_frames.blockSignals(True)
             try:
                 self.combo_frames.clear()
                 self.combo_frames.addItem("메인 문서", "main")
-                
+
                 if not self.browser.is_alive():
                     return
-                    
+
                 try:
                     frames = self.browser.get_all_frames(force_refresh=True)
                 except TypeError:
                     frames = self.browser.get_all_frames()
                 for path, identifier in frames:
-                    indent = "  " * path.count('/')
+                    indent = "  " * path.count("/")
                     self.combo_frames.addItem(f"{indent}📄 {identifier}", path)
                 if manual_target and self.combo_frames.findData(manual_target) < 0:
                     manual_target = None
@@ -254,11 +262,18 @@ class ExplorerBrowserNavigationMixin:
                     item_frame = item.found_frame if item is not None else ""
                     if item_frame and self.combo_frames.findData(item_frame) >= 0:
                         target_frame = item_frame
-                    elif self.browser.current_frame_path and self.combo_frames.findData(self.browser.current_frame_path) >= 0:
+                    elif (
+                        self.browser.current_frame_path
+                        and self.combo_frames.findData(self.browser.current_frame_path)
+                        >= 0
+                    ):
                         target_frame = self.browser.current_frame_path
                     else:
                         target_frame = "main"
-                self._set_frame_combo_path(target_frame, explicit=getattr(self, "_frame_selection_explicit", False))
+                self._set_frame_combo_path(
+                    target_frame,
+                    explicit=getattr(self, "_frame_selection_explicit", False),
+                )
                 self._show_toast(f"{len(frames)}개의 프레임을 찾았습니다.", "info")
             finally:
                 self.combo_frames.blockSignals(False)

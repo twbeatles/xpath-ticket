@@ -2,7 +2,6 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
 from xpath_explorer.qt_compat import (
     QDialog,
     QHeaderView,
@@ -82,7 +81,11 @@ class DiffInspectionMixin:
                     changes_text = ", ".join(result.changes) if result.changes else "-"
                     table.setItem(row, 2, QTableWidgetItem(changes_text))
 
-                    xpath_short = result.xpath[:40] + "..." if len(result.xpath) > 40 else result.xpath
+                    xpath_short = (
+                        result.xpath[:40] + "..."
+                        if len(result.xpath) > 40
+                        else result.xpath
+                    )
                     xpath_item = QTableWidgetItem(xpath_short)
                     xpath_item.setToolTip(result.xpath)
                     table.setItem(row, 3, xpath_item)
@@ -93,7 +96,9 @@ class DiffInspectionMixin:
                         modified += 1
                     elif result.status == "missing":
                         missing += 1
-                lbl_summary.setText(f"분석 완료: ✅ 변경없음 {unchanged}개 | ⚠️ 수정됨 {modified}개 | ❌ 찾지못함 {missing}개")
+                lbl_summary.setText(
+                    f"분석 완료: ✅ 변경없음 {unchanged}개 | ⚠️ 수정됨 {modified}개 | ❌ 찾지못함 {missing}개"
+                )
             finally:
                 table.setUpdatesEnabled(True)
 
@@ -115,7 +120,9 @@ class DiffInspectionMixin:
                 return
             lbl_summary.setText("분석 중...")
             btn_analyze.setEnabled(False)
-            self.diff_worker = DiffAnalyzeWorker(list(self.config.items), self.browser, self.diff_analyzer)
+            self.diff_worker = DiffAnalyzeWorker(
+                list(self.config.items), self.browser, self.diff_analyzer
+            )
             self.diff_worker.progress.connect(_on_diff_progress)
             self.diff_worker.completed.connect(_on_diff_completed)
             self.diff_worker.failed.connect(_on_diff_failed)
@@ -125,7 +132,9 @@ class DiffInspectionMixin:
 
         dialog.finished.connect(
             lambda _=None: (
-                self.diff_worker.cancel() if self.diff_worker and self.diff_worker.isRunning() else None
+                self.diff_worker.cancel()
+                if self.diff_worker and self.diff_worker.isRunning()
+                else None
             )
         )
 

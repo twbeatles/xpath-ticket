@@ -42,7 +42,9 @@ def test_launch_cleans_up_partial_resources_on_context_failure(monkeypatch):
     fake_playwright = _FakePlaywright(fake_browser)
 
     monkeypatch.setattr(xp, "PLAYWRIGHT_AVAILABLE", True)
-    monkeypatch.setattr(xp, "sync_playwright", lambda: _FakeSyncPlaywright(fake_playwright))
+    monkeypatch.setattr(
+        xp, "sync_playwright", lambda: _FakeSyncPlaywright(fake_playwright)
+    )
 
     manager = xp.PlaywrightManager()
     ok = manager.launch(headless=True, stealth=False)

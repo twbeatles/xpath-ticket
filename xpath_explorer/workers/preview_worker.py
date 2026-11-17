@@ -12,13 +12,14 @@ from xpath_explorer.workers.worker_shared import (
     _restore_browser_context,
 )
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 class LivePreviewWorker(QThread):
     """실시간 미리보기용 요소 카운트 워커."""
+
     counted = Signal(int, int)  # request_id, count
-    failed = Signal(int, str)   # request_id, error
+    failed = Signal(int, str)  # request_id, error
 
     def __init__(
         self,
@@ -59,7 +60,10 @@ class LivePreviewWorker(QThread):
                         )
                     )
                     if not ok:
-                        message = str(getattr(self.browser, "last_error", "") or "window switch failed")
+                        message = str(
+                            getattr(self.browser, "last_error", "")
+                            or "window switch failed"
+                        )
                         try:
                             self.browser.last_error = message
                         except Exception:

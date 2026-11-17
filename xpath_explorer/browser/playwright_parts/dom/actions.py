@@ -12,20 +12,22 @@ from typing import Any, Dict, List, Literal, Optional
 # 상수 임포트
 from xpath_explorer.browser import playwright_deps as deps
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -49,7 +51,9 @@ class PlaywrightDomActionsMixin:
                 except Exception:
                     child_name = ""
                 identifier = child_name or f"index={idx}"
-                child_path = identifier if path in ("", "main") else f"{path}/{identifier}"
+                child_path = (
+                    identifier if path in ("", "main") else f"{path}/{identifier}"
+                )
                 walk(child, child_path)
 
         try:
@@ -100,12 +104,20 @@ class PlaywrightDomActionsMixin:
     def validate_xpath(self, xpath: str) -> Dict:
         """XPath 검증"""
         if not self.is_alive():
-            return {"found": False, "msg": "브라우저 연결 안됨", "error_type": "browser_not_connected"}
+            return {
+                "found": False,
+                "msg": "브라우저 연결 안됨",
+                "error_type": "browser_not_connected",
+            }
 
         try:
             frame = self._get_frame()
             if not frame:
-                return {"found": False, "msg": "브라우저 연결 안됨", "error_type": "browser_not_connected"}
+                return {
+                    "found": False,
+                    "msg": "브라우저 연결 안됨",
+                    "error_type": "browser_not_connected",
+                }
 
             elements = frame.query_selector_all(f"xpath={xpath}")
             window_meta = self.get_current_window_metadata()
@@ -241,12 +253,14 @@ class PlaywrightDomActionsMixin:
             page = self._get_current_page()
             if page is None:
                 return False
-            page.wait_for_load_state('domcontentloaded', timeout=timeout)
+            page.wait_for_load_state("domcontentloaded", timeout=timeout)
             return True
         except Exception:
             return False
 
-    def screenshot(self, path: Optional[str] = None, full_page: bool = False) -> Optional[bytes]:
+    def screenshot(
+        self, path: Optional[str] = None, full_page: bool = False
+    ) -> Optional[bytes]:
         """스크린샷 캡처"""
         if not self.is_alive():
             return None
@@ -261,7 +275,9 @@ class PlaywrightDomActionsMixin:
             logger.error(f"스크린샷 실패: {e}")
             return None
 
-    def capture_element(self, xpath: str, path: Optional[str] = None) -> Optional[bytes]:
+    def capture_element(
+        self, xpath: str, path: Optional[str] = None
+    ) -> Optional[bytes]:
         """특정 요소 캡처"""
         if not self.is_alive():
             return None

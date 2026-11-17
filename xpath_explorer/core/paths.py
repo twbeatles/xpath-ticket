@@ -48,7 +48,9 @@ def resolve_storage_file(filename: str) -> Tuple[Optional[Path], str]:
     return base_dir / filename, source
 
 
-def atomic_write_json(path: Path, payload: Any, *, indent: int = 2, backup: bool = True) -> None:
+def atomic_write_json(
+    path: Path, payload: Any, *, indent: int = 2, backup: bool = True
+) -> None:
     """Write JSON without leaving a partially-written target behind.
 
     Set backup=False for sensitive payloads (e.g. cookies) so no plaintext

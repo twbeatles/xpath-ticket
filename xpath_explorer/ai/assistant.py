@@ -42,7 +42,9 @@ class XPathAIAssistant:
 
         self._config = self._load_config()
 
-        provider = self._coerce_text(self._config.get("provider"), default="openai").lower()
+        provider = self._coerce_text(
+            self._config.get("provider"), default="openai"
+        ).lower()
         if provider in SUPPORTED_PROVIDERS:
             self._provider = provider
         self._model = self._coerce_text(
@@ -124,7 +126,9 @@ class XPathAIAssistant:
         compat = _compat_ai_module()
         config_path, source = compat.resolve_storage_file("ai_config.json")
         if config_path is None:
-            message = "설정은 적용되었지만 저장 가능한 경로가 없어 현재 세션에만 유지됩니다."
+            message = (
+                "설정은 적용되었지만 저장 가능한 경로가 없어 현재 세션에만 유지됩니다."
+            )
             logger.warning("AI config save skipped: no writable storage path.")
             return AIConfigResult(
                 ok=True,
@@ -223,8 +227,12 @@ class XPathAIAssistant:
     ) -> XPathSuggestion:
         return XPathSuggestion(
             xpath=self._coerce_text(payload.get(xpath_key), fallback_xpath),
-            confidence=self._coerce_float(payload.get("confidence"), confidence_default),
-            explanation=self._coerce_text(payload.get("explanation"), fallback_explanation),
+            confidence=self._coerce_float(
+                payload.get("confidence"), confidence_default
+            ),
+            explanation=self._coerce_text(
+                payload.get("explanation"), fallback_explanation
+            ),
             alternative_xpaths=self._coerce_string_list(payload.get("alternatives")),
         )
 
@@ -277,7 +285,9 @@ class XPathAIAssistant:
         elif self._provider == "gemini":
             genai_module = _compat_ai_module().import_optional("google.genai")
             if genai_module is None:
-                raise ImportError("Google GenAI 라이브러리가 필요합니다. pip install google-genai")
+                raise ImportError(
+                    "Google GenAI 라이브러리가 필요합니다. pip install google-genai"
+                )
             client_cls = getattr(genai_module, "Client", None)
             if client_cls is None:
                 raise ImportError("google.genai.Client not found")
@@ -333,7 +343,9 @@ XPath 생성 시 고려사항:
             user_prompt += f"\n\n페이지 컨텍스트:\n{page_context[:2000]}"
 
         if existing_xpaths:
-            user_prompt += "\n\n이미 존재하는 XPath (중복 방지):\n" + "\n".join(existing_xpaths[:10])
+            user_prompt += "\n\n이미 존재하는 XPath (중복 방지):\n" + "\n".join(
+                existing_xpaths[:10]
+            )
 
         try:
             if self._provider == "gemini":
@@ -343,7 +355,9 @@ XPath 생성 시 고려사항:
             logger.warning("AI 요청 실패: %s", e)
             return self._fallback_suggestion(description)
 
-    def _generate_with_gemini(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
+    def _generate_with_gemini(
+        self, system_prompt: str, user_prompt: str
+    ) -> XPathSuggestion:
         """Gemini API 사용하여 생성 (google-genai)"""
         client = self._get_client()
         if client is None:
@@ -354,7 +368,7 @@ XPath 생성 시 고려사항:
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                **({"config": config} if config is not None else {})
+                **({"config": config} if config is not None else {}),
             )
             result = self._safe_json_loads(getattr(response, "text", None))
             return self._build_xpath_suggestion(
@@ -370,7 +384,9 @@ XPath 생성 시 고려사항:
                 alternative_xpaths=[],
             )
 
-    def _generate_with_openai(self, system_prompt: str, user_prompt: str) -> XPathSuggestion:
+    def _generate_with_openai(
+        self, system_prompt: str, user_prompt: str
+    ) -> XPathSuggestion:
         """OpenAI API 사용하여 생성"""
         client = self._get_client()
         if client is None:
@@ -407,7 +423,7 @@ XPath 생성 시 고려사항:
                 explanation="텍스트 기반 버튼 XPath (AI 없이 규칙 기반 생성)",
                 alternative_xpaths=[
                     f'//*[contains(@class, "btn")][contains(text(), {button_expr})]',
-                    f"//input[@type=\"submit\"][@value={button_expr}]",
+                    f'//input[@type="submit"][@value={button_expr}]',
                 ],
             )
 
@@ -481,7 +497,7 @@ XPath 생성 시 고려사항:
     ]
 }"""
 
-        user_prompt = f"""다음 HTML에서 {', '.join(target_types)} 요소들을 분석해주세요.
+        user_prompt = f"""다음 HTML에서 {", ".join(target_types)} 요소들을 분석해주세요.
 중요한 상호작용 요소만 추출하고, 각각에 대해 안정적인 XPath를 생성해주세요.
 
 HTML:
@@ -495,7 +511,9 @@ HTML:
             logger.warning("페이지 분석 실패: %s", e)
             return []
 
-    def _analyze_with_gemini(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
+    def _analyze_with_gemini(
+        self, system_prompt: str, user_prompt: str
+    ) -> List[Dict[str, Any]]:
         """Gemini API로 페이지 분석 (google-genai)"""
         client = self._get_client()
         if client is None:
@@ -506,7 +524,7 @@ HTML:
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                **({"config": config} if config is not None else {})
+                **({"config": config} if config is not None else {}),
             )
             result = self._safe_json_loads(getattr(response, "text", None))
             elements = result.get("elements")
@@ -515,7 +533,9 @@ HTML:
             logger.warning("Gemini Analyze Error: %s", e)
             return []
 
-    def _analyze_with_openai(self, system_prompt: str, user_prompt: str) -> List[Dict[str, Any]]:
+    def _analyze_with_openai(
+        self, system_prompt: str, user_prompt: str
+    ) -> List[Dict[str, Any]]:
         """OpenAI API로 페이지 분석"""
         client = self._get_client()
         if client is None:
@@ -535,7 +555,9 @@ HTML:
         elements = result.get("elements")
         return list(elements) if isinstance(elements, list) else []
 
-    def improve_xpath(self, xpath: str, issue_description: Optional[str] = None) -> XPathSuggestion:
+    def improve_xpath(
+        self, xpath: str, issue_description: Optional[str] = None
+    ) -> XPathSuggestion:
         """
         기존 XPath 개선 제안
         """
@@ -630,7 +652,7 @@ HTML:
             response = client.models.generate_content(
                 model=self._model,
                 contents=user_prompt,
-                **({"config": config} if config is not None else {})
+                **({"config": config} if config is not None else {}),
             )
             result = self._safe_json_loads(getattr(response, "text", None))
             return self._build_xpath_suggestion(

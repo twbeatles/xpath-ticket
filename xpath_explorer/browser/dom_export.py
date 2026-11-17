@@ -76,23 +76,39 @@ def render_dom_report_htm(
     parts.append("<html lang='ko'>")
     parts.append("<head>")
     parts.append("  <meta charset='utf-8'>")
-    parts.append("  <meta name='viewport' content='width=device-width, initial-scale=1'>")
+    parts.append(
+        "  <meta name='viewport' content='width=device-width, initial-scale=1'>"
+    )
     parts.append(f"  <title>{_safe(source_label)} DOM Export Report</title>")
     parts.append("  <style>")
     parts.append("    :root { color-scheme: light; }")
-    parts.append("    body { font-family: 'Segoe UI', sans-serif; margin: 20px; line-height: 1.45; }")
+    parts.append(
+        "    body { font-family: 'Segoe UI', sans-serif; margin: 20px; line-height: 1.45; }"
+    )
     parts.append("    h1, h2, h3 { margin: 0 0 10px 0; }")
     parts.append("    .meta { margin: 4px 0; color: #333; }")
-    parts.append("    .summary { margin: 12px 0 20px; padding: 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }")
-    parts.append("    .toc { margin: 0 0 24px; padding: 12px; background: #fafbfc; border: 1px solid #d8dee4; border-radius: 6px; }")
+    parts.append(
+        "    .summary { margin: 12px 0 20px; padding: 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }"
+    )
+    parts.append(
+        "    .toc { margin: 0 0 24px; padding: 12px; background: #fafbfc; border: 1px solid #d8dee4; border-radius: 6px; }"
+    )
     parts.append("    .toc li { margin: 4px 0; }")
-    parts.append("    .snapshot { margin: 20px 0; padding: 12px; border: 1px solid #d0d7de; border-radius: 8px; }")
-    parts.append("    .label { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eaeef2; font-size: 12px; margin-right: 6px; }")
+    parts.append(
+        "    .snapshot { margin: 20px 0; padding: 12px; border: 1px solid #d0d7de; border-radius: 8px; }"
+    )
+    parts.append(
+        "    .label { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eaeef2; font-size: 12px; margin-right: 6px; }"
+    )
     parts.append("    .popup { background: #fff2cc; }")
     parts.append("    .main { background: #ddeeff; }")
-    parts.append("    .error { margin: 10px 0; padding: 10px; background: #fff1f0; border: 1px solid #ffccc7; border-radius: 6px; color: #a8071a; }")
+    parts.append(
+        "    .error { margin: 10px 0; padding: 10px; background: #fff1f0; border: 1px solid #ffccc7; border-radius: 6px; color: #a8071a; }"
+    )
     parts.append("    details { margin-top: 12px; }")
-    parts.append("    pre { margin: 8px 0 0; padding: 12px; background: #0f1720; color: #e5e7eb; border-radius: 6px; overflow: auto; white-space: pre-wrap; word-break: break-word; }")
+    parts.append(
+        "    pre { margin: 8px 0 0; padding: 12px; background: #0f1720; color: #e5e7eb; border-radius: 6px; overflow: auto; white-space: pre-wrap; word-break: break-word; }"
+    )
     parts.append("    a { color: #0969da; text-decoration: none; }")
     parts.append("    a:hover { text-decoration: underline; }")
     parts.append("  </style>")
@@ -100,18 +116,34 @@ def render_dom_report_htm(
     parts.append("<body>")
     parts.append(f"  <h1>{_safe(source_label)} DOM Export Report</h1>")
     parts.append("  <div class='summary'>")
-    parts.append(f"    <div class='meta'><strong>Generated At:</strong> {_safe(generated_at_iso)}</div>")
-    parts.append(f"    <div class='meta'><strong>Engine:</strong> {_safe(engine_text)}</div>")
+    parts.append(
+        f"    <div class='meta'><strong>Generated At:</strong> {_safe(generated_at_iso)}</div>"
+    )
+    parts.append(
+        f"    <div class='meta'><strong>Engine:</strong> {_safe(engine_text)}</div>"
+    )
     parts.append(f"    <div class='meta'><strong>Scope:</strong> {_safe(scope)}</div>")
     if selected_window_title:
-        parts.append(f"    <div class='meta'><strong>Selected Window:</strong> {_safe(selected_window_title)}</div>")
+        parts.append(
+            f"    <div class='meta'><strong>Selected Window:</strong> {_safe(selected_window_title)}</div>"
+        )
     if selected_window_url:
-        parts.append(f"    <div class='meta'><strong>Selected URL:</strong> {_safe(selected_window_url)}</div>")
-    parts.append(f"    <div class='meta'><strong>Total Documents:</strong> {total_count}</div>")
-    parts.append(f"    <div class='meta'><strong>Failed Documents:</strong> {fail_count}</div>")
+        parts.append(
+            f"    <div class='meta'><strong>Selected URL:</strong> {_safe(selected_window_url)}</div>"
+        )
+    parts.append(
+        f"    <div class='meta'><strong>Total Documents:</strong> {total_count}</div>"
+    )
+    parts.append(
+        f"    <div class='meta'><strong>Failed Documents:</strong> {fail_count}</div>"
+    )
     if error_types:
-        summary = ", ".join(f"{key}={value}" for key, value in sorted(error_types.items()))
-        parts.append(f"    <div class='meta'><strong>Error Types:</strong> {_safe(summary)}</div>")
+        summary = ", ".join(
+            f"{key}={value}" for key, value in sorted(error_types.items())
+        )
+        parts.append(
+            f"    <div class='meta'><strong>Error Types:</strong> {_safe(summary)}</div>"
+        )
     parts.append("  </div>")
 
     parts.append("  <div class='toc'>")
@@ -142,12 +174,20 @@ def render_dom_report_htm(
         parts.append(f"      <span class='label'>{_safe(snap.engine)}</span>")
         parts.append(f"      <span class='label'>{_safe(frame_text)}</span>")
         parts.append("    </div>")
-        parts.append(f"    <div class='meta'><strong>Window ID:</strong> {_safe(snap.window_id)}</div>")
-        parts.append(f"    <div class='meta'><strong>Window URL:</strong> {_safe(snap.window_url)}</div>")
-        parts.append(f"    <div class='meta'><strong>Document URL:</strong> {_safe(snap.document_url)}</div>")
+        parts.append(
+            f"    <div class='meta'><strong>Window ID:</strong> {_safe(snap.window_id)}</div>"
+        )
+        parts.append(
+            f"    <div class='meta'><strong>Window URL:</strong> {_safe(snap.window_url)}</div>"
+        )
+        parts.append(
+            f"    <div class='meta'><strong>Document URL:</strong> {_safe(snap.document_url)}</div>"
+        )
         if snap.error:
             error_type = f" ({snap.error_type})" if snap.error_type else ""
-            parts.append(f"    <div class='error'><strong>수집 실패{_safe(error_type)}:</strong> {_safe(snap.error)}</div>")
+            parts.append(
+                f"    <div class='error'><strong>수집 실패{_safe(error_type)}:</strong> {_safe(snap.error)}</div>"
+            )
         parts.append("    <details open>")
         parts.append("      <summary><strong>DOM 원문</strong></summary>")
         parts.append(f"      <pre>{dom_html}</pre>")
@@ -236,7 +276,10 @@ def diff_dom_snapshots(
                 change_type="changed",
                 window_title=new.window_title or old.window_title,
                 frame_path=new.frame_path or old.frame_path or "main",
-                document_url=new.document_url or old.document_url or new.window_url or old.window_url,
+                document_url=new.document_url
+                or old.document_url
+                or new.window_url
+                or old.window_url,
                 old_size=len(old_html),
                 new_size=len(new_html),
                 similarity=similarity,
@@ -269,27 +312,45 @@ def render_dom_diff_report_htm(
     parts.append("<html lang='ko'>")
     parts.append("<head>")
     parts.append("  <meta charset='utf-8'>")
-    parts.append("  <meta name='viewport' content='width=device-width, initial-scale=1'>")
+    parts.append(
+        "  <meta name='viewport' content='width=device-width, initial-scale=1'>"
+    )
     parts.append(f"  <title>{_safe(source_label)} DOM Diff Report</title>")
     parts.append("  <style>")
-    parts.append("    body { font-family: 'Segoe UI', sans-serif; margin: 20px; line-height: 1.45; }")
-    parts.append("    .summary { margin: 12px 0 20px; padding: 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }")
-    parts.append("    .chip { display: inline-block; margin-right: 8px; padding: 3px 8px; border-radius: 999px; font-size: 12px; }")
+    parts.append(
+        "    body { font-family: 'Segoe UI', sans-serif; margin: 20px; line-height: 1.45; }"
+    )
+    parts.append(
+        "    .summary { margin: 12px 0 20px; padding: 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; }"
+    )
+    parts.append(
+        "    .chip { display: inline-block; margin-right: 8px; padding: 3px 8px; border-radius: 999px; font-size: 12px; }"
+    )
     parts.append("    .added { background: #dcfce7; }")
     parts.append("    .removed { background: #fee2e2; }")
     parts.append("    .changed { background: #fef3c7; }")
     parts.append("    .table { width: 100%; border-collapse: collapse; }")
-    parts.append("    .table th, .table td { border: 1px solid #d0d7de; padding: 8px; text-align: left; vertical-align: top; }")
+    parts.append(
+        "    .table th, .table td { border: 1px solid #d0d7de; padding: 8px; text-align: left; vertical-align: top; }"
+    )
     parts.append("    .table th { background: #f3f4f6; }")
-    parts.append("    .mono { font-family: 'Consolas', monospace; word-break: break-all; }")
+    parts.append(
+        "    .mono { font-family: 'Consolas', monospace; word-break: break-all; }"
+    )
     parts.append("  </style>")
     parts.append("</head>")
     parts.append("<body>")
     parts.append(f"  <h1>{_safe(source_label)} DOM Diff Report</h1>")
     parts.append("  <div class='summary'>")
-    parts.append(f"    <div><strong>Generated At:</strong> {_safe(generated_at_iso)}</div>")
-    parts.append(f"    <div><strong>Baseline Documents:</strong> {len(old_snapshots)}</div>")
-    parts.append(f"    <div><strong>Current Documents:</strong> {len(new_snapshots)}</div>")
+    parts.append(
+        f"    <div><strong>Generated At:</strong> {_safe(generated_at_iso)}</div>"
+    )
+    parts.append(
+        f"    <div><strong>Baseline Documents:</strong> {len(old_snapshots)}</div>"
+    )
+    parts.append(
+        f"    <div><strong>Current Documents:</strong> {len(new_snapshots)}</div>"
+    )
     parts.append("    <div style='margin-top:8px;'>")
     parts.append(f"      <span class='chip added'>추가 {added}</span>")
     parts.append(f"      <span class='chip removed'>삭제 {removed}</span>")
@@ -300,20 +361,30 @@ def render_dom_diff_report_htm(
 
     parts.append("  <table class='table'>")
     parts.append("    <thead>")
-    parts.append("      <tr><th>변경</th><th>창/프레임</th><th>문서 URL</th><th>크기(이전→현재)</th><th>유사도</th><th>오류 변화</th></tr>")
+    parts.append(
+        "      <tr><th>변경</th><th>창/프레임</th><th>문서 URL</th><th>크기(이전→현재)</th><th>유사도</th><th>오류 변화</th></tr>"
+    )
     parts.append("    </thead>")
     parts.append("    <tbody>")
     if entries:
         for entry in entries:
-            kind = {"added": "추가", "removed": "삭제", "changed": "변경"}.get(entry.change_type, entry.change_type)
+            kind = {"added": "추가", "removed": "삭제", "changed": "변경"}.get(
+                entry.change_type, entry.change_type
+            )
             size_text = f"{entry.old_size} → {entry.new_size}"
-            similarity_text = "-" if entry.change_type != "changed" else f"{entry.similarity * 100:.1f}%"
+            similarity_text = (
+                "-"
+                if entry.change_type != "changed"
+                else f"{entry.similarity * 100:.1f}%"
+            )
             error_text = ""
             if entry.old_error or entry.new_error:
                 error_text = f"{entry.old_error or '-'} → {entry.new_error or '-'}"
             parts.append("      <tr>")
             parts.append(f"        <td>{_safe(kind)}</td>")
-            parts.append(f"        <td>{_safe(entry.window_title)} / {_safe(entry.frame_path)}</td>")
+            parts.append(
+                f"        <td>{_safe(entry.window_title)} / {_safe(entry.frame_path)}</td>"
+            )
             parts.append(f"        <td class='mono'>{_safe(entry.document_url)}</td>")
             parts.append(f"        <td>{size_text}</td>")
             parts.append(f"        <td>{similarity_text}</td>")
@@ -326,6 +397,7 @@ def render_dom_diff_report_htm(
     parts.append("</body>")
     parts.append("</html>")
     return "\n".join(parts)
+
 
 def snapshot_record(snapshot: DomSnapshot, index: int) -> dict:
     """추후 분석용 매니페스트에 담을 단일 문서 메타데이터."""
@@ -376,7 +448,9 @@ def save_dom_bundle(
         selected_window_title=selected_window_title,
         selected_window_url=selected_window_url,
     )
-    records = [snapshot_record(snap, idx) for idx, snap in enumerate(snapshots, start=1)]
+    records = [
+        snapshot_record(snap, idx) for idx, snap in enumerate(snapshots, start=1)
+    ]
     manifest = {
         "generated_at": generated_at_iso,
         "source": source_label,
@@ -393,7 +467,9 @@ def save_dom_bundle(
     try:
         with zipfile.ZipFile(tmp_out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
             bundle.writestr("report.htm", report)
-            bundle.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            bundle.writestr(
+                "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2)
+            )
             for record, snap in zip(records, snapshots, strict=True):
                 bundle.writestr(record["file"], snap.html or "")
         tmp_out.replace(out)

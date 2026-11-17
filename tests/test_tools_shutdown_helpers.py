@@ -236,7 +236,9 @@ def test_tools_mixin_close_event_clears_worker_references():
             self.scenario_worker = _NoopWorker()
             self.playwright_install_worker = _NoopWorker()
             self.pw_manager = type("PW", (), {"close": lambda self: None})()
-            self.stats_manager = type("Stats", (), {"shutdown": lambda self, timeout=5.0: None})()
+            self.stats_manager = type(
+                "Stats", (), {"shutdown": lambda self, timeout=5.0: None}
+            )()
             self.browser = type("Browser", (), {"close": lambda self: None})()
 
         def saveGeometry(self):
@@ -286,7 +288,13 @@ def test_tools_mixin_classify_scenario_result_thresholds():
     host = _ToolHost()
 
     assert host._classify_scenario_result(5, 5, False) == ("success", "완료")
-    assert host._classify_scenario_result(8, 10, False) == ("warning", "완료(일부 경고)")
+    assert host._classify_scenario_result(8, 10, False) == (
+        "warning",
+        "완료(일부 경고)",
+    )
     assert host._classify_scenario_result(7, 10, False) == ("error", "완료(실패 다수)")
-    assert host._classify_scenario_result(0, 0, False) == ("warning", "완료(실행 결과 없음)")
+    assert host._classify_scenario_result(0, 0, False) == (
+        "warning",
+        "완료(실행 결과 없음)",
+    )
     assert host._classify_scenario_result(1, 10, True) == ("warning", "취소됨")

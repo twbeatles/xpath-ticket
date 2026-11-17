@@ -28,7 +28,9 @@ def test_batch_worker_cancel_stops_before_processing():
 
     out = {}
     worker = BatchTestWorker(FakeBrowser(), items)
-    worker.completed.connect(lambda results, cancelled: out.update(results=results, cancelled=cancelled))
+    worker.completed.connect(
+        lambda results, cancelled: out.update(results=results, cancelled=cancelled)
+    )
 
     worker.cancel()
     worker.run()

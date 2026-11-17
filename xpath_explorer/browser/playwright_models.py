@@ -10,9 +10,11 @@ PlaywrightBrowserType: TypeAlias = Any
 PlaywrightBrowserContextType: TypeAlias = Any
 PlaywrightPageType: TypeAlias = Any
 
+
 @dataclass
 class ScannedElement:
     """Scanned element data."""
+
     xpath: str
     css_selector: str
     tag: str
@@ -28,9 +30,11 @@ class ScannedElement:
     window_url: str = ""
     source_engine: str = "playwright"
 
+
 @dataclass
 class NetworkRequest:
     """Captured network request data."""
+
     url: str
     method: str
     resource_type: str

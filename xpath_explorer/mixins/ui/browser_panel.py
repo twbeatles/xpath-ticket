@@ -2,7 +2,6 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -24,11 +23,11 @@ class ExplorerUIBrowserPanelMixin:
         """브라우저 컨트롤 패널 - v3.6: 개선된 레이아웃"""
         self.browser_layout = QHBoxLayout()
         self.browser_layout.setSpacing(10)
-        
+
         # 애니메이션 상태 인디케이터
         self.status_indicator = AnimatedStatusIndicator()
         self.browser_layout.addWidget(self.status_indicator)
-        
+
         # 브라우저 열기/닫기 버튼
         self.btn_open = QPushButton("🌐 브라우저 열기")
         self.btn_open.setObjectName("primary")
@@ -37,19 +36,19 @@ class ExplorerUIBrowserPanelMixin:
         self.btn_open.setMinimumWidth(120)
         self.browser_layout.addWidget(self.btn_open)
         self.btn_open.clicked.connect(self._toggle_browser)
-        
+
         # 상태 텍스트 라벨
         self.lbl_status = QLabel("연결 안됨")
         self.lbl_status.setObjectName("status_disconnected")
         self.lbl_status.setToolTip("브라우저 연결 상태")
         self.browser_layout.addWidget(self.lbl_status)
-        
+
         # 구분선
         sep1 = QFrame()
         sep1.setFrameShape(QFrame.Shape.VLine)
         sep1.setStyleSheet("color: rgba(69, 71, 90, 0.5); max-width: 1px;")
         self.browser_layout.addWidget(sep1)
-        
+
         # 사이트 프리셋
         self.combo_preset = NoWheelComboBox()
         self.combo_preset.addItems(list(SITE_PRESETS.keys()))
@@ -57,13 +56,13 @@ class ExplorerUIBrowserPanelMixin:
         self.combo_preset.setToolTip("사이트 프리셋 선택")
         self.combo_preset.currentTextChanged.connect(self._on_preset_changed)
         self.browser_layout.addWidget(self.combo_preset)
-        
+
         # 구분선
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.VLine)
         sep2.setStyleSheet("color: #45475a;")
         self.browser_layout.addWidget(sep2)
-        
+
         # 창/프레임 (컴팩트)
         lbl_win = QLabel("창")
         lbl_win.setToolTip("브라우저 창/탭 선택")
@@ -72,14 +71,14 @@ class ExplorerUIBrowserPanelMixin:
         self.combo_windows.setMinimumWidth(70)
         self.combo_windows.currentIndexChanged.connect(self._on_window_changed)
         self.browser_layout.addWidget(self.combo_windows)
-        
+
         self.btn_refresh_wins = QPushButton("↻")
         self.btn_refresh_wins.setObjectName("icon_btn")
         self.btn_refresh_wins.setToolTip("창 목록 새로고침")
         self.btn_refresh_wins.setFixedSize(26, 26)
         self.btn_refresh_wins.clicked.connect(self._refresh_windows)
         self.browser_layout.addWidget(self.btn_refresh_wins)
-        
+
         lbl_frame = QLabel("프레임")
         lbl_frame.setToolTip("iframe 선택")
         self.browser_layout.addWidget(lbl_frame)
@@ -87,20 +86,20 @@ class ExplorerUIBrowserPanelMixin:
         self.combo_frames.setMinimumWidth(70)
         self.combo_frames.currentIndexChanged.connect(self._on_frame_changed)
         self.browser_layout.addWidget(self.combo_frames)
-        
+
         self.btn_scan_frames = QPushButton("🔍")
         self.btn_scan_frames.setObjectName("icon_btn")
         self.btn_scan_frames.setToolTip("iframe 스캔")
         self.btn_scan_frames.setFixedSize(26, 26)
         self.btn_scan_frames.clicked.connect(self._scan_frames)
         self.browser_layout.addWidget(self.btn_scan_frames)
-        
+
         # 구분선
         sep3 = QFrame()
         sep3.setFrameShape(QFrame.Shape.VLine)
         sep3.setStyleSheet("color: #45475a;")
         self.browser_layout.addWidget(sep3)
-        
+
         # URL 네비게이션 (컴팩트)
         self.btn_back = QPushButton("◀")
         self.btn_back.setObjectName("icon_btn")
@@ -108,14 +107,14 @@ class ExplorerUIBrowserPanelMixin:
         self.btn_back.setFixedSize(26, 26)
         self.btn_back.clicked.connect(self._browser_back)
         self.browser_layout.addWidget(self.btn_back)
-        
+
         self.btn_forward = QPushButton("▶")
         self.btn_forward.setObjectName("icon_btn")
         self.btn_forward.setToolTip("앞으로가기")
         self.btn_forward.setFixedSize(26, 26)
         self.btn_forward.clicked.connect(self._browser_forward)
         self.browser_layout.addWidget(self.btn_forward)
-        
+
         self.btn_refresh_page = QPushButton("↻")
         self.btn_refresh_page.setObjectName("icon_btn")
         self.btn_refresh_page.setToolTip("페이지 새로고침")
@@ -130,12 +129,26 @@ class ExplorerUIBrowserPanelMixin:
         self.btn_export_dom.setFixedSize(56, 26)
         self.btn_export_dom.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         selenium_dom_menu = QMenu(self.btn_export_dom)
-        selenium_dom_menu.addAction("전체 DOM 저장", lambda: self._export_dom_selenium_htm(scope="all", include_frames=True))
-        selenium_dom_menu.addAction("현재 창 DOM 저장", lambda: self._export_dom_selenium_htm(scope="current", include_frames=False))
-        selenium_dom_menu.addAction("현재 창 + iframe DOM 저장", lambda: self._export_dom_selenium_htm(scope="current", include_frames=True))
-        selenium_dom_menu.addAction("분석용 번들 저장 (.zip)", lambda: self._export_dom_bundle(scope="all", include_frames=True))
+        selenium_dom_menu.addAction(
+            "전체 DOM 저장",
+            lambda: self._export_dom_selenium_htm(scope="all", include_frames=True),
+        )
+        selenium_dom_menu.addAction(
+            "현재 창 DOM 저장",
+            lambda: self._export_dom_selenium_htm(
+                scope="current", include_frames=False
+            ),
+        )
+        selenium_dom_menu.addAction(
+            "현재 창 + iframe DOM 저장",
+            lambda: self._export_dom_selenium_htm(scope="current", include_frames=True),
+        )
+        selenium_dom_menu.addAction(
+            "분석용 번들 저장 (.zip)",
+            lambda: self._export_dom_bundle(scope="all", include_frames=True),
+        )
         self.btn_export_dom.setMenu(selenium_dom_menu)
         self.browser_layout.addWidget(self.btn_export_dom)
-        
+
         # URL 입력창 (구버전 제거, 하단 Collapsible 영역으로 이동)
         self.browser_layout.addStretch()

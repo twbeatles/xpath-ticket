@@ -21,7 +21,9 @@ def test_build_gemini_generate_config_returns_none_when_module_missing(monkeypat
 
 
 def test_build_gemini_generate_config_builds_config_when_module_exists(monkeypatch):
-    fake_module = types.SimpleNamespace(GenerateContentConfig=_FakeGenerateContentConfig)
+    fake_module = types.SimpleNamespace(
+        GenerateContentConfig=_FakeGenerateContentConfig
+    )
     monkeypatch.setattr(ai_module, "import_optional", lambda _name: fake_module)
 
     config = XPathAIAssistant._build_gemini_generate_config("prompt")

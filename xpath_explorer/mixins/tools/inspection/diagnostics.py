@@ -43,19 +43,25 @@ class FeatureDiagnosticsMixin:
             except Exception:
                 meta = {}
             if isinstance(meta, dict):
-                lines.extend([
-                    f"- 현재 창 핸들: {self._md_value(meta.get('handle', ''))}",
-                    f"- 현재 창 제목: {self._md_value(meta.get('title', ''))}",
-                    f"- 현재 URL: {self._md_value(meta.get('url', ''))}",
-                ])
-            lines.append(f"- 현재 프레임: {self._md_value(getattr(browser, 'current_frame_path', '') or 'main')}")
+                lines.extend(
+                    [
+                        f"- 현재 창 핸들: {self._md_value(meta.get('handle', ''))}",
+                        f"- 현재 창 제목: {self._md_value(meta.get('title', ''))}",
+                        f"- 현재 URL: {self._md_value(meta.get('url', ''))}",
+                    ]
+                )
+            lines.append(
+                f"- 현재 프레임: {self._md_value(getattr(browser, 'current_frame_path', '') or 'main')}"
+            )
 
         combo_windows = getattr(self, "combo_windows", None)
         combo_frames = getattr(self, "combo_frames", None)
         if combo_windows is not None:
             lines.append(f"- UI 선택 창: {self._md_value(combo_windows.currentText())}")
         if combo_frames is not None:
-            lines.append(f"- UI 선택 프레임: {self._md_value(combo_frames.currentText())}")
+            lines.append(
+                f"- UI 선택 프레임: {self._md_value(combo_frames.currentText())}"
+            )
 
         lines.extend(["", "## Playwright 상태"])
         pw_manager = getattr(self, "pw_manager", None)
@@ -72,18 +78,31 @@ class FeatureDiagnosticsMixin:
             except Exception:
                 meta = {}
             if isinstance(meta, dict):
-                lines.extend([
-                    f"- 현재 창 핸들: {self._md_value(meta.get('handle', ''))}",
-                    f"- 현재 창 제목: {self._md_value(meta.get('title', ''))}",
-                    f"- 현재 URL: {self._md_value(meta.get('url', ''))}",
-                ])
+                lines.extend(
+                    [
+                        f"- 현재 창 핸들: {self._md_value(meta.get('handle', ''))}",
+                        f"- 현재 창 제목: {self._md_value(meta.get('title', ''))}",
+                        f"- 현재 URL: {self._md_value(meta.get('url', ''))}",
+                    ]
+                )
             current_frame = getattr(pw_manager, "_current_frame", None)
             frame_label = ""
             if current_frame is not None:
-                frame_label = str(getattr(current_frame, "name", "") or getattr(current_frame, "url", "") or "")
+                frame_label = str(
+                    getattr(current_frame, "name", "")
+                    or getattr(current_frame, "url", "")
+                    or ""
+                )
             lines.append(f"- 현재 프레임: {self._md_value(frame_label or 'main')}")
 
-        lines.extend(["", "## 저장 항목 문맥", "|이름|창|URL|프레임|검증|", "|---|---|---|---|---|"])
+        lines.extend(
+            [
+                "",
+                "## 저장 항목 문맥",
+                "|이름|창|URL|프레임|검증|",
+                "|---|---|---|---|---|",
+            ]
+        )
         items = list(getattr(getattr(self, "config", None), "items", []) or [])
         if items:
             for item in items[:100]:
@@ -92,10 +111,15 @@ class FeatureDiagnosticsMixin:
                     + "|".join(
                         [
                             self._md_value(getattr(item, "name", "")),
-                            self._md_value(getattr(item, "found_window_title", "") or getattr(item, "found_window", "")),
+                            self._md_value(
+                                getattr(item, "found_window_title", "")
+                                or getattr(item, "found_window", "")
+                            ),
                             self._md_value(getattr(item, "found_window_url", "")),
                             self._md_value(getattr(item, "found_frame", "")),
-                            "성공" if bool(getattr(item, "is_verified", False)) else "미검증/실패",
+                            "성공"
+                            if bool(getattr(item, "is_verified", False))
+                            else "미검증/실패",
                         ]
                     )
                     + "|"
@@ -103,12 +127,18 @@ class FeatureDiagnosticsMixin:
         else:
             lines.append("|-|-|-|-|-|")
 
-        lines.extend(["", "## 최근 검증 실패", "|시각|항목|프레임|오류|", "|---|---|---|---|"])
+        lines.extend(
+            ["", "## 최근 검증 실패", "|시각|항목|프레임|오류|", "|---|---|---|---|"]
+        )
         recent_failures: List[Any] = []
         stats_manager = getattr(self, "stats_manager", None)
         if stats_manager is not None and hasattr(stats_manager, "get_recent_history"):
             try:
-                recent_failures = [row for row in stats_manager.get_recent_history(50) if not bool(getattr(row, "success", False))][:20]
+                recent_failures = [
+                    row
+                    for row in stats_manager.get_recent_history(50)
+                    if not bool(getattr(row, "success", False))
+                ][:20]
             except Exception:
                 recent_failures = []
         if recent_failures:
@@ -133,11 +163,13 @@ class FeatureDiagnosticsMixin:
             telemetry = error_telemetry.get_summary(top_n=10)
         except Exception:
             telemetry = {}
-        lines.extend([
-            f"- 총 에러: {telemetry.get('total_errors', 0)}",
-            f"- 치명적 에러: {telemetry.get('critical_count', 0)}",
-            f"- 최근 버퍼 이벤트: {telemetry.get('buffered_events', 0)}",
-        ])
+        lines.extend(
+            [
+                f"- 총 에러: {telemetry.get('total_errors', 0)}",
+                f"- 치명적 에러: {telemetry.get('critical_count', 0)}",
+                f"- 최근 버퍼 이벤트: {telemetry.get('buffered_events', 0)}",
+            ]
+        )
         top_errors = telemetry.get("top_errors", [])
         if top_errors:
             lines.extend(["", "|모듈|함수|메시지|횟수|", "|---|---|---|---|"])
@@ -157,7 +189,9 @@ class FeatureDiagnosticsMixin:
         return "\n".join(lines) + "\n"
 
     def _save_feature_diagnostics_report(self):
-        default_name = f"feature_diagnostics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        default_name = (
+            f"feature_diagnostics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        )
         fname, _ = QFileDialog.getSaveFileName(
             self,
             "기능 진단 리포트 저장",

@@ -15,17 +15,26 @@ def test_xpath_literal_handles_quotes_and_empty_values():
     assert xpath_literal('a"b') == "'a\"b'"
     assert xpath_literal("a'b") == '"a\'b"'
 
-    mixed = xpath_literal('a"b\'c')
+    mixed = xpath_literal("a\"b'c")
 
     assert mixed == 'concat("a", \'"\', "b\'c")'
 
 
 def test_xpath_attribute_helpers_escape_values_and_reject_bad_attribute_names():
-    value = 'id"with\'quotes'
+    value = "id\"with'quotes"
 
-    assert xpath_attr_equals("data-x", value) == '@data-x=concat("id", \'"\', "with\'quotes")'
-    assert xpath_attr_contains("class", value) == 'contains(@class, concat("id", \'"\', "with\'quotes"))'
-    assert xpath_contains_text(value) == 'contains(text(), concat("id", \'"\', "with\'quotes"))'
+    assert (
+        xpath_attr_equals("data-x", value)
+        == '@data-x=concat("id", \'"\', "with\'quotes")'
+    )
+    assert (
+        xpath_attr_contains("class", value)
+        == 'contains(@class, concat("id", \'"\', "with\'quotes"))'
+    )
+    assert (
+        xpath_contains_text(value)
+        == 'contains(text(), concat("id", \'"\', "with\'quotes"))'
+    )
 
     with pytest.raises(ValueError):
         xpath_attr_equals("bad attr", "x")
@@ -40,7 +49,7 @@ def test_optimizer_uses_safe_literals_for_id_name_class_data_and_text():
             "name": "go'now",
             "class": 'primary "quoted',
             "text": '예매 "VIP\'석"',
-            "attributes": {"data-action": 'book"vip\'seat', "aria-label": "Book"},
+            "attributes": {"data-action": "book\"vip'seat", "aria-label": "Book"},
             "parent_tag": "div",
             "parent_id": 'panel"root',
             "parent_class": "section",
@@ -55,4 +64,3 @@ def test_optimizer_uses_safe_literals_for_id_name_class_data_and_text():
     assert '@name="go\'now"' in joined
     assert "data-action=concat(" in joined
     assert "contains(text(), concat(" in joined
-

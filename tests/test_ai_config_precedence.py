@@ -42,12 +42,14 @@ def test_legacy_file_key_is_purged_and_never_used(monkeypatch, tmp_path):
     cfg_dir.mkdir(parents=True, exist_ok=True)
     cfg_file = cfg_dir / "ai_config.json"
     cfg_file.write_text(
-        json.dumps({
-            "provider": "openai",
-            "model": "x",
-            "openai_api_key": "legacy_key",
-            "gemini_api_key": "legacy_gemini_key",
-        }),
+        json.dumps(
+            {
+                "provider": "openai",
+                "model": "x",
+                "openai_api_key": "legacy_key",
+                "gemini_api_key": "legacy_gemini_key",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -72,7 +74,9 @@ def test_env_key_still_wins_and_purges_legacy_file_key(monkeypatch, tmp_path):
     cfg_dir.mkdir(parents=True, exist_ok=True)
     cfg_file = cfg_dir / "ai_config.json"
     cfg_file.write_text(
-        json.dumps({"provider": "openai", "model": "x", "openai_api_key": "legacy_key"}),
+        json.dumps(
+            {"provider": "openai", "model": "x", "openai_api_key": "legacy_key"}
+        ),
         encoding="utf-8",
     )
 
@@ -113,7 +117,9 @@ def test_configure_reports_saved_result_and_persists(monkeypatch, tmp_path):
     assert result.storage_source == "home"
     assert assistant._model == ai_module.DEFAULT_OPENAI_MODEL
 
-    saved = json.loads((tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8"))
+    saved = json.loads(
+        (tmp_path / ".xpath_explorer" / "ai_config.json").read_text(encoding="utf-8")
+    )
     assert saved["provider"] == "openai"
     assert saved["model"] == ai_module.DEFAULT_OPENAI_MODEL
     assert "openai_api_key" not in saved
@@ -140,7 +146,9 @@ def test_configure_uses_atomic_json_writer(monkeypatch, tmp_path):
 
 
 def test_configure_reports_runtime_only_when_storage_unavailable(monkeypatch):
-    monkeypatch.setattr(ai_module, "resolve_storage_file", lambda _filename: (None, "memory"))
+    monkeypatch.setattr(
+        ai_module, "resolve_storage_file", lambda _filename: (None, "memory")
+    )
 
     assistant = XPathAIAssistant()
     result = assistant.configure("sk-valid-test-key", provider="openai")
@@ -171,4 +179,3 @@ def test_configure_drops_other_provider_key_from_memory(monkeypatch, tmp_path):
     assistant.configure("gemini-key-1234567890", provider="gemini")
     assert "openai_api_key" not in assistant._config
     assert assistant._config.get("gemini_api_key") == "gemini-key-1234567890"
-

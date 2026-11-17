@@ -185,4 +185,3 @@ def test_validate_worker_ignores_playwright_pseudo_handle_for_selenium_switch():
     worker.run()
 
     assert browser.switch_context_calls[0] == ("", "https://popup.example", "Popup")
-

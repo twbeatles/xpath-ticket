@@ -6,7 +6,9 @@ from pathlib import Path
 def _load_quality_module():
     root = Path(__file__).resolve().parent.parent
     script_path = root / "scripts" / "run_quality_checks.py"
-    spec = importlib.util.spec_from_file_location("run_quality_checks_module", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "run_quality_checks_module", script_path
+    )
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -190,7 +192,10 @@ def test_run_pyright_falls_back_to_python_module(monkeypatch, tmp_path):
     code = module._run_pyright(tmp_path)
 
     assert code == 0
-    assert calls == [[sys.executable, "-m", "pyright", "-p", "."], ["pyright", "-p", "."]]
+    assert calls == [
+        [sys.executable, "-m", "pyright", "-p", "."],
+        ["pyright", "-p", "."],
+    ]
 
 
 def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path):
@@ -206,4 +211,7 @@ def test_run_pyright_returns_127_when_all_commands_missing(monkeypatch, tmp_path
     code = module._run_pyright(tmp_path)
 
     assert code == 127
-    assert calls == [[sys.executable, "-m", "pyright", "-p", "."], ["pyright", "-p", "."]]
+    assert calls == [
+        [sys.executable, "-m", "pyright", "-p", "."],
+        ["pyright", "-p", "."],
+    ]

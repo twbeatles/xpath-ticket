@@ -9,16 +9,19 @@ from xpath_explorer.analysis.diff import XPathDiffAnalyzer
 from xpath_explorer.core.config import XPathItem
 from xpath_explorer.qt_compat import QThread, Signal
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 class DiffAnalyzeWorker(QThread):
     """DOM diff 분석 워커."""
+
     progress = Signal(int, str)
     completed = Signal(list)
     failed = Signal(str)
 
-    def __init__(self, items: List[XPathItem], browser: Any, analyzer: XPathDiffAnalyzer):
+    def __init__(
+        self, items: List[XPathItem], browser: Any, analyzer: XPathDiffAnalyzer
+    ):
         super().__init__()
         self.items = items
         self.browser = browser
@@ -43,9 +46,9 @@ class DiffAnalyzeWorker(QThread):
                 try:
                     current_info = self.browser.get_element_info(item.xpath)
                     if current_info is None:
-                        current_info = {'found': False, 'msg': '요소 없음'}
+                        current_info = {"found": False, "msg": "요소 없음"}
                 except Exception as e:
-                    current_info = {'found': False, 'msg': str(e)}
+                    current_info = {"found": False, "msg": str(e)}
                 results.append(self.analyzer.compare_element(item, current_info))
 
             self.progress.emit(100, "완료")

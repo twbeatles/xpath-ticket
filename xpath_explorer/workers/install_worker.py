@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from xpath_explorer.qt_compat import QThread, Signal
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 class InstallChromiumWorker(QThread):

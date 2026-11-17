@@ -135,9 +135,7 @@ class ErrorTelemetryStore:
             module = self._escape_markdown_table_cell(row["module"])
             function = self._escape_markdown_table_cell(row["function"])
             message = self._escape_markdown_table_cell(row["message"])
-            lines.append(
-                f"| {row['count']} | `{module}` | `{function}` | {message} |"
-            )
+            lines.append(f"| {row['count']} | `{module}` | `{function}` | {message} |")
         if not summary["top_errors"]:
             lines.append("| 0 | - | - | No errors captured |")
 
@@ -151,7 +149,9 @@ class ErrorTelemetryStore:
             ]
         )
         for event in recent:
-            location = self._escape_markdown_table_cell(f"{event.module}.{event.function}:{event.line}")
+            location = self._escape_markdown_table_cell(
+                f"{event.module}.{event.function}:{event.line}"
+            )
             level = self._escape_markdown_table_cell(event.level)
             message = self._escape_markdown_table_cell(event.message)
             lines.append(
@@ -179,24 +179,30 @@ error_telemetry = ErrorTelemetryStore()
 
 def setup_logger():
     """Shared app logger setup."""
-    logger = logging.getLogger('XPathExplorer')
+    logger = logging.getLogger("XPathExplorer")
     logger.setLevel(logging.DEBUG)
 
     if not logger.handlers:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
-        console_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%H:%M:%S')
+        console_format = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S"
+        )
         console_handler.setFormatter(console_format)
         logger.addHandler(console_handler)
 
         log_path, source = resolve_storage_file("debug.log")
         if log_path is None:
-            logger.warning("File logging disabled (in-memory mode: no writable storage path).")
+            logger.warning(
+                "File logging disabled (in-memory mode: no writable storage path)."
+            )
         else:
             try:
-                file_handler = logging.FileHandler(log_path, encoding='utf-8')
+                file_handler = logging.FileHandler(log_path, encoding="utf-8")
                 file_handler.setLevel(logging.DEBUG)
-                file_format = logging.Formatter('%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s')
+                file_format = logging.Formatter(
+                    "%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s"
+                )
                 file_handler.setFormatter(file_format)
                 logger.addHandler(file_handler)
                 if source != "home":
@@ -204,7 +210,9 @@ def setup_logger():
             except Exception as e:
                 logger.warning(f"File logging disabled (console only): {e}")
 
-    has_telemetry_handler = any(isinstance(h, ErrorTelemetryHandler) for h in logger.handlers)
+    has_telemetry_handler = any(
+        isinstance(h, ErrorTelemetryHandler) for h in logger.handlers
+    )
     if not has_telemetry_handler:
         logger.addHandler(ErrorTelemetryHandler(error_telemetry))
 

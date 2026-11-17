@@ -50,4 +50,3 @@ def test_feature_diagnostics_markdown_contains_context_sections_and_escapes_tabl
     assert "## 저장 항목 문맥" in content
     assert "frame\\|a" in content
     assert "not\\|found" in content
-

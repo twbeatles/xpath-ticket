@@ -4,7 +4,9 @@ from xpath_explorer.browser.playwright import PlaywrightManager
 
 
 class _FakeFrame:
-    def __init__(self, name: str, url: str, html: str = "", error: str = "", children=None):
+    def __init__(
+        self, name: str, url: str, html: str = "", error: str = "", children=None
+    ):
         self.name = name
         self.url = url
         self._html = html
@@ -18,7 +20,9 @@ class _FakeFrame:
 
 
 class _FakePage:
-    def __init__(self, title: str, url: str, main_frame: _FakeFrame, closed: bool = False):
+    def __init__(
+        self, title: str, url: str, main_frame: _FakeFrame, closed: bool = False
+    ):
         self._title = title
         self.url = url
         self.main_frame = main_frame
@@ -72,7 +76,9 @@ def test_collect_dom_snapshots_collects_pages_popups_frames_and_errors():
 
     root_page = _FakePage("Root", "https://root.example", root_main, closed=False)
     popup_page = _FakePage("Popup", "https://popup.example", popup_main, closed=False)
-    closed_page = _FakePage("Closed", "https://closed.example", closed_main, closed=True)
+    closed_page = _FakePage(
+        "Closed", "https://closed.example", closed_main, closed=True
+    )
 
     manager = PlaywrightManager()
     manager._is_initialized = True
@@ -91,14 +97,26 @@ def test_collect_dom_snapshots_collects_pages_popups_frames_and_errors():
     popup_docs = [s for s in snapshots if s.window_title == "Popup"]
     assert len(popup_docs) == 2
     assert all(s.is_popup is True for s in popup_docs)
-    assert any(s.frame_path == "index=1" and s.error and s.error_type == "detached_frame" for s in popup_docs)
+    assert any(
+        s.frame_path == "index=1" and s.error and s.error_type == "detached_frame"
+        for s in popup_docs
+    )
 
-    assert any(s.frame_path == "main" and s.error == "page is closed" and s.error_type == "closed_page" for s in snapshots)
+    assert any(
+        s.frame_path == "main"
+        and s.error == "page is closed"
+        and s.error_type == "closed_page"
+        for s in snapshots
+    )
 
 
 def test_collect_dom_snapshots_current_scope_without_frames_uses_tracked_page():
-    root_main = _FakeFrame(name="", url="https://root.example", html="<html><body>root</body></html>")
-    popup_main = _FakeFrame(name="", url="https://popup.example", html="<html><body>popup</body></html>")
+    root_main = _FakeFrame(
+        name="", url="https://root.example", html="<html><body>root</body></html>"
+    )
+    popup_main = _FakeFrame(
+        name="", url="https://popup.example", html="<html><body>popup</body></html>"
+    )
 
     root_page = _FakePage("Root", "https://root.example", root_main, closed=False)
     popup_page = _FakePage("Popup", "https://popup.example", popup_main, closed=False)
@@ -120,9 +138,15 @@ def test_collect_dom_snapshots_current_scope_without_frames_uses_tracked_page():
 
 
 def test_current_page_falls_back_to_last_open_page_when_active_page_closes():
-    root_main = _FakeFrame(name="", url="https://root.example", html="<html><body>root</body></html>")
-    popup_main = _FakeFrame(name="", url="https://popup.example", html="<html><body>popup</body></html>")
-    extra_main = _FakeFrame(name="", url="https://extra.example", html="<html><body>extra</body></html>")
+    root_main = _FakeFrame(
+        name="", url="https://root.example", html="<html><body>root</body></html>"
+    )
+    popup_main = _FakeFrame(
+        name="", url="https://popup.example", html="<html><body>popup</body></html>"
+    )
+    extra_main = _FakeFrame(
+        name="", url="https://extra.example", html="<html><body>extra</body></html>"
+    )
 
     root_page = _FakePage("Root", "https://root.example", root_main, closed=False)
     popup_page = _FakePage("Popup", "https://popup.example", popup_main, closed=False)
@@ -143,7 +167,9 @@ def test_current_page_falls_back_to_last_open_page_when_active_page_closes():
 def test_is_alive_returns_true_after_closed_page_fallback_to_open_page():
     closed_main = _FakeFrame(name="", url="https://closed.example")
     open_main = _FakeFrame(name="", url="https://open.example")
-    closed_page = _FakePage("Closed", "https://closed.example", closed_main, closed=True)
+    closed_page = _FakePage(
+        "Closed", "https://closed.example", closed_main, closed=True
+    )
     open_page = _FakePage("Open", "https://open.example", open_main, closed=False)
 
     manager = PlaywrightManager()

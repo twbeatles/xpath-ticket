@@ -74,7 +74,7 @@ class ExplorerDataFilesMixin:
                 self._show_toast(f"자동 저장 복원 실패: {e}", "error")
                 return
             self.config = restored
-            self._editing_original_name = ''
+            self._editing_original_name = ""
             self._table_data_dirty = True
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
@@ -84,7 +84,9 @@ class ExplorerDataFilesMixin:
             pass
 
     def _is_config_dirty(self) -> bool:
-        return is_config_dirty(self.config, getattr(self, "_saved_config_fingerprint", None))
+        return is_config_dirty(
+            self.config, getattr(self, "_saved_config_fingerprint", None)
+        )
 
     def _confirm_discard_unsaved(self, action_label: str = "계속") -> bool:
         if not self._is_config_dirty():
@@ -108,9 +110,14 @@ class ExplorerDataFilesMixin:
     def _new_config(self):
         if not self._confirm_discard_unsaved("새 설정"):
             return
-        if QMessageBox.question(self, "새 설정", "모든 항목을 지우고 초기화하시겠습니까?") == QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(
+                self, "새 설정", "모든 항목을 지우고 초기화하시겠습니까?"
+            )
+            == QMessageBox.StandardButton.Yes
+        ):
             self.config = SiteConfig.from_preset("빈 템플릿")
-            self._editing_original_name = ''
+            self._editing_original_name = ""
             self._table_data_dirty = True
             self._filter_options_dirty = True
             self._refresh_table(refresh_filters=True)
@@ -122,13 +129,15 @@ class ExplorerDataFilesMixin:
     def _open_config(self):
         if not self._confirm_discard_unsaved("설정 열기"):
             return
-        fname, _ = QFileDialog.getOpenFileName(self, '설정 열기', '', 'JSON 파일 (*.json)')
+        fname, _ = QFileDialog.getOpenFileName(
+            self, "설정 열기", "", "JSON 파일 (*.json)"
+        )
         if fname:
             try:
-                with open(fname, 'r', encoding='utf-8') as f:
+                with open(fname, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.config = SiteConfig.from_dict(data)
-                    self._editing_original_name = ''
+                    self._editing_original_name = ""
                     self._table_data_dirty = True
                     self._filter_options_dirty = True
                     self._refresh_table(refresh_filters=True)
@@ -140,7 +149,12 @@ class ExplorerDataFilesMixin:
                 self._show_toast(f"로드 실패: {e}", "error")
 
     def _save_config(self):
-        fname, _ = QFileDialog.getSaveFileName(self, '설정 저장', f"{_safe_config_filename(self.config.name)}.json", 'JSON 파일 (*.json)')
+        fname, _ = QFileDialog.getSaveFileName(
+            self,
+            "설정 저장",
+            f"{_safe_config_filename(self.config.name)}.json",
+            "JSON 파일 (*.json)",
+        )
         if fname:
             try:
                 atomic_write_json(Path(fname), self.config.to_dict())
@@ -153,53 +167,70 @@ class ExplorerDataFilesMixin:
     def _export(self, fmt):
         """내보내기"""
         if not self.config.items:
-            self._show_toast('내보낼 항목이 없습니다.', 'warning')
+            self._show_toast("내보낼 항목이 없습니다.", "warning")
             return
 
-        fname, _ = QFileDialog.getSaveFileName(self, f'{fmt.upper()}로 내보내기', 'xpath_export', f'{fmt.upper()} 파일 (*.{fmt})')
+        fname, _ = QFileDialog.getSaveFileName(
+            self,
+            f"{fmt.upper()}로 내보내기",
+            "xpath_export",
+            f"{fmt.upper()} 파일 (*.{fmt})",
+        )
         if not fname:
             return
 
         try:
-            if fmt == 'json':
+            if fmt == "json":
                 data = [item.to_dict() for item in self.config.items]
                 atomic_write_json(Path(fname), data)
-            elif fmt == 'csv':
-                buffer = io.StringIO(newline='')
+            elif fmt == "csv":
+                buffer = io.StringIO(newline="")
                 writer = csv.writer(buffer)
-                writer.writerow(['이름', 'XPath', '카테고리', '설명'])
+                writer.writerow(["이름", "XPath", "카테고리", "설명"])
                 for item in self.config.items:
-                    writer.writerow([
-                        sanitize_csv_value(item.name),
-                        sanitize_csv_value(item.xpath),
-                        sanitize_csv_value(item.category),
-                        sanitize_csv_value(item.description),
-                    ])
+                    writer.writerow(
+                        [
+                            sanitize_csv_value(item.name),
+                            sanitize_csv_value(item.xpath),
+                            sanitize_csv_value(item.category),
+                            sanitize_csv_value(item.description),
+                        ]
+                    )
                 atomic_write_text(Path(fname), buffer.getvalue())
-            elif fmt == 'python':
-                content = '# Selenium XPaths\n\nclass XPaths:\n'
+            elif fmt == "python":
+                content = "# Selenium XPaths\n\nclass XPaths:\n"
                 used_names: Dict[str, int] = {}
                 for item in self.config.items:
                     raw_safe_name = self.code_generator._safe_var_name(item.name)
                     suffix = used_names.get(raw_safe_name, 0)
                     used_names[raw_safe_name] = suffix + 1
-                    safe_name = raw_safe_name if suffix == 0 else f'{raw_safe_name}_{suffix + 1}'
+                    safe_name = (
+                        raw_safe_name
+                        if suffix == 0
+                        else f"{raw_safe_name}_{suffix + 1}"
+                    )
                     xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
-                    desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
-                    content += f'    {safe_name} = {xpath_literal}  # {desc_comment}\n'
-                compile(content, '<xpath_export>', 'exec')
+                    desc_comment = (
+                        (item.description or "").replace("\n", " ").replace("\r", " ")
+                    )
+                    content += f"    {safe_name} = {xpath_literal}  # {desc_comment}\n"
+                compile(content, "<xpath_export>", "exec")
                 atomic_write_text(Path(fname), content)
-            elif fmt == 'javascript':
-                content = 'const XPaths = {\n'
+            elif fmt == "javascript":
+                content = "const XPaths = {\n"
                 for item in self.config.items:
                     name_literal = json.dumps(item.name, ensure_ascii=False)
                     xpath_literal = json.dumps(item.xpath, ensure_ascii=False)
-                    desc_comment = (item.description or '').replace('\n', ' ').replace('\r', ' ')
-                    content += f'    {name_literal}: {xpath_literal}, // {desc_comment}\n'
-                content += '};'
+                    desc_comment = (
+                        (item.description or "").replace("\n", " ").replace("\r", " ")
+                    )
+                    content += (
+                        f"    {name_literal}: {xpath_literal}, // {desc_comment}\n"
+                    )
+                content += "};"
                 atomic_write_text(Path(fname), content)
 
-            self._show_toast(f'{fmt.upper()} 내보내기 성공', 'success')
+            self._show_toast(f"{fmt.upper()} 내보내기 성공", "success")
 
         except Exception as e:
-            self._show_toast(f'내보내기 실패: {e}', 'error')
+            self._show_toast(f"내보내기 실패: {e}", "error")

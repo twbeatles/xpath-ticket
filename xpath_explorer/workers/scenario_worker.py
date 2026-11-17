@@ -20,17 +20,19 @@ from xpath_explorer.workers.worker_shared import (
     _switch_browser_to_item_window,
 )
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 #: Actions that always run against the Selenium browser. Playwright exposes no
 #: popup/window-switch API, so these steps require a live Selenium session.
-SELENIUM_ONLY_ACTIONS = frozenset({
-    "wait_for_popup",
-    "switch_latest_popup",
-    "switch_window_by_title",
-    "switch_root_window",
-})
+SELENIUM_ONLY_ACTIONS = frozenset(
+    {
+        "wait_for_popup",
+        "switch_latest_popup",
+        "switch_window_by_title",
+        "switch_root_window",
+    }
+)
 
 
 def _engine_alive(engine: Any) -> bool:
@@ -43,6 +45,7 @@ def _engine_alive(engine: Any) -> bool:
     except Exception:
         return False
 
+
 class BatchScenarioWorker(QThread):
     """JSON 기반 배치 시나리오 실행 워커."""
 
@@ -51,7 +54,13 @@ class BatchScenarioWorker(QThread):
     completed = Signal(list, bool, str)  # results, cancelled, scenario_name
     failed = Signal(str)
 
-    def __init__(self, browser: Any, items: List[XPathItem], scenario: Dict[str, Any], playwright: Any = None):
+    def __init__(
+        self,
+        browser: Any,
+        items: List[XPathItem],
+        scenario: Dict[str, Any],
+        playwright: Any = None,
+    ):
         super().__init__()
         self.browser = browser
         self.playwright = playwright
@@ -117,7 +126,10 @@ class BatchScenarioWorker(QThread):
                 "frame_path": str(raw.get("frame_path") or ""),
                 "title": str(raw.get("title") or ""),
                 "wait_seconds": min(SCENARIO_MAX_WAIT_SECONDS, max(0.0, wait_seconds)),
-                "retries": min(SCENARIO_MAX_RETRIES, max(0, cls._to_int(raw.get("retries", 0), default=0))),
+                "retries": min(
+                    SCENARIO_MAX_RETRIES,
+                    max(0, cls._to_int(raw.get("retries", 0), default=0)),
+                ),
             }
             steps.append(step)
         return steps
@@ -129,7 +141,9 @@ class BatchScenarioWorker(QThread):
             self._stop_event.wait(timeout=tick)
             remaining -= tick
 
-    def _run_validate(self, xpath: str, preferred_frame: str, session: Any, browser: Any = None) -> Dict[str, Any]:
+    def _run_validate(
+        self, xpath: str, preferred_frame: str, session: Any, browser: Any = None
+    ) -> Dict[str, Any]:
         target = browser if browser is not None else self.browser
         try:
             try:
@@ -164,9 +178,15 @@ class BatchScenarioWorker(QThread):
             "count": int(result.get("count", 1 if success else 0) or 0),
             "tag": str(result.get("tag", "") or ""),
             "error_type": str(result.get("error_type", "") or ""),
-            "window_handle": str(result.get("window_handle", "") or window_meta.get("handle", "") or ""),
-            "window_title": str(result.get("window_title", "") or window_meta.get("title", "") or ""),
-            "window_url": str(result.get("window_url", "") or window_meta.get("url", "") or ""),
+            "window_handle": str(
+                result.get("window_handle", "") or window_meta.get("handle", "") or ""
+            ),
+            "window_title": str(
+                result.get("window_title", "") or window_meta.get("title", "") or ""
+            ),
+            "window_url": str(
+                result.get("window_url", "") or window_meta.get("url", "") or ""
+            ),
         }
 
     def _run_validate_with_retry(
@@ -228,10 +248,15 @@ class BatchScenarioWorker(QThread):
         last_outcome["retry_count"] = max(0, _attempt - 1)
         return last_outcome
 
-    def _run_window_action(self, action: str, title: str, timeout_seconds: float) -> Dict[str, Any]:
+    def _run_window_action(
+        self, action: str, title: str, timeout_seconds: float
+    ) -> Dict[str, Any]:
         # Window/popup actions are Selenium-only (see SELENIUM_ONLY_ACTIONS).
         if not _engine_alive(self.browser):
-            return {"success": False, "msg": "Selenium 브라우저가 연결되어 있지 않아 창 액션을 수행할 수 없습니다."}
+            return {
+                "success": False,
+                "msg": "Selenium 브라우저가 연결되어 있지 않아 창 액션을 수행할 수 없습니다.",
+            }
         if action == "wait_for_popup":
             wait_for_popup = getattr(self.browser, "wait_for_popup", None)
             if not callable(wait_for_popup):
@@ -245,30 +270,62 @@ class BatchScenarioWorker(QThread):
                     "window_title": str(popup.get("title", "") or ""),
                     "window_url": str(popup.get("url", "") or ""),
                 }
-            return {"success": False, "msg": str(getattr(self.browser, "last_error", "") or "popup not found")}
+            return {
+                "success": False,
+                "msg": str(
+                    getattr(self.browser, "last_error", "") or "popup not found"
+                ),
+            }
 
         if action == "switch_latest_popup":
             switch_latest_popup = getattr(self.browser, "switch_to_latest_popup", None)
             if not callable(switch_latest_popup):
                 return {"success": False, "msg": "switch_to_latest_popup not supported"}
             ok = bool(switch_latest_popup())
-            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "popup switch failed")}
+            return {
+                "success": ok,
+                "msg": ""
+                if ok
+                else str(
+                    getattr(self.browser, "last_error", "") or "popup switch failed"
+                ),
+            }
 
         if action == "switch_window_by_title":
-            switch_window_by_title = getattr(self.browser, "switch_to_window_by_title", None)
+            switch_window_by_title = getattr(
+                self.browser, "switch_to_window_by_title", None
+            )
             if not callable(switch_window_by_title):
-                return {"success": False, "msg": "switch_to_window_by_title not supported"}
+                return {
+                    "success": False,
+                    "msg": "switch_to_window_by_title not supported",
+                }
             if not title:
                 return {"success": False, "msg": "title is required"}
             ok = bool(switch_window_by_title(title))
-            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "window switch failed")}
+            return {
+                "success": ok,
+                "msg": ""
+                if ok
+                else str(
+                    getattr(self.browser, "last_error", "") or "window switch failed"
+                ),
+            }
 
         if action == "switch_root_window":
             switch_root_window = getattr(self.browser, "switch_to_root_window", None)
             if not callable(switch_root_window):
                 return {"success": False, "msg": "switch_to_root_window not supported"}
             ok = bool(switch_root_window())
-            return {"success": ok, "msg": "" if ok else str(getattr(self.browser, "last_error", "") or "root window switch failed")}
+            return {
+                "success": ok,
+                "msg": ""
+                if ok
+                else str(
+                    getattr(self.browser, "last_error", "")
+                    or "root window switch failed"
+                ),
+            }
 
         return {"success": False, "msg": f"unsupported action: {action}"}
 
@@ -296,15 +353,19 @@ class BatchScenarioWorker(QThread):
             elif action in SELENIUM_ONLY_ACTIONS:
                 selenium_needed = True
         if selenium_needed and not _engine_alive(self.browser):
-            return ("Selenium 브라우저가 연결되어 있지 않습니다. "
-                    "일반 XPath·팝업/창 전환 스텝에 필요합니다. "
-                    "Playwright 항목만 실행하려면 해당 스텝만 남기세요.")
+            return (
+                "Selenium 브라우저가 연결되어 있지 않습니다. "
+                "일반 XPath·팝업/창 전환 스텝에 필요합니다. "
+                "Playwright 항목만 실행하려면 해당 스텝만 남기세요."
+            )
         return ""
 
     def run(self):
         scenario_name = str(self.scenario.get("name") or "시나리오")
         steps = self._normalize_steps(self.scenario.get("steps"))
-        leave_context = self._to_bool(self.scenario.get("leave_context", False), default=False)
+        leave_context = self._to_bool(
+            self.scenario.get("leave_context", False), default=False
+        )
         results: List[Dict[str, Any]] = []
         cancelled = False
 
@@ -383,13 +444,17 @@ class BatchScenarioWorker(QThread):
                             msg = "Playwright 브라우저가 연결되어 있지 않습니다."
                             error_type = "browser_not_connected"
                         else:
-                            ok, error_msg = _switch_browser_to_item_window(engine_browser, item)
+                            ok, error_msg = _switch_browser_to_item_window(
+                                engine_browser, item
+                            )
                             if not ok:
                                 success = False
                                 msg = error_msg
                                 error_type = "window_context"
                             else:
-                                item_session = session if engine_name != "playwright" else None
+                                item_session = (
+                                    session if engine_name != "playwright" else None
+                                )
                                 outcome = self._run_validate_with_retry(
                                     xpath,
                                     frame_path,
@@ -413,7 +478,9 @@ class BatchScenarioWorker(QThread):
                         error_type = "empty_xpath"
                     else:
                         target = xpath
-                        outcome = self._run_validate_with_retry(xpath, frame_path, session, retries=retries)
+                        outcome = self._run_validate_with_retry(
+                            xpath, frame_path, session, retries=retries
+                        )
                         success = bool(outcome["success"])
                         msg = str(outcome["msg"])
                         frame_path = str(outcome["frame_path"])
@@ -423,7 +490,12 @@ class BatchScenarioWorker(QThread):
                         attempt = int(outcome["attempt"])
                         max_attempts = int(outcome["max_attempts"])
                         retry_count = int(outcome["retry_count"])
-                elif action in ("wait_for_popup", "switch_latest_popup", "switch_window_by_title", "switch_root_window"):
+                elif action in (
+                    "wait_for_popup",
+                    "switch_latest_popup",
+                    "switch_window_by_title",
+                    "switch_root_window",
+                ):
                     target = title or action
                     outcome = self._run_window_action(
                         action,
@@ -434,8 +506,12 @@ class BatchScenarioWorker(QThread):
                     msg = str(outcome.get("msg", ""))
                     error_type = "" if success else "window_action_failed"
                     post_window_meta = _get_browser_window_metadata(self.browser)
-                    outcome.setdefault("window_handle", post_window_meta.get("handle", ""))
-                    outcome.setdefault("window_title", post_window_meta.get("title", ""))
+                    outcome.setdefault(
+                        "window_handle", post_window_meta.get("handle", "")
+                    )
+                    outcome.setdefault(
+                        "window_title", post_window_meta.get("title", "")
+                    )
                     outcome.setdefault("window_url", post_window_meta.get("url", ""))
                 else:
                     success = False
@@ -444,9 +520,19 @@ class BatchScenarioWorker(QThread):
 
                 duration_ms = int((time.perf_counter() - started) * 1000)
                 window_meta = _get_browser_window_metadata(self.browser)
-                row_window_handle = str(outcome.get("window_handle", "") or window_meta.get("handle", "") or "")
-                row_window_title = str(outcome.get("window_title", "") or window_meta.get("title", "") or "")
-                row_window_url = str(outcome.get("window_url", "") or window_meta.get("url", "") or "")
+                row_window_handle = str(
+                    outcome.get("window_handle", "")
+                    or window_meta.get("handle", "")
+                    or ""
+                )
+                row_window_title = str(
+                    outcome.get("window_title", "")
+                    or window_meta.get("title", "")
+                    or ""
+                )
+                row_window_url = str(
+                    outcome.get("window_url", "") or window_meta.get("url", "") or ""
+                )
                 row = {
                     "step": idx,
                     "name": step["name"],
@@ -459,7 +545,8 @@ class BatchScenarioWorker(QThread):
                     "tag": tag,
                     "success": success,
                     "msg": msg,
-                    "error_type": error_type or str(outcome.get("error_type", "") or ""),
+                    "error_type": error_type
+                    or str(outcome.get("error_type", "") or ""),
                     "duration_ms": duration_ms,
                     "attempt": attempt,
                     "max_attempts": max_attempts,

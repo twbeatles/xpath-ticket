@@ -25,7 +25,9 @@ def test_check_tls_excludes_detects_libssl_and_libcrypto():
 def test_pyinstaller_spec_does_not_exclude_tls_libs():
     module = _load_release_smoke_module()
     root = Path(__file__).resolve().parent.parent
-    spec_text = module.load_spec_text(root / "packaging" / "pyinstaller" / "xpath_explorer.spec")
+    spec_text = module.load_spec_text(
+        root / "packaging" / "pyinstaller" / "xpath_explorer.spec"
+    )
     ok, blocked = module.check_tls_excludes(spec_text)
     assert ok is True
     assert blocked == []

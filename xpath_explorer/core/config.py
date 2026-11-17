@@ -47,9 +47,13 @@ def _coerce_int(value: Any, default: int = 0) -> int:
 
 def _coerce_str_list(value: Any) -> List[str]:
     if isinstance(value, list):
-        return [_coerce_str(item).strip() for item in value if _coerce_str(item).strip()]
+        return [
+            _coerce_str(item).strip() for item in value if _coerce_str(item).strip()
+        ]
     if isinstance(value, tuple):
-        return [_coerce_str(item).strip() for item in value if _coerce_str(item).strip()]
+        return [
+            _coerce_str(item).strip() for item in value if _coerce_str(item).strip()
+        ]
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
     return []
@@ -64,6 +68,7 @@ def _coerce_str_dict(value: Any) -> Dict[str, str]:
 @dataclass
 class XPathItem:
     """XPath 항목"""
+
     name: str
     xpath: str
     category: str
@@ -77,29 +82,29 @@ class XPathItem:
     found_window_url: str = ""
     found_frame: str = ""
     # v3.3 신규 필드
-    is_favorite: bool = False                    # 즐겨찾기 (#6)
+    is_favorite: bool = False  # 즐겨찾기 (#6)
     tags: List[str] = field(default_factory=list)  # 태그 (#6)
-    test_count: int = 0                          # 테스트 횟수 (#14)
-    success_count: int = 0                       # 성공 횟수 (#14)
-    last_tested: str = ""                        # 마지막 테스트 시간 (#14)
-    sort_order: int = 0                          # 정렬 순서 (#13)
+    test_count: int = 0  # 테스트 횟수 (#14)
+    success_count: int = 0  # 성공 횟수 (#14)
+    last_tested: str = ""  # 마지막 테스트 시간 (#14)
+    sort_order: int = 0  # 정렬 순서 (#13)
     # v4.0 신규 필드
     alternatives: List[str] = field(default_factory=list)  # 대안 XPath 목록
     element_attributes: Dict[str, str] = field(default_factory=dict)  # 저장된 속성
-    screenshot_path: str = ""                    # 스크린샷 경로
-    ai_generated: bool = False                   # AI 생성 여부
+    screenshot_path: str = ""  # 스크린샷 경로
+    ai_generated: bool = False  # AI 생성 여부
     source_engine: str = ""
-    
+
     def to_dict(self) -> Dict:
         return asdict(self)
-    
+
     @property
     def success_rate(self) -> float:
         """성공률 계산"""
         if self.test_count == 0:
             return 0.0
         return (self.success_count / self.test_count) * 100
-    
+
     def record_test(self, success: bool):
         """테스트 결과 기록"""
         self.test_count += 1
@@ -111,6 +116,7 @@ class XPathItem:
 @dataclass
 class SiteConfig:
     """사이트 설정"""
+
     name: str
     url: str
     login_url: str = ""
@@ -120,46 +126,48 @@ class SiteConfig:
     created_at: str = ""
     updated_at: str = ""
     _item_index: Dict[str, int] = field(default_factory=dict, init=False, repr=False)
-    
+
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
         self.updated_at = datetime.now().isoformat()
         self.rebuild_index()
-    
+
     def to_dict(self) -> Dict:
         return {
-            'schema_version': CONFIG_SCHEMA_VERSION,
-            'name': self.name,
-            'url': self.url,
-            'login_url': self.login_url,
-            'description': self.description,
-            'items': [item.to_dict() for item in self.items],
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "schema_version": CONFIG_SCHEMA_VERSION,
+            "name": self.name,
+            "url": self.url,
+            "login_url": self.login_url,
+            "description": self.description,
+            "items": [item.to_dict() for item in self.items],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict) -> 'SiteConfig':
+    def from_dict(cls, data: Dict) -> "SiteConfig":
         """
         딕셔너리에서 SiteConfig 생성 (예외 처리 포함)
-        
+
         Args:
             data: 설정 딕셔너리
-            
+
         Returns:
             SiteConfig 객체
-            
+
         Raises:
             ValueError: 데이터 형식이 잘못된 경우
         """
         if not isinstance(data, dict):
-            raise ValueError(f"SiteConfig.from_dict: dict 타입이 필요하지만 {type(data).__name__} 타입이 전달되었습니다")
-        
+            raise ValueError(
+                f"SiteConfig.from_dict: dict 타입이 필요하지만 {type(data).__name__} 타입이 전달되었습니다"
+            )
+
         try:
             items = []
             seen_names = set()
-            raw_items = data.get('items', [])
+            raw_items = data.get("items", [])
             if raw_items is None:
                 raw_items = []
             if not isinstance(raw_items, list):
@@ -168,10 +176,12 @@ class SiteConfig:
                 )
             for i, item_data in enumerate(raw_items):
                 if not isinstance(item_data, dict):
-                    raise ValueError(f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다")
+                    raise ValueError(
+                        f"항목 {i}: dict 타입이 필요하지만 {type(item_data).__name__} 타입입니다"
+                    )
 
-                item_name = _coerce_str(item_data.get('name', '')).strip()
-                item_xpath = _coerce_str(item_data.get('xpath', '')).strip()
+                item_name = _coerce_str(item_data.get("name", "")).strip()
+                item_xpath = _coerce_str(item_data.get("xpath", "")).strip()
                 if not item_name:
                     raise ValueError(f"Item {i}: name is required")
                 if not item_xpath:
@@ -179,63 +189,72 @@ class SiteConfig:
                 if item_name in seen_names:
                     raise ValueError(f"Duplicate item name in config: {item_name}")
                 seen_names.add(item_name)
-                
+
                 # 하위 호환성: 새 필드가 없는 기존 JSON도 로드 가능하도록
                 item = XPathItem(
                     name=item_name,
                     xpath=item_xpath,
-                    category=_coerce_str(item_data.get('category', 'common'), 'common') or 'common',
-                    description=_coerce_str(item_data.get('description', '')),
-                    css_selector=_coerce_str(item_data.get('css_selector', '')),
-                    is_verified=_coerce_bool(item_data.get('is_verified', False)),
-                    element_tag=_coerce_str(item_data.get('element_tag', '')),
-                    element_text=_coerce_str(item_data.get('element_text', '')),
-                    found_window=_coerce_str(item_data.get('found_window', '')),
-                    found_window_title=_coerce_str(item_data.get('found_window_title', '')),
-                    found_window_url=_coerce_str(item_data.get('found_window_url', '')),
-                    found_frame=_coerce_str(item_data.get('found_frame', '')),
+                    category=_coerce_str(item_data.get("category", "common"), "common")
+                    or "common",
+                    description=_coerce_str(item_data.get("description", "")),
+                    css_selector=_coerce_str(item_data.get("css_selector", "")),
+                    is_verified=_coerce_bool(item_data.get("is_verified", False)),
+                    element_tag=_coerce_str(item_data.get("element_tag", "")),
+                    element_text=_coerce_str(item_data.get("element_text", "")),
+                    found_window=_coerce_str(item_data.get("found_window", "")),
+                    found_window_title=_coerce_str(
+                        item_data.get("found_window_title", "")
+                    ),
+                    found_window_url=_coerce_str(item_data.get("found_window_url", "")),
+                    found_frame=_coerce_str(item_data.get("found_frame", "")),
                     # v3.3 신규 필드 (기본값 처리)
-                    is_favorite=_coerce_bool(item_data.get('is_favorite', False)),
-                    tags=_coerce_str_list(item_data.get('tags', [])),
-                    test_count=max(0, _coerce_int(item_data.get('test_count', 0), 0)),
-                    success_count=max(0, _coerce_int(item_data.get('success_count', 0), 0)),
-                    last_tested=_coerce_str(item_data.get('last_tested', '')),
-                    sort_order=_coerce_int(item_data.get('sort_order', 0), 0),
+                    is_favorite=_coerce_bool(item_data.get("is_favorite", False)),
+                    tags=_coerce_str_list(item_data.get("tags", [])),
+                    test_count=max(0, _coerce_int(item_data.get("test_count", 0), 0)),
+                    success_count=max(
+                        0, _coerce_int(item_data.get("success_count", 0), 0)
+                    ),
+                    last_tested=_coerce_str(item_data.get("last_tested", "")),
+                    sort_order=_coerce_int(item_data.get("sort_order", 0), 0),
                     # v4.0 신규 필드
-                    alternatives=_coerce_str_list(item_data.get('alternatives', [])),
-                    element_attributes=_coerce_str_dict(item_data.get('element_attributes', {})),
-                    screenshot_path=_coerce_str(item_data.get('screenshot_path', '')),
-                    ai_generated=_coerce_bool(item_data.get('ai_generated', False)),
-                    source_engine=_coerce_str(item_data.get('source_engine', '')),
+                    alternatives=_coerce_str_list(item_data.get("alternatives", [])),
+                    element_attributes=_coerce_str_dict(
+                        item_data.get("element_attributes", {})
+                    ),
+                    screenshot_path=_coerce_str(item_data.get("screenshot_path", "")),
+                    ai_generated=_coerce_bool(item_data.get("ai_generated", False)),
+                    source_engine=_coerce_str(item_data.get("source_engine", "")),
                 )
                 if item.success_count > item.test_count:
                     item.success_count = item.test_count
                 items.append(item)
-            
+
             return cls(
-                name=_coerce_str(data.get('name', '')),
-                url=_coerce_str(data.get('url', '')),
-                login_url=_coerce_str(data.get('login_url', '')),
-                description=_coerce_str(data.get('description', '')),
-                schema_version=_coerce_int(data.get('schema_version', 1), 1),
+                name=_coerce_str(data.get("name", "")),
+                url=_coerce_str(data.get("url", "")),
+                login_url=_coerce_str(data.get("login_url", "")),
+                description=_coerce_str(data.get("description", "")),
+                schema_version=_coerce_int(data.get("schema_version", 1), 1),
                 items=items,
-                created_at=_coerce_str(data.get('created_at', '')),
-                updated_at=_coerce_str(data.get('updated_at', ''))
+                created_at=_coerce_str(data.get("created_at", "")),
+                updated_at=_coerce_str(data.get("updated_at", "")),
             )
         except KeyError as e:
-            raise ValueError(f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}") from e
+            raise ValueError(
+                f"SiteConfig.from_dict: 필수 필드가 누락되었습니다 - {e}"
+            ) from e
         except TypeError as e:
             raise ValueError(f"SiteConfig.from_dict: 데이터 형식 오류 - {e}") from e
-    
+
     @classmethod
-    def from_preset(cls, preset_name: str) -> 'SiteConfig':
+    def from_preset(cls, preset_name: str) -> "SiteConfig":
         preset = SITE_PRESETS.get(preset_name, SITE_PRESETS["빈 템플릿"])
         items = [
             XPathItem(
                 name=item["name"],
                 xpath=item["xpath"],
                 category=item["category"],
-                description=item.get("desc", "")
+                description=item.get("desc", ""),
             )
             for item in preset.get("items", [])
         ]
@@ -244,9 +263,9 @@ class SiteConfig:
             url=preset["url"],
             login_url=preset.get("login_url", ""),
             description=preset.get("description", ""),
-            items=items
+            items=items,
         )
-    
+
     def get_item(self, name: str) -> Optional[XPathItem]:
         idx = self._item_index.get(name)
         if idx is None:
@@ -259,7 +278,7 @@ class SiteConfig:
         if idx is not None and 0 <= idx < len(self.items):
             return self.items[idx]
         return None
-    
+
     def add_or_update(self, item: XPathItem):
         idx = self._item_index.get(item.name)
         if idx is not None and 0 <= idx < len(self.items):
@@ -271,7 +290,7 @@ class SiteConfig:
             return
         self.rebuild_index()
         self.updated_at = datetime.now().isoformat()
-    
+
     def remove_item(self, name: str):
         idx = self._item_index.get(name)
         if idx is None:
@@ -280,7 +299,7 @@ class SiteConfig:
             self.items.pop(idx)
         self.rebuild_index()
         self.updated_at = datetime.now().isoformat()
-    
+
     def get_categories(self) -> List[str]:
         return list(set(item.category for item in self.items))
 

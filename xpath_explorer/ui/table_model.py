@@ -46,7 +46,9 @@ class XPathItemTableModel(QAbstractTableModel):
     def headerData(self, section: int, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role != Qt.ItemDataRole.DisplayRole:
             return None
-        if orientation == Qt.Orientation.Horizontal and 0 <= section < len(self.HEADERS):
+        if orientation == Qt.Orientation.Horizontal and 0 <= section < len(
+            self.HEADERS
+        ):
             return self.HEADERS[section]
         return None
 

@@ -19,7 +19,9 @@ class _FakeBrowser:
     def __init__(self):
         self.include_attributes_calls = []
 
-    def get_element_info(self, xpath, frame_path=None, include_attributes=True, session=None):
+    def get_element_info(
+        self, xpath, frame_path=None, include_attributes=True, session=None
+    ):
         self.include_attributes_calls.append(include_attributes)
         attrs = {"id": "a1", "class": "btn"} if include_attributes else {}
         return {
@@ -84,4 +86,3 @@ def test_record_validation_outcome_only_collects_full_attrs_for_initial_snapshot
     assert explorer.browser.include_attributes_calls == [True, False]
     assert explorer.diff_analyzer.save_calls == 1
     assert explorer.stats_manager.calls == 2
-

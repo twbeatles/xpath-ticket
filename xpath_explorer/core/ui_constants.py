@@ -3,7 +3,7 @@
 
 # UI 상수
 BROWSER_CHECK_INTERVAL = 2000  # ms - 브라우저 연결 상태 확인 주기
-SEARCH_DEBOUNCE_MS = 300       # ms - 검색 입력 디바운스
+SEARCH_DEBOUNCE_MS = 300  # ms - 검색 입력 디바운스
 LIVE_PREVIEW_DEBOUNCE_MS = 500  # ms - 라이브 프리뷰 디바운스
 DEFAULT_WINDOW_SIZE = (1400, 900)
 CATEGORY_LABELS = {

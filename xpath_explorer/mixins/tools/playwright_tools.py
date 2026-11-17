@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
@@ -72,7 +72,11 @@ class ExplorerPlaywrightToolsMixin:
         worker = self.playwright_install_worker
         self.btn_pw_toggle.setEnabled(False)
         self._show_toast("Chromium 설치 중... (잠시 기다려주세요)", "info", 4000)
-        worker.completed.connect(lambda ok, msg, target=url: self._on_playwright_chromium_installed(ok, msg, target))
+        worker.completed.connect(
+            lambda ok, msg, target=url: self._on_playwright_chromium_installed(
+                ok, msg, target
+            )
+        )
         worker.start()
 
     def _on_playwright_chromium_installed(self, success: bool, message: str, url: str):
@@ -85,7 +89,9 @@ class ExplorerPlaywrightToolsMixin:
             self._set_playwright_status_ui(False)
             return
 
-        self._show_toast("Chromium 설치 완료. Playwright를 다시 시작합니다.", "success", 3000)
+        self._show_toast(
+            "Chromium 설치 완료. Playwright를 다시 시작합니다.", "success", 3000
+        )
         if not self._start_playwright_with_navigation(url):
             last_error = getattr(self.pw_manager, "last_error", "")
             if last_error:
@@ -132,7 +138,9 @@ class ExplorerPlaywrightToolsMixin:
             else:
                 self._show_toast("Playwright 시작 실패", "error")
         except ImportError:
-            self._show_toast("Playwright가 설치되지 않았습니다. pip install playwright", "error")
+            self._show_toast(
+                "Playwright가 설치되지 않았습니다. pip install playwright", "error"
+            )
         except Exception as e:
             self._show_toast(f"Playwright 오류: {e}", "error")
 
@@ -141,7 +149,7 @@ class ExplorerPlaywrightToolsMixin:
         if not self.pw_manager or not self.pw_manager.is_alive():
             self._show_toast("Playwright 브라우저가 실행되지 않았습니다.", "warning")
             return
-        
+
         scan_label = self.combo_scan_type.currentText()
         scan_type = self.combo_scan_type.currentData()
         if not isinstance(scan_type, str) or not scan_type:
@@ -155,18 +163,22 @@ class ExplorerPlaywrightToolsMixin:
             if isinstance(combo_scope, str) and combo_scope:
                 scan_scope = combo_scope
         self._show_toast(f"{scan_label} 스캔 중... ({scope_label})", "info", 2000)
-        
+
         try:
             with perf_span("ui.scan_page_elements"):
-                elements = self.pw_manager.scan_elements(scan_type, max_count=50, scope=scan_scope)
-                
+                elements = self.pw_manager.scan_elements(
+                    scan_type, max_count=50, scope=scan_scope
+                )
+
                 self.table_scan_results.setUpdatesEnabled(False)
                 self.table_scan_results.setRowCount(len(elements))
-                
+
                 self._last_scan_elements = list(elements)
                 for row, elem in enumerate(elements):
                     full_xpath = elem.xpath or ""
-                    shown = full_xpath if len(full_xpath) <= 80 else full_xpath[:77] + "..."
+                    shown = (
+                        full_xpath if len(full_xpath) <= 80 else full_xpath[:77] + "..."
+                    )
                     xpath_item = QTableWidgetItem(shown)
                     xpath_item.setToolTip(full_xpath)
                     try:
@@ -180,32 +192,42 @@ class ExplorerPlaywrightToolsMixin:
                     frame_item = QTableWidgetItem(elem.frame_path or "main")
                     frame_item.setToolTip(elem.frame_path or "main")
                     self.table_scan_results.setItem(row, 3, frame_item)
-                    window_text = elem.window_title or elem.window_url or elem.window_handle
+                    window_text = (
+                        elem.window_title or elem.window_url or elem.window_handle
+                    )
                     window_item = QTableWidgetItem(window_text)
                     window_item.setToolTip(elem.window_url or window_text)
                     self.table_scan_results.setItem(row, 4, window_item)
-                    
+
                     btn_use = QPushButton("사용")
                     btn_use.setObjectName("success")
                     btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_use.clicked.connect(lambda checked, e=elem: self._use_scanned_element(e))
+                    btn_use.clicked.connect(
+                        lambda checked, e=elem: self._use_scanned_element(e)
+                    )
                     self.table_scan_results.setCellWidget(row, 5, btn_use)
 
                 self.table_scan_results.setUpdatesEnabled(True)
                 self.lbl_scan_summary.setText(f"스캔된 요소: {len(elements)}개")
-                self._show_toast(f"{len(elements)}개의 {scan_label}를 찾았습니다.", "success")
-            
+                self._show_toast(
+                    f"{len(elements)}개의 {scan_label}를 찾았습니다.", "success"
+                )
+
         except Exception as e:
             self.table_scan_results.setUpdatesEnabled(True)
             self._show_toast(f"스캔 실패: {e}", "error")
 
-    def _export_dom_playwright_htm(self, scope: str = "all", include_frames: bool = True):
+    def _export_dom_playwright_htm(
+        self, scope: str = "all", include_frames: bool = True
+    ):
         """현재 Playwright 브라우저의 DOM을 단일 HTM으로 저장."""
         if not self.pw_manager or not self.pw_manager.is_alive():
             self._show_toast("Playwright 브라우저를 먼저 실행하세요.", "warning")
             return
 
-        default_name = f"playwright_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        default_name = (
+            f"playwright_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        )
         fname, _ = QFileDialog.getSaveFileName(
             self,
             "Playwright DOM 저장",
@@ -218,10 +240,16 @@ class ExplorerPlaywrightToolsMixin:
         if not fname.lower().endswith((".htm", ".html")):
             fname += ".htm"
 
-        scope_label = "현재 창 + iframe" if scope == "current" and include_frames else ("현재 창" if scope == "current" else "전체")
+        scope_label = (
+            "현재 창 + iframe"
+            if scope == "current" and include_frames
+            else ("현재 창" if scope == "current" else "전체")
+        )
         self._show_toast(f"Playwright DOM 추출 중... ({scope_label})", "info", 2000)
         try:
-            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            snapshots = self.pw_manager.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            )
             current_window = self.pw_manager.get_current_window_metadata()
             report = render_dom_report_htm(
                 snapshots,
@@ -242,13 +270,17 @@ class ExplorerPlaywrightToolsMixin:
             logger.error(f"Playwright DOM 저장 실패: {e}")
             self._show_toast(f"DOM 저장 실패: {e}", "error")
 
-    def _export_dom_bundle_playwright(self, scope: str = "all", include_frames: bool = True):
+    def _export_dom_bundle_playwright(
+        self, scope: str = "all", include_frames: bool = True
+    ):
         """Playwright DOM 분석 번들(.zip: 보고서 + manifest + 원본 HTML) 저장."""
         if not self.pw_manager or not self.pw_manager.is_alive():
             self._show_toast("Playwright 브라우저를 먼저 실행하세요.", "warning")
             return
 
-        default_name = f"playwright_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        default_name = (
+            f"playwright_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
         fname, _ = QFileDialog.getSaveFileName(
             self,
             "Playwright DOM 분석 번들 저장",
@@ -265,7 +297,9 @@ class ExplorerPlaywrightToolsMixin:
         try:
             from xpath_explorer.browser.dom_export import save_dom_bundle
 
-            snapshots = self.pw_manager.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            snapshots = self.pw_manager.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            )
             current_window = self.pw_manager.get_current_window_metadata()
             summary = save_dom_bundle(
                 snapshots,
@@ -310,9 +344,11 @@ class ExplorerPlaywrightToolsMixin:
         self._editing_source_engine = "playwright"
         self._editing_source_frame = str(getattr(element, "frame_path", "") or "main")
         self._editing_source_window = str(getattr(element, "window_handle", "") or "")
-        self._editing_source_window_title = str(getattr(element, "window_title", "") or "")
+        self._editing_source_window_title = str(
+            getattr(element, "window_title", "") or ""
+        )
         self._editing_source_window_url = str(getattr(element, "window_url", "") or "")
-        
+
         # 자동 이름 생성 (태그 + ID 또는 이름)
         if element.element_id:
             suggested_name = element.element_id
@@ -320,12 +356,12 @@ class ExplorerPlaywrightToolsMixin:
             suggested_name = element.element_name
         else:
             suggested_name = f"{element.tag}_{len(self.config.items) + 1}"
-        
+
         self.input_name.setText(suggested_name)
         self.input_desc.setText(element.text[:50] if element.text else "")
-        
+
         self._show_toast(f"'{suggested_name}' 요소를 로드했습니다.", "success")
-        
+
         # Playwright에서 하이라이트
         if self.pw_manager and self.pw_manager.is_alive():
             frame_path = str(getattr(element, "frame_path", "") or "")

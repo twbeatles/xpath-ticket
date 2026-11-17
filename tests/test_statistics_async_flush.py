@@ -78,4 +78,3 @@ def test_statistics_save_uses_atomic_json_writer(monkeypatch, tmp_path):
 
     assert calls
     assert calls[0][0] == path
-

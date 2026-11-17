@@ -15,7 +15,11 @@ def test_import_optional_returns_none_when_spec_missing(monkeypatch):
 
 def test_import_optional_returns_none_when_import_fails(monkeypatch):
     monkeypatch.setattr(importlib.util, "find_spec", lambda _name: object())
-    monkeypatch.setattr(mod.importlib, "import_module", lambda _name: (_ for _ in ()).throw(ImportError("x")))
+    monkeypatch.setattr(
+        mod.importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("x")),
+    )
 
     result = mod.import_optional("broken.module")
 
@@ -33,7 +37,7 @@ def test_import_optional_returns_module_when_available(monkeypatch):
 
 
 def test_workers_import_through_qt_compat_without_pyside6():
-    script = r'''
+    script = r"""
 import builtins
 
 real_import = builtins.__import__
@@ -49,7 +53,7 @@ from xpath_explorer.workers.background import LivePreviewWorker, ValidateWorker
 
 assert LivePreviewWorker is not None
 assert ValidateWorker is not None
-'''
+"""
     completed = subprocess.run(
         [sys.executable, "-c", script],
         text=True,

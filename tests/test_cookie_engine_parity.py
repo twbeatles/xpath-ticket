@@ -11,7 +11,8 @@ from xpath_explorer.mixins.data.cookies import ExplorerDataCookiesMixin
 
 def _say_yes(monkeypatch, cookies_module):
     monkeypatch.setattr(
-        cookies_module.QMessageBox, "warning",
+        cookies_module.QMessageBox,
+        "warning",
         staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
     )
 
@@ -71,8 +72,12 @@ class _FakePlaywright:
         self.cleared += 1
 
     def get_current_window_metadata(self):
-        return {"handle": "p1", "title": "PW",
-                "url": "https://ticket.example.com/seat", "is_popup": False}
+        return {
+            "handle": "p1",
+            "title": "PW",
+            "url": "https://ticket.example.com/seat",
+            "is_popup": False,
+        }
 
     def reload_current_page(self):
         self.reloaded += 1
@@ -84,8 +89,13 @@ def _host(browser, pw_manager):
     host = SimpleNamespace(browser=browser, pw_manager=pw_manager)
     host.toasts = toasts
     host._show_toast = lambda msg, _kind="info", *_a: toasts.append(str(msg))
-    for name in ("_cookie_engine", "_report_cookie_load", "_save_cookies",
-                 "_load_cookies", "_clear_cookies"):
+    for name in (
+        "_cookie_engine",
+        "_report_cookie_load",
+        "_save_cookies",
+        "_load_cookies",
+        "_clear_cookies",
+    ):
         setattr(host, name, getattr(ExplorerDataCookiesMixin, name).__get__(host))
     return host
 
@@ -98,7 +108,8 @@ def test_save_cookies_uses_playwright_when_selenium_dead(tmp_path, monkeypatch):
     target = tmp_path / "cookies.json"
     _say_yes(monkeypatch, cookies_module)
     monkeypatch.setattr(
-        cookies_module.QFileDialog, "getSaveFileName",
+        cookies_module.QFileDialog,
+        "getSaveFileName",
         staticmethod(lambda *a, **k: (str(target), "")),
     )
 
@@ -119,7 +130,8 @@ def test_save_cookies_prefers_selenium_when_both_alive(tmp_path, monkeypatch):
     target = tmp_path / "cookies.json"
     _say_yes(monkeypatch, cookies_module)
     monkeypatch.setattr(
-        cookies_module.QFileDialog, "getSaveFileName",
+        cookies_module.QFileDialog,
+        "getSaveFileName",
         staticmethod(lambda *a, **k: (str(target), "")),
     )
 
@@ -136,14 +148,17 @@ def test_load_cookies_into_playwright_session(tmp_path, monkeypatch):
     host = _host(_DeadSelenium(), pw)
     cookie_path = tmp_path / "cookies.json"
     cookie_path.write_text(
-        json.dumps([
-            {"name": "ok", "value": "1", "domain": "ticket.example.com"},
-            {"name": "other", "value": "9", "domain": "unrelated.example"},
-        ]),
+        json.dumps(
+            [
+                {"name": "ok", "value": "1", "domain": "ticket.example.com"},
+                {"name": "other", "value": "9", "domain": "unrelated.example"},
+            ]
+        ),
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        cookies_module.QFileDialog, "getOpenFileName",
+        cookies_module.QFileDialog,
+        "getOpenFileName",
         staticmethod(lambda *a, **k: (str(cookie_path), "")),
     )
 

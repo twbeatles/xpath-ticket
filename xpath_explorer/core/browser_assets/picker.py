@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Selenium picker JavaScript asset."""
 
-PICKER_SCRIPT = '''
+PICKER_SCRIPT = """
 (function() {
     // 이미 활성화되어 있으면 무시
     if (window.__pickerActive) return "ALREADY_ACTIVE";
@@ -416,12 +416,13 @@ PICKER_SCRIPT = '''
 
     return "STARTED";
 })();
-'''
+"""
 
 
 def picker_overlay_bootstrap(overlay_mode: bool) -> str:
     """Set overlay capture flag before (or after) injecting PICKER_SCRIPT."""
     flag = "true" if overlay_mode else "false"
     return f"window.__pickerOverlay = {flag};"
+
 
 # UI 상수

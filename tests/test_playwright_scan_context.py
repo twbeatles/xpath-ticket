@@ -17,7 +17,9 @@ class _FakeFrame:
 
 
 class _FakePage:
-    def __init__(self, title: str, url: str, main_frame: _FakeFrame, closed: bool = False):
+    def __init__(
+        self, title: str, url: str, main_frame: _FakeFrame, closed: bool = False
+    ):
         self._title = title
         self.url = url
         self.main_frame = main_frame
@@ -72,8 +74,12 @@ def test_playwright_scan_current_window_frames_fills_frame_and_window_metadata()
 
 
 def test_playwright_scan_all_pages_includes_popup_frames():
-    root = _FakePage("Root", "https://root.example", _FakeFrame("", rows=[_row(text="Root")]))
-    popup = _FakePage("Popup", "https://popup.example", _FakeFrame("", rows=[_row(text="Popup")]))
+    root = _FakePage(
+        "Root", "https://root.example", _FakeFrame("", rows=[_row(text="Root")])
+    )
+    popup = _FakePage(
+        "Popup", "https://popup.example", _FakeFrame("", rows=[_row(text="Popup")])
+    )
     manager = PlaywrightManager()
     manager._is_initialized = True
     cast(Any, manager)._page = root
@@ -84,7 +90,11 @@ def test_playwright_scan_all_pages_includes_popup_frames():
 
     assert [element.window_title for element in elements] == ["Root", "Popup"]
     assert [element.window_handle for element in elements] == ["pw-page-1", "pw-page-2"]
-    assert [element.source_engine for element in elements] == ["playwright", "playwright"]
+    assert [element.source_engine for element in elements] == [
+        "playwright",
+        "playwright",
+    ]
+
 
 class _NavigatingFrame(_FakeFrame):
     """Navigating frame whose eval injection fails."""

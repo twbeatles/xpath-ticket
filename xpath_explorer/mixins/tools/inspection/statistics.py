@@ -2,7 +2,6 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
 from xpath_explorer.qt_compat import (
     QAbstractItemView,
     QColor,
@@ -66,7 +65,9 @@ class StatisticsInspectionMixin:
                 table.setItem(row, 0, QTableWidgetItem(item.name))
                 table.setItem(row, 1, QTableWidgetItem(str(item.test_count)))
                 table.setItem(row, 2, QTableWidgetItem(str(item.success_count)))
-                table.setItem(row, 3, QTableWidgetItem(str(item.test_count - item.success_count)))
+                table.setItem(
+                    row, 3, QTableWidgetItem(str(item.test_count - item.success_count))
+                )
 
                 rate_item = QTableWidgetItem(f"{item.success_rate:.0f}%")
                 if item.success_rate >= 80:
@@ -86,7 +87,9 @@ class StatisticsInspectionMixin:
         if unstable_items:
             list_unstable = QListWidget()
             for stat in unstable_items:
-                list_unstable.addItem(f"❌ {stat.name} - 성공률: {stat.success_rate:.0f}% ({stat.total_tests}회)")
+                list_unstable.addItem(
+                    f"❌ {stat.name} - 성공률: {stat.success_rate:.0f}% ({stat.total_tests}회)"
+                )
             tab_unstable_layout.addWidget(list_unstable)
         else:
             tab_unstable_layout.addWidget(QLabel("불안정한 항목이 없습니다. 👍"))
@@ -99,11 +102,13 @@ class StatisticsInspectionMixin:
         btn_layout = QHBoxLayout()
 
         btn_clear = QPushButton("🗑 통계 초기화")
-        btn_clear.clicked.connect(lambda: (
-            self.stats_manager.clear_statistics(),
-            self._show_toast("통계가 초기화되었습니다.", "success"),
-            dialog.reject()
-        ))
+        btn_clear.clicked.connect(
+            lambda: (
+                self.stats_manager.clear_statistics(),
+                self._show_toast("통계가 초기화되었습니다.", "success"),
+                dialog.reject(),
+            )
+        )
         btn_layout.addWidget(btn_clear)
 
         btn_close = QPushButton("닫기")
@@ -146,7 +151,9 @@ class StatisticsInspectionMixin:
 
         table = QTableWidget()
         table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(["시간", "항목", "XPath", "결과", "프레임", "메시지"])
+        table.setHorizontalHeaderLabels(
+            ["시간", "항목", "XPath", "결과", "프레임", "메시지"]
+        )
         table_hh = table.horizontalHeader()
         if table_hh is not None:
             table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -195,7 +202,13 @@ class StatisticsInspectionMixin:
                 status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 table.setItem(row, 3, status_item)
                 table.setItem(row, 4, QTableWidgetItem(record.frame_path or "main"))
-                table.setItem(row, 5, QTableWidgetItem(record.error_msg or ("Found" if record.success else "")))
+                table.setItem(
+                    row,
+                    5,
+                    QTableWidgetItem(
+                        record.error_msg or ("Found" if record.success else "")
+                    ),
+                )
 
             success_count = sum(1 for r in filtered if r.success)
             fail_count = len(filtered) - success_count

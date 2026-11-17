@@ -16,15 +16,30 @@ def _ensure_qt_app():
 
 
 def _build_items():
-    a = XPathItem(name="login_btn", xpath="//button[@id='login']", category="login", description="로그인 버튼")
+    a = XPathItem(
+        name="login_btn",
+        xpath="//button[@id='login']",
+        category="login",
+        description="로그인 버튼",
+    )
     a.tags = ["auth", "primary"]
     a.is_favorite = True
 
-    b = XPathItem(name="seat_map", xpath="//div[@id='seat']", category="seat", description="좌석 맵")
+    b = XPathItem(
+        name="seat_map",
+        xpath="//div[@id='seat']",
+        category="seat",
+        description="좌석 맵",
+    )
     b.tags = ["seat"]
     b.is_favorite = False
 
-    c = XPathItem(name="login_input", xpath="//input[@name='id']", category="login", description="아이디 입력")
+    c = XPathItem(
+        name="login_input",
+        xpath="//input[@name='id']",
+        category="login",
+        description="아이디 입력",
+    )
     c.tags = ["auth"]
     c.is_favorite = False
     return [a, b, c]
@@ -69,4 +84,3 @@ def test_proxy_filters_and_item_mapping():
     final_item = proxy.get_item(0)
     assert final_item is not None
     assert final_item.name == "seat_map"
-

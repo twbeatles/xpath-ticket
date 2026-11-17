@@ -17,22 +17,29 @@ class ExplorerBrowserValidationMixin:
         xpath = self.input_xpath.toPlainText().strip()
         if not xpath:
             return
-        
+
         engine_browser, engine_name = self._active_validation_browser()
-        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+        if (
+            engine_browser is None
+            or not getattr(engine_browser, "is_alive", lambda: False)()
+        ):
             if engine_name == "playwright":
-                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "error")
+                self._show_toast(
+                    "Playwright 브라우저가 연결되어 있지 않습니다.", "error"
+                )
             else:
                 self._show_toast("브라우저가 연결되지 않았습니다.", "error")
             return
-            
+
         self._show_toast("XPath 검색 중...", "info")
         if engine_name != "playwright" and not self._ensure_window_context_for_action():
-            error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+            error_msg = str(
+                getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다."
+            )
             self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
             self._show_toast(error_msg, "error")
             return
-        
+
         original_frame = getattr(engine_browser, "current_frame_path", "") or ""
 
         target_frame = self._resolve_active_frame_path()
@@ -46,10 +53,10 @@ class ExplorerBrowserValidationMixin:
                 result = cast(Dict[str, Any], engine_browser.validate_xpath(xpath))
             else:
                 result = self._validate_xpath_for_ui(xpath, target_frame)
-            success = bool(result.get('found'))
+            success = bool(result.get("found"))
             name = self.input_name.text().strip()
             self._record_validation_outcome(name, xpath, success, result)
-            
+
             if success:
                 msg = f"✅ 발견! (개수: {result.get('count', 1)})"
                 detail = (
@@ -60,18 +67,26 @@ class ExplorerBrowserValidationMixin:
                 )
                 self.txt_result.setPlainText(msg + "\n" + detail)
                 self._show_toast("요소를 찾았습니다!", "success")
-                
+
                 # 하이라이트
-                self._highlight_on_browser(engine_browser, xpath, result.get('frame_path') or target_frame)
+                self._highlight_on_browser(
+                    engine_browser, xpath, result.get("frame_path") or target_frame
+                )
             else:
-                error_msg = str(result.get('msg') or getattr(engine_browser, "last_error", "") or "요소를 찾을 수 없습니다.")
+                error_msg = str(
+                    result.get("msg")
+                    or getattr(engine_browser, "last_error", "")
+                    or "요소를 찾을 수 없습니다."
+                )
                 self.txt_result.setPlainText(f"❌ 실패\n{error_msg}")
                 self._show_toast(error_msg, "error")
             self._refresh_table()
         finally:
             # 프레임 복구 (항상 원복)
             try:
-                switch_back = getattr(engine_browser, "switch_to_frame_by_path", None) or getattr(engine_browser, "switch_to_frame", None)
+                switch_back = getattr(
+                    engine_browser, "switch_to_frame_by_path", None
+                ) or getattr(engine_browser, "switch_to_frame", None)
                 if callable(switch_back):
                     switch_back(original_frame if original_frame else "main")
             except Exception:
@@ -83,9 +98,14 @@ class ExplorerBrowserValidationMixin:
         if not xpath:
             return
         engine_browser, engine_name = self._active_validation_browser()
-        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+        if (
+            engine_browser is None
+            or not getattr(engine_browser, "is_alive", lambda: False)()
+        ):
             if engine_name == "playwright":
-                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "warning")
+                self._show_toast(
+                    "Playwright 브라우저가 연결되어 있지 않습니다.", "warning"
+                )
             else:
                 self._show_toast("브라우저가 연결되지 않았습니다.", "warning")
             return
@@ -118,14 +138,21 @@ class ExplorerBrowserValidationMixin:
             self._show_toast("XPath를 먼저 입력하세요.", "warning")
             return
         engine_browser, engine_name = self._active_validation_browser()
-        if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
+        if (
+            engine_browser is None
+            or not getattr(engine_browser, "is_alive", lambda: False)()
+        ):
             if engine_name == "playwright":
-                self._show_toast("Playwright 브라우저가 연결되어 있지 않습니다.", "error")
+                self._show_toast(
+                    "Playwright 브라우저가 연결되어 있지 않습니다.", "error"
+                )
             else:
                 self._show_toast("브라우저가 연결되지 않았습니다.", "error")
             return
         if engine_name != "playwright" and not self._ensure_window_context_for_action():
-            error_msg = str(getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+            error_msg = str(
+                getattr(self.browser, "last_error", "") or "대상 창을 찾을 수 없습니다."
+            )
             self.txt_result.setPlainText(f"❌ 클릭 실패\n{error_msg}")
             self._show_toast(error_msg, "error")
             return
@@ -139,7 +166,9 @@ class ExplorerBrowserValidationMixin:
         self._show_toast("요소 클릭 시도 중...", "info")
         try:
             try:
-                ok = bool(click(xpath, frame_path=frame_path) if frame_path else click(xpath))
+                ok = bool(
+                    click(xpath, frame_path=frame_path) if frame_path else click(xpath)
+                )
             except TypeError:
                 ok = bool(click(xpath))
         except Exception as e:
@@ -166,7 +195,7 @@ class ExplorerBrowserValidationMixin:
         if not self.config.items:
             self._show_toast("검증할 항목이 없습니다.", "warning")
             return
-            
+
         if not self.browser.is_alive() and not (
             getattr(self, "pw_manager", None) is not None and self.pw_manager.is_alive()
         ):
@@ -178,12 +207,12 @@ class ExplorerBrowserValidationMixin:
 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        
+
         # 현재 열린 모든 윈도우 핸들 수집 (워커에 전달용)
         windows = []
         if self.browser.is_alive():
-            windows = [w['handle'] for w in self.browser.get_windows()]
-        
+            windows = [w["handle"] for w in self.browser.get_windows()]
+
         worker = ValidateWorker(
             self.browser,
             self.config.items,
@@ -191,7 +220,9 @@ class ExplorerBrowserValidationMixin:
             playwright=getattr(self, "pw_manager", None),
         )
         self.validate_worker = worker
-        worker.progress.connect(lambda v, m: (self.progress_bar.setValue(v), self.lbl_status.setText(m)))
+        worker.progress.connect(
+            lambda v, m: (self.progress_bar.setValue(v), self.lbl_status.setText(m))
+        )
         worker.validated.connect(self._on_validated)
         worker.finished.connect(self._on_validate_finished)
         worker.start()
@@ -201,9 +232,13 @@ class ExplorerBrowserValidationMixin:
         item = self.config.get_item(name)
         if not item:
             return
-        self._record_validation_outcome(name, item.xpath, bool(result.get('found')), result)
+        self._record_validation_outcome(
+            name, item.xpath, bool(result.get("found")), result
+        )
 
-    def _record_validation_outcome(self, name: str, xpath: str, success: bool, result: Dict[str, Any]):
+    def _record_validation_outcome(
+        self, name: str, xpath: str, success: bool, result: Dict[str, Any]
+    ):
         """단일/전체/배치 검증 결과 공통 처리."""
         item = self.config.get_item(name)
         if not item:
@@ -212,12 +247,12 @@ class ExplorerBrowserValidationMixin:
         item.is_verified = success
         item.record_test(success)
 
-        frame_path = (result or {}).get('frame_path', '') or ''
-        window_handle = str((result or {}).get('window_handle', '') or '')
-        window_title = str((result or {}).get('window_title', '') or '')
-        window_url = str((result or {}).get('window_url', '') or '')
+        frame_path = (result or {}).get("frame_path", "") or ""
+        window_handle = str((result or {}).get("window_handle", "") or "")
+        window_title = str((result or {}).get("window_title", "") or "")
+        window_url = str((result or {}).get("window_url", "") or "")
         if success:
-            item.element_tag = (result or {}).get('tag', '') or item.element_tag
+            item.element_tag = (result or {}).get("tag", "") or item.element_tag
             item.found_window = window_handle or item.found_window
             item.found_window_title = window_title or item.found_window_title
             item.found_window_url = window_url or item.found_window_url
@@ -244,7 +279,7 @@ class ExplorerBrowserValidationMixin:
                 xpath,
                 success,
                 frame_path=frame_path,
-                error_msg=(result or {}).get('msg', '') if not success else "",
+                error_msg=(result or {}).get("msg", "") if not success else "",
             )
 
         if not success:
@@ -269,27 +304,35 @@ class ExplorerBrowserValidationMixin:
         except Exception:
             info = None
 
-        if not info or not info.get('found'):
+        if not info or not info.get("found"):
             if self.table_model is not None:
                 self.table_model.notify_item_changed(name)
             return
 
-        item.element_tag = info.get('tag', item.element_tag) or item.element_tag
-        item.found_window = str(info.get('window_handle', '') or item.found_window or '')
-        item.found_window_title = str(info.get('window_title', '') or item.found_window_title or '')
-        item.found_window_url = str(info.get('window_url', '') or item.found_window_url or '')
-        item.found_frame = info.get('frame_path', frame_path or item.found_frame) or item.found_frame
+        item.element_tag = info.get("tag", item.element_tag) or item.element_tag
+        item.found_window = str(
+            info.get("window_handle", "") or item.found_window or ""
+        )
+        item.found_window_title = str(
+            info.get("window_title", "") or item.found_window_title or ""
+        )
+        item.found_window_url = str(
+            info.get("window_url", "") or item.found_window_url or ""
+        )
+        item.found_frame = (
+            info.get("frame_path", frame_path or item.found_frame) or item.found_frame
+        )
 
-        attrs = info.get('attributes', {})
+        attrs = info.get("attributes", {})
         if need_snapshot and isinstance(attrs, dict):
             item.element_attributes = dict(attrs)
             snapshot_payload = {
-                'xpath': xpath,
-                'tag': info.get('tag', ''),
-                'id': info.get('id', ''),
-                'class': info.get('class', ''),
-                'text': info.get('text', ''),
-                'attributes': item.element_attributes,
+                "xpath": xpath,
+                "tag": info.get("tag", ""),
+                "id": info.get("id", ""),
+                "class": info.get("class", ""),
+                "text": info.get("text", ""),
+                "attributes": item.element_attributes,
             }
             if self.diff_analyzer and hasattr(self.diff_analyzer, "save_snapshot"):
                 self.diff_analyzer.save_snapshot(name, snapshot_payload)
@@ -301,5 +344,8 @@ class ExplorerBrowserValidationMixin:
         """검증 완료"""
         self.progress_bar.setVisible(False)
         self._refresh_table()
-        self._show_toast(f"검증 완료: {found}/{total} 성공", "success" if found==total else "warning")
+        self._show_toast(
+            f"검증 완료: {found}/{total} 성공",
+            "success" if found == total else "warning",
+        )
         self.validate_worker = None

@@ -21,20 +21,22 @@ from xpath_explorer.browser.playwright_models import (
 # 상수 임포트
 from xpath_explorer.core.constants import USER_AGENTS
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -74,7 +76,9 @@ class PlaywrightLifecycleStateMixin:
         """현재 페이지 객체"""
         return self._get_current_page()
 
-    def _set_current_page(self, page: Optional[PlaywrightPageType], *, make_root: bool = False):
+    def _set_current_page(
+        self, page: Optional[PlaywrightPageType], *, make_root: bool = False
+    ):
         self._page = page
         if make_root or self._root_page is None:
             self._root_page = page
@@ -104,7 +108,9 @@ class PlaywrightLifecycleStateMixin:
         if page is None or not hasattr(page, "on"):
             return
         try:
-            page.on("close", lambda *_args, closed=page: self._handle_page_closed(closed))
+            page.on(
+                "close", lambda *_args, closed=page: self._handle_page_closed(closed)
+            )
         except Exception:
             pass
 
@@ -207,7 +213,8 @@ class PlaywrightLifecycleStateMixin:
 
         if stealth:
             chrome_like = [
-                ua for ua in USER_AGENTS
+                ua
+                for ua in USER_AGENTS
                 if "Windows NT" in ua and "Chrome/" in ua and "Firefox/" not in ua
             ]
             if chrome_like:

@@ -114,4 +114,3 @@ def test_site_config_from_dict_preserves_source_engine():
     )
 
     assert config.items[0].source_engine == "playwright"
-

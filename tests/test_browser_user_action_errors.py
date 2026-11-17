@@ -29,7 +29,9 @@ class _FakeSwitchTo:
         self._driver._frame_stack.pop()
 
     def frame(self, frame_ref):
-        frame_id = frame_ref.frame_id if isinstance(frame_ref, _FakeFrameEl) else frame_ref
+        frame_id = (
+            frame_ref.frame_id if isinstance(frame_ref, _FakeFrameEl) else frame_ref
+        )
         if not self._driver._frame_stack and frame_id == "f1":
             self._driver._frame_stack.append("f1")
             return

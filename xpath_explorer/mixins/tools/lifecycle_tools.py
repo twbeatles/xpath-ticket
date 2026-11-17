@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
@@ -33,7 +33,10 @@ class ExplorerLifecycleToolsMixin:
         busy, name = exclusive_driver_worker_running(self)
         if not busy:
             return False
-        self._show_toast(f"{action_label}을(를) 진행할 수 없습니다. 다른 브라우저 작업이 실행 중입니다 ({name}).", "warning")
+        self._show_toast(
+            f"{action_label}을(를) 진행할 수 없습니다. 다른 브라우저 작업이 실행 중입니다 ({name}).",
+            "warning",
+        )
         return True
 
     def keyPressEvent(self, a0):
@@ -43,7 +46,9 @@ class ExplorerLifecycleToolsMixin:
                 self.batch_worker.cancel()
         super().keyPressEvent(a0)
 
-    def _stop_worker_thread(self, worker: Any, worker_name: str, timeout: int = WORKER_WAIT_TIMEOUT):
+    def _stop_worker_thread(
+        self, worker: Any, worker_name: str, timeout: int = WORKER_WAIT_TIMEOUT
+    ):
         if worker is None:
             return
         try:
@@ -92,13 +97,21 @@ class ExplorerLifecycleToolsMixin:
                 self.settings.setValue("geometry", self.saveGeometry())
             self._save_settings()
 
-            self._stop_worker_thread(getattr(self, "picker_watcher", None), "PickerWatcher")
-            self._stop_worker_thread(getattr(self, "validate_worker", None), "ValidateWorker")
-            self._stop_worker_thread(getattr(self, "live_preview_worker", None), "LivePreviewWorker")
+            self._stop_worker_thread(
+                getattr(self, "picker_watcher", None), "PickerWatcher"
+            )
+            self._stop_worker_thread(
+                getattr(self, "validate_worker", None), "ValidateWorker"
+            )
+            self._stop_worker_thread(
+                getattr(self, "live_preview_worker", None), "LivePreviewWorker"
+            )
             self._stop_worker_thread(getattr(self, "ai_worker", None), "AIWorker")
             self._stop_worker_thread(getattr(self, "diff_worker", None), "DiffWorker")
             self._stop_worker_thread(getattr(self, "batch_worker", None), "BatchWorker")
-            self._stop_worker_thread(getattr(self, "scenario_worker", None), "BatchScenarioWorker")
+            self._stop_worker_thread(
+                getattr(self, "scenario_worker", None), "BatchScenarioWorker"
+            )
             self._stop_worker_thread(
                 getattr(self, "playwright_install_worker", None),
                 "InstallChromiumWorker",

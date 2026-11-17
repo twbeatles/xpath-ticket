@@ -14,20 +14,22 @@ from xpath_explorer.browser import playwright_deps as deps
 # 상수 임포트
 from xpath_explorer.core.constants import STEALTH_SCRIPT
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
@@ -57,7 +59,9 @@ class PlaywrightLaunchMixin:
         try:
             running_loop = asyncio.get_running_loop()
             if running_loop.is_running():
-                self.last_error = "sync_playwright cannot run inside an active asyncio loop"
+                self.last_error = (
+                    "sync_playwright cannot run inside an active asyncio loop"
+                )
                 logger.error(
                     "Playwright Sync API는 asyncio 루프 내부에서 실행할 수 없습니다. "
                     "현재 경로는 Async API 또는 별도 스레드/프로세스가 필요합니다."
@@ -77,20 +81,22 @@ class PlaywrightLaunchMixin:
 
             # 브라우저 시작 옵션
             launch_args = [
-                '--start-maximized',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-infobars',
-                '--disable-extensions',
-                '--lang=ko-KR',
+                "--start-maximized",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-infobars",
+                "--disable-extensions",
+                "--lang=ko-KR",
             ]
 
             if headless:
-                launch_args.extend([
-                    '--headless=new',  # 새로운 headless 모드 (탐지 어려움)
-                ])
+                launch_args.extend(
+                    [
+                        "--headless=new",  # 새로운 headless 모드 (탐지 어려움)
+                    ]
+                )
 
             launch_kwargs = {
                 "headless": headless,
@@ -102,10 +108,14 @@ class PlaywrightLaunchMixin:
             self._browser = None
             if stealth:
                 try:
-                    self._browser = self._playwright.chromium.launch(channel="chrome", **launch_kwargs)
+                    self._browser = self._playwright.chromium.launch(
+                        channel="chrome", **launch_kwargs
+                    )
                     logger.info("Playwright system Chrome 채널로 실행")
                 except Exception as e:
-                    logger.debug(f"system Chrome 채널 실행 실패, bundled Chromium으로 폴백: {e}")
+                    logger.debug(
+                        f"system Chrome 채널 실행 실패, bundled Chromium으로 폴백: {e}"
+                    )
 
             if self._browser is None:
                 self._browser = self._playwright.chromium.launch(**launch_kwargs)
@@ -116,13 +126,13 @@ class PlaywrightLaunchMixin:
 
             # 컨텍스트 생성 (fingerprint 설정)
             self._context = self._browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
+                viewport={"width": 1920, "height": 1080},
                 user_agent=user_agent,
-                locale='ko-KR',
-                timezone_id='Asia/Seoul',
-                geolocation={'latitude': 37.5665, 'longitude': 126.9780},
-                permissions=['geolocation'],
-                color_scheme='light',
+                locale="ko-KR",
+                timezone_id="Asia/Seoul",
+                geolocation={"latitude": 37.5665, "longitude": 126.9780},
+                permissions=["geolocation"],
+                color_scheme="light",
                 device_scale_factor=1,
                 extra_http_headers={
                     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -155,7 +165,9 @@ class PlaywrightLaunchMixin:
             try:
                 self.close()
             except Exception as cleanup_error:
-                logger.debug(f"Playwright 초기화 실패 후 정리 중 예외(무시): {cleanup_error}")
+                logger.debug(
+                    f"Playwright 초기화 실패 후 정리 중 예외(무시): {cleanup_error}"
+                )
             return False
 
     def _apply_stealth(self):

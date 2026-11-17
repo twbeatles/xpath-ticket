@@ -84,7 +84,10 @@ def test_history_snapshot_preserves_metadata_and_truncates_attributes():
 
     restored = mgr.undo()
     assert restored is not None
-    assert restored[0]["alternatives"] == ["//*[@id='target']", "//button[contains(.,'확인')]"]
+    assert restored[0]["alternatives"] == [
+        "//*[@id='target']",
+        "//button[contains(.,'확인')]",
+    ]
     assert restored[0]["screenshot_path"] == "captures/target.png"
     restored_attrs = restored[0]["element_attributes"]
     assert len(restored_attrs) == HISTORY_MAX_ELEMENT_ATTRIBUTES

@@ -19,19 +19,26 @@ class ExplorerBrowserPreviewMixin:
         """실시간 매칭 요소 수 업데이트 (비동기)"""
         with perf_span("ui.update_live_preview"):
             xpath = self.input_xpath.toPlainText().strip()
-        
+
             if not xpath:
                 self.lbl_live_preview.setText("🔍 매칭: -")
                 self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
                 return
-            
+
             from xpath_explorer.workers.driver_guard import (
                 exclusive_driver_worker_running,
             )
 
             engine_browser, engine_name = self._active_validation_browser()
-            if engine_browser is None or not getattr(engine_browser, "is_alive", lambda: False)():
-                label = "Playwright 없음" if engine_name == "playwright" else "브라우저 없음"
+            if (
+                engine_browser is None
+                or not getattr(engine_browser, "is_alive", lambda: False)()
+            ):
+                label = (
+                    "Playwright 없음"
+                    if engine_name == "playwright"
+                    else "브라우저 없음"
+                )
                 self.lbl_live_preview.setText(f"🔍 매칭: ({label})")
                 self.lbl_live_preview.setStyleSheet("color: #6c7086; font-size: 11px;")
                 return
@@ -56,7 +63,9 @@ class ExplorerBrowserPreviewMixin:
             if source_engine == "playwright":
                 window_context = {
                     "handle": "",
-                    "title": str(getattr(self, "_editing_source_window_title", "") or ""),
+                    "title": str(
+                        getattr(self, "_editing_source_window_title", "") or ""
+                    ),
                     "url": str(getattr(self, "_editing_source_window_url", "") or ""),
                 }
             else:
@@ -75,7 +84,10 @@ class ExplorerBrowserPreviewMixin:
                         "title": str(getattr(item, "found_window_title", "") or ""),
                         "url": str(getattr(item, "found_window_url", "") or ""),
                     }
-                    if str(getattr(item, "source_engine", "") or "").lower() == "playwright":
+                    if (
+                        str(getattr(item, "source_engine", "") or "").lower()
+                        == "playwright"
+                    ):
                         window_context["handle"] = ""
 
             frame_path = self._resolve_active_frame_path()
@@ -96,7 +108,9 @@ class ExplorerBrowserPreviewMixin:
                 )
             worker.counted.connect(self._on_live_preview_counted)
             worker.failed.connect(self._on_live_preview_failed)
-            worker.finished.connect(lambda w=worker: self._on_live_preview_worker_finished(w))
+            worker.finished.connect(
+                lambda w=worker: self._on_live_preview_worker_finished(w)
+            )
             self.live_preview_worker = worker
             worker.start()
 

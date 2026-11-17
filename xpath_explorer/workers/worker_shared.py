@@ -4,9 +4,12 @@
 import logging
 from typing import Any, Dict
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
-def _engine_browser_for_item(selenium: Any, playwright: Any, item: Any) -> tuple[Any, str]:
+
+def _engine_browser_for_item(
+    selenium: Any, playwright: Any, item: Any
+) -> tuple[Any, str]:
     from xpath_explorer.browser.engine_router import resolve_browser_for_item
 
     return resolve_browser_for_item(selenium, playwright, item)
@@ -46,7 +49,9 @@ def _get_browser_frame_path(browser: Any) -> str:
     return str(getattr(browser, "current_frame_path", "") or "")
 
 
-def _restore_browser_context(browser: Any, window_handle: str = "", frame_path: str = "") -> bool:
+def _restore_browser_context(
+    browser: Any, window_handle: str = "", frame_path: str = ""
+) -> bool:
     ok = True
     handle = str(window_handle or "")
     if handle:
@@ -95,4 +100,6 @@ def _switch_browser_to_item_window(browser: Any, item: Any) -> tuple[bool, str]:
         return False, str(e)
     if ok:
         return True, ""
-    return False, str(getattr(browser, "last_error", "") or "대상 창을 찾을 수 없습니다.")
+    return False, str(
+        getattr(browser, "last_error", "") or "대상 창을 찾을 수 없습니다."
+    )

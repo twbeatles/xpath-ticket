@@ -2,7 +2,6 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
 from xpath_explorer.core.config import SiteConfig
 from xpath_explorer.core.constants import SITE_PRESETS
 from xpath_explorer.qt_compat import (
@@ -26,7 +25,7 @@ class ExplorerDataSettingsMixin:
         if len(self.config.items) > 0:
             reply = QMessageBox.question(
                 self,
-                '확인',
+                "확인",
                 f'"{preset_name}" 프리셋을 불러오시겠습니까?\n현재 작성 중인 목록은 초기화됩니다.',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -38,7 +37,7 @@ class ExplorerDataSettingsMixin:
                 return
 
         self.config = SiteConfig.from_preset(preset_name)
-        self._editing_original_name = ''
+        self._editing_original_name = ""
 
         if self.config.login_url:
             self.input_url.setText(self.config.login_url)
@@ -50,7 +49,7 @@ class ExplorerDataSettingsMixin:
         self._refresh_table(refresh_filters=True)
         self._reset_history_baseline()
         self._mark_config_clean()
-        self._show_toast(f'{preset_name} 프리셋 로드 완료', 'success')
+        self._show_toast(f"{preset_name} 프리셋 로드 완료", "success")
 
     def _increase_font(self):
         self._apply_font_size(self._font_size + 1)

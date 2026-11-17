@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
@@ -36,33 +36,39 @@ class ExplorerGenerationToolsMixin:
         if not self.config.items:
             self._show_toast("생성할 XPath 항목이 없습니다.", "warning")
             return
-        
+
         dialog = QDialog(self)
         dialog.setWindowTitle("매크로 코드 생성")
         dialog.resize(800, 600)
-        
+
         layout = QVBoxLayout(dialog)
-        
+
         # 템플릿 선택
         layout.addWidget(QLabel("코드 템플릿:"))
         combo_template = QComboBox()
-        combo_template.addItems(["Selenium (파이썬)", "Playwright (파이썬)", "PyAutoGUI"])
+        combo_template.addItems(
+            ["Selenium (파이썬)", "Playwright (파이썬)", "PyAutoGUI"]
+        )
         layout.addWidget(combo_template)
-        
+
         # 코드 미리보기
         layout.addWidget(QLabel("생성된 코드:"))
         txt_code = QPlainTextEdit()
         txt_code.setReadOnly(True)
-        txt_code.setStyleSheet("font-family: 'Consolas', monospace; background-color: #181825;")
+        txt_code.setStyleSheet(
+            "font-family: 'Consolas', monospace; background-color: #181825;"
+        )
         layout.addWidget(txt_code)
-        
+
         def generate_code():
             template_map = {
                 0: CodeTemplate.SELENIUM_PYTHON,
                 1: CodeTemplate.PLAYWRIGHT_PYTHON,
-                2: CodeTemplate.PYAUTOGUI
+                2: CodeTemplate.PYAUTOGUI,
             }
-            template = template_map.get(combo_template.currentIndex(), CodeTemplate.SELENIUM_PYTHON)
+            template = template_map.get(
+                combo_template.currentIndex(), CodeTemplate.SELENIUM_PYTHON
+            )
             try:
                 code = self.code_generator.generate(self.config.items, template)
             except Exception as e:
@@ -70,35 +76,41 @@ class ExplorerGenerationToolsMixin:
                 self._show_toast(f"코드 생성 실패: {e}", "error")
                 return
             txt_code.setPlainText(code)
-        
+
         combo_template.currentIndexChanged.connect(generate_code)
         generate_code()  # 초기 생성
-        
+
         # 버튼
         btn_layout = QHBoxLayout()
-        
+
         btn_copy = QPushButton("📋 복사")
+
         def copy_code():
             clipboard = QApplication.clipboard()
             if clipboard is not None:
                 clipboard.setText(txt_code.toPlainText())
             self._show_toast("코드가 클립보드에 복사되었습니다.", "success")
+
         btn_copy.clicked.connect(copy_code)
         btn_layout.addWidget(btn_copy)
-        
+
         btn_save = QPushButton("💾 파일로 저장")
+
         def save_code():
-            fname, _ = QFileDialog.getSaveFileName(dialog, "코드 저장", "macro_script", "파이썬 파일 (*.py)")
+            fname, _ = QFileDialog.getSaveFileName(
+                dialog, "코드 저장", "macro_script", "파이썬 파일 (*.py)"
+            )
             if fname:
                 atomic_write_text(Path(fname), txt_code.toPlainText())
                 self._show_toast(f"저장 완료: {fname}", "success")
+
         btn_save.clicked.connect(save_code)
         btn_layout.addWidget(btn_save)
-        
+
         btn_close = QPushButton("닫기")
         btn_close.clicked.connect(dialog.reject)
         btn_layout.addWidget(btn_close)
-        
+
         layout.addLayout(btn_layout)
         dialog.exec()
 
@@ -116,7 +128,9 @@ class ExplorerGenerationToolsMixin:
         filter_row.addWidget(QLabel("카테고리:"))
         combo_category = QComboBox()
         combo_category.addItem("전체", "")
-        for category in sorted({t.category for t in self.code_generator.list_xpath_templates()}):
+        for category in sorted(
+            {t.category for t in self.code_generator.list_xpath_templates()}
+        ):
             combo_category.addItem(category_to_label(category), category)
         filter_row.addWidget(combo_category)
 
@@ -128,7 +142,9 @@ class ExplorerGenerationToolsMixin:
 
         table = QTableWidget()
         table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["카테고리", "템플릿명", "XPath", "설명", "사용"])
+        table.setHorizontalHeaderLabels(
+            ["카테고리", "템플릿명", "XPath", "설명", "사용"]
+        )
         table_hh = table.horizontalHeader()
         if table_hh is not None:
             table_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -171,7 +187,9 @@ class ExplorerGenerationToolsMixin:
 
             table.setRowCount(len(current_rows))
             for row, template in enumerate(current_rows):
-                table.setItem(row, 0, QTableWidgetItem(category_to_label(template.category)))
+                table.setItem(
+                    row, 0, QTableWidgetItem(category_to_label(template.category))
+                )
                 table.setItem(row, 1, QTableWidgetItem(template.name))
 
                 xpath_item = QTableWidgetItem(template.xpath)
@@ -182,7 +200,9 @@ class ExplorerGenerationToolsMixin:
                 btn_apply = QPushButton("적용")
                 btn_apply.setObjectName("success")
                 btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_apply.clicked.connect(lambda _checked=False, t=template: apply_template(t))
+                btn_apply.clicked.connect(
+                    lambda _checked=False, t=template: apply_template(t)
+                )
                 table.setCellWidget(row, 4, btn_apply)
 
             lbl_summary.setText(f"템플릿 {len(current_rows)}개")
@@ -224,49 +244,53 @@ class ExplorerGenerationToolsMixin:
     def _show_xpath_alternatives(self):
         """XPath 대안 제안 다이얼로그"""
         xpath = self.input_xpath.toPlainText().strip()
-        
+
         if not xpath:
             self._show_toast("XPath를 먼저 입력하세요.", "warning")
             return
-        
+
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
-        
+
         # 요소 정보 가져오기
         element_info = self.browser.get_element_info(xpath)
-        
-        if not element_info or not element_info.get('found'):
+
+        if not element_info or not element_info.get("found"):
             self._show_toast("요소를 찾을 수 없습니다.", "error")
             return
-        
+
         # 대안 생성
-        element_info['original_xpath'] = xpath
+        element_info["original_xpath"] = xpath
         alternatives = self.optimizer.generate_alternatives(element_info)
-        
+
         if not alternatives:
             self._show_toast("대안을 생성할 수 없습니다.", "warning")
             return
-        
+
         # 다이얼로그 표시
         dialog = QDialog(self)
         dialog.setWindowTitle("💡 XPath 대안 제안")
         dialog.resize(700, 500)
-        
+
         layout = QVBoxLayout(dialog)
-        
+
         # 요소 정보 요약
         info_text = f"요소: <{element_info.get('tag', '?')}>"
-        if element_info.get('id'):
+        if element_info.get("id"):
             info_text += f" id='{element_info['id']}'"
-        if element_info.get('class'):
-            info_text += f" class='{element_info['class'][:30]}...'" if len(element_info.get('class', '')) > 30 else f" class='{element_info.get('class', '')}'"
-        
+        if element_info.get("class"):
+            info_text += (
+                f" class='{element_info['class'][:30]}...'"
+                if len(element_info.get("class", "")) > 30
+                else f" class='{element_info.get('class', '')}'"
+            )
+
         lbl_info = QLabel(info_text)
         lbl_info.setWordWrap(True)
         lbl_info.setStyleSheet("color: #89b4fa; padding: 5px;")
         layout.addWidget(lbl_info)
-        
+
         # 대안 테이블
         table = QTableWidget()
         table.setColumnCount(4)
@@ -281,11 +305,11 @@ class ExplorerGenerationToolsMixin:
         if alt_vh is not None:
             alt_vh.setVisible(False)
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        
+
         for alt in alternatives:
             row = table.rowCount()
             table.insertRow(row)
-            
+
             # 점수
             score_item = QTableWidgetItem(f"{alt.robustness_score:.0f}")
             score_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -296,31 +320,33 @@ class ExplorerGenerationToolsMixin:
             else:
                 score_item.setForeground(QColor("#f38ba8"))
             table.setItem(row, 0, score_item)
-            
+
             # 전략
             table.setItem(row, 1, QTableWidgetItem(alt.strategy))
-            
+
             # XPath
             xpath_item = QTableWidgetItem(alt.xpath)
             xpath_item.setToolTip(alt.description)
             table.setItem(row, 2, xpath_item)
-            
+
             # 사용 버튼
             btn_use = QPushButton("사용")
             btn_use.setObjectName("success")
             btn_use.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_use.clicked.connect(lambda checked, x=alt.xpath: (
-                self.input_xpath.setPlainText(x),
-                self._show_toast("XPath 적용됨", "success"),
-                dialog.accept()
-            ))
+            btn_use.clicked.connect(
+                lambda checked, x=alt.xpath: (
+                    self.input_xpath.setPlainText(x),
+                    self._show_toast("XPath 적용됨", "success"),
+                    dialog.accept(),
+                )
+            )
             table.setCellWidget(row, 3, btn_use)
-        
+
         layout.addWidget(table)
-        
+
         # 닫기 버튼
         btn_close = QPushButton("닫기")
         btn_close.clicked.connect(dialog.reject)
         layout.addWidget(btn_close)
-        
+
         dialog.exec()

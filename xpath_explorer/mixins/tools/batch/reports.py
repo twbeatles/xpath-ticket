@@ -26,12 +26,16 @@ from xpath_explorer.tools.csv_safety import sanitize_csv_value
 
 class BatchReportMixin:
     @staticmethod
-    def _top_failure_reasons(results: List[Dict[str, Any]], top_n: int = 5) -> List[Tuple[str, int]]:
+    def _top_failure_reasons(
+        results: List[Dict[str, Any]], top_n: int = 5
+    ) -> List[Tuple[str, int]]:
         counter: Counter[str] = Counter()
         for row in results:
             if bool(row.get("success")):
                 continue
-            reason = str(row.get("msg", "") or "Unknown error").strip() or "Unknown error"
+            reason = (
+                str(row.get("msg", "") or "Unknown error").strip() or "Unknown error"
+            )
             counter[reason] += 1
         return list(counter.most_common(max(1, int(top_n))))
 
@@ -102,7 +106,12 @@ class BatchReportMixin:
     @staticmethod
     def _escape_markdown_cell(value: Any) -> str:
         text = str(value if value is not None else "")
-        return text.replace("\\", "\\\\").replace("|", "\\|").replace("\r\n", "<br>").replace("\n", "<br>")
+        return (
+            text.replace("\\", "\\\\")
+            .replace("|", "\\|")
+            .replace("\r\n", "<br>")
+            .replace("\n", "<br>")
+        )
 
     @classmethod
     def _batch_results_to_markdown(
@@ -117,7 +126,9 @@ class BatchReportMixin:
         success_count = sum(1 for row in results if bool(row.get("success")))
         retry_sum = retry_total
         if retry_sum is None:
-            retry_sum = sum(max(0, int(row.get("retry_count", 0) or 0)) for row in results)
+            retry_sum = sum(
+                max(0, int(row.get("retry_count", 0) or 0)) for row in results
+            )
         success_rate = (success_count / total * 100.0) if total else 0.0
         columns = cls._batch_export_columns()
         lines = [
@@ -135,7 +146,14 @@ class BatchReportMixin:
         ]
         for row in results:
             normalized = cls._batch_export_row(row)
-            lines.append("|" + "|".join(cls._escape_markdown_cell(normalized.get(col, "")) for col in columns) + "|")
+            lines.append(
+                "|"
+                + "|".join(
+                    cls._escape_markdown_cell(normalized.get(col, ""))
+                    for col in columns
+                )
+                + "|"
+            )
         return "\n".join(lines) + "\n"
 
     def _save_batch_results(
@@ -165,7 +183,9 @@ class BatchReportMixin:
             )
             suffix = ".md"
 
-        fname, _ = QFileDialog.getSaveFileName(self, "결과 저장", default_name, file_filter)
+        fname, _ = QFileDialog.getSaveFileName(
+            self, "결과 저장", default_name, file_filter
+        )
         if not fname:
             return
         if not fname.lower().endswith(suffix):
@@ -196,7 +216,9 @@ class BatchReportMixin:
         success_count = sum(1 for r in results if bool(r.get("success")))
         success_rate = (success_count / total * 100.0) if total > 0 else 0.0
         if retry_total is None:
-            retry_total = sum(max(0, int(r.get("retry_count", 0) or 0)) for r in results)
+            retry_total = sum(
+                max(0, int(r.get("retry_count", 0) or 0)) for r in results
+            )
 
         cancelled_text = " | 상태: 취소됨" if cancelled else ""
         summary = QLabel(
@@ -208,7 +230,9 @@ class BatchReportMixin:
 
         table = QTableWidget()
         table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(["상태", "이름", "프레임", "창", "개수", "결과"])
+        table.setHorizontalHeaderLabels(
+            ["상태", "이름", "프레임", "창", "개수", "결과"]
+        )
         batch_hh = table.horizontalHeader()
         if batch_hh is not None:
             batch_hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -225,11 +249,29 @@ class BatchReportMixin:
             status = QTableWidgetItem("✅" if success else "❌")
             status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             table.setItem(row, 0, status)
-            table.setItem(row, 1, QTableWidgetItem(str(r.get("name", r.get("item_name", "-")))))
+            table.setItem(
+                row, 1, QTableWidgetItem(str(r.get("name", r.get("item_name", "-"))))
+            )
             table.setItem(row, 2, QTableWidgetItem(str(r.get("frame_path", ""))))
-            table.setItem(row, 3, QTableWidgetItem(str(r.get("window_title", "") or r.get("window_url", "") or r.get("window_handle", ""))))
+            table.setItem(
+                row,
+                3,
+                QTableWidgetItem(
+                    str(
+                        r.get("window_title", "")
+                        or r.get("window_url", "")
+                        or r.get("window_handle", "")
+                    )
+                ),
+            )
             table.setItem(row, 4, QTableWidgetItem(str(r.get("count", ""))))
-            table.setItem(row, 5, QTableWidgetItem(str(r.get("msg", "Found" if success else "Not found"))))
+            table.setItem(
+                row,
+                5,
+                QTableWidgetItem(
+                    str(r.get("msg", "Found" if success else "Not found"))
+                ),
+            )
 
         layout.addWidget(table)
 
@@ -240,7 +282,10 @@ class BatchReportMixin:
             txt_failures.setReadOnly(True)
             txt_failures.setMaximumHeight(120)
             txt_failures.setPlainText(
-                "\n".join(f"{idx}. {reason} ({count}회)" for idx, (reason, count) in enumerate(top_failures, start=1))
+                "\n".join(
+                    f"{idx}. {reason} ({count}회)"
+                    for idx, (reason, count) in enumerate(top_failures, start=1)
+                )
             )
             layout.addWidget(txt_failures)
 
@@ -268,9 +313,23 @@ class BatchReportMixin:
 
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btn_csv = btn_box.addButton("CSV 저장", QDialogButtonBox.ButtonRole.ActionRole)
-        btn_md = btn_box.addButton("Markdown 저장", QDialogButtonBox.ButtonRole.ActionRole)
-        btn_csv.clicked.connect(lambda: self._save_batch_results(results, "csv", cancelled=cancelled, title=title, retry_total=retry_total))
-        btn_md.clicked.connect(lambda: self._save_batch_results(results, "md", cancelled=cancelled, title=title, retry_total=retry_total))
+        btn_md = btn_box.addButton(
+            "Markdown 저장", QDialogButtonBox.ButtonRole.ActionRole
+        )
+        btn_csv.clicked.connect(
+            lambda: self._save_batch_results(
+                results,
+                "csv",
+                cancelled=cancelled,
+                title=title,
+                retry_total=retry_total,
+            )
+        )
+        btn_md.clicked.connect(
+            lambda: self._save_batch_results(
+                results, "md", cancelled=cancelled, title=title, retry_total=retry_total
+            )
+        )
         btn_box.rejected.connect(dialog.reject)
         layout.addWidget(btn_box)
 

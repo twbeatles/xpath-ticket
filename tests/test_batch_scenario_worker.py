@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from PySide6.QtCore import QCoreApplication
 
 from xpath_explorer.core.config import XPathItem
@@ -37,13 +37,33 @@ class _FakeBrowser:
     def validate_xpath(self, xpath, preferred_frame=None, session=None):
         self.validate_calls.append((xpath, preferred_frame, session))
         if xpath == "//ok":
-            return {"found": True, "msg": "", "frame_path": preferred_frame or "main", "count": 1}
+            return {
+                "found": True,
+                "msg": "",
+                "frame_path": preferred_frame or "main",
+                "count": 1,
+            }
         if xpath == "//flaky":
             self._flaky_calls += 1
             if self._flaky_calls >= 2:
-                return {"found": True, "msg": "recovered", "frame_path": preferred_frame or "main", "count": 1}
-            return {"found": False, "msg": "temporary failure", "frame_path": preferred_frame or "main", "count": 0}
-        return {"found": False, "msg": "not found", "frame_path": preferred_frame or "main", "count": 0}
+                return {
+                    "found": True,
+                    "msg": "recovered",
+                    "frame_path": preferred_frame or "main",
+                    "count": 1,
+                }
+            return {
+                "found": False,
+                "msg": "temporary failure",
+                "frame_path": preferred_frame or "main",
+                "count": 0,
+            }
+        return {
+            "found": False,
+            "msg": "not found",
+            "frame_path": preferred_frame or "main",
+            "count": 0,
+        }
 
     def get_current_window_metadata(self):
         return {
@@ -80,7 +100,9 @@ class _FakeBrowser:
         return True
 
     def switch_to_window_context(self, handle="", window_url="", title=""):
-        self.window_action_calls.append(("switch_to_window_context", handle, window_url, title))
+        self.window_action_calls.append(
+            ("switch_to_window_context", handle, window_url, title)
+        )
         if handle:
             self.current_handle = handle
             self.current_title = "Root" if handle == "root" else "Popup"
@@ -189,7 +211,12 @@ def test_batch_scenario_worker_retries_and_reports_attempt_metadata():
     scenario = {
         "name": "retry",
         "steps": [
-            {"name": "flaky xpath", "action": "validate_xpath", "xpath": "//flaky", "retries": 2},
+            {
+                "name": "flaky xpath",
+                "action": "validate_xpath",
+                "xpath": "//flaky",
+                "retries": 2,
+            },
         ],
     }
 
@@ -245,9 +272,18 @@ def test_batch_scenario_worker_supports_popup_and_window_switch_actions():
     scenario = {
         "name": "popup-flow",
         "steps": [
-            {"name": "detect popup", "action": "wait_for_popup", "seconds": 0.5, "title": "Popup"},
+            {
+                "name": "detect popup",
+                "action": "wait_for_popup",
+                "seconds": 0.5,
+                "title": "Popup",
+            },
             {"name": "switch popup", "action": "switch_latest_popup"},
-            {"name": "switch by title", "action": "switch_window_by_title", "title": "Popup"},
+            {
+                "name": "switch by title",
+                "action": "switch_window_by_title",
+                "title": "Popup",
+            },
             {"name": "back root", "action": "switch_root_window"},
         ],
     }
@@ -378,14 +414,25 @@ class _FakePlaywright:
     def validate_xpath(self, xpath):
         self.validate_calls.append(xpath)
         if xpath == "//pw-ok":
-            return {"found": True, "msg": "", "frame_path": "main", "count": 1,
-                    "tag": "button", "window_handle": "pw-page",
-                    "window_title": "PW", "window_url": "https://pw.example"}
+            return {
+                "found": True,
+                "msg": "",
+                "frame_path": "main",
+                "count": 1,
+                "tag": "button",
+                "window_handle": "pw-page",
+                "window_title": "PW",
+                "window_url": "https://pw.example",
+            }
         return {"found": False, "msg": "not found", "frame_path": "main", "count": 0}
 
     def get_current_window_metadata(self):
-        return {"handle": "pw-page", "title": "PW",
-                "url": "https://pw.example", "is_popup": False}
+        return {
+            "handle": "pw-page",
+            "title": "PW",
+            "url": "https://pw.example",
+            "is_popup": False,
+        }
 
 
 class _DeadPlaywright(_FakePlaywright):
@@ -399,9 +446,12 @@ def _run_worker(browser, items, scenario, playwright=None):
     worker = BatchScenarioWorker(browser, items, scenario, playwright=playwright)
     worker.completed.connect(
         lambda results, cancelled, name: outcome.update(
-            kind="completed", results=results, cancelled=cancelled)
+            kind="completed", results=results, cancelled=cancelled
+        )
     )
-    worker.failed.connect(lambda message: outcome.update(kind="failed", message=message))
+    worker.failed.connect(
+        lambda message: outcome.update(kind="failed", message=message)
+    )
     worker.run()
     return outcome
 
@@ -409,8 +459,14 @@ def _run_worker(browser, items, scenario, playwright=None):
 def test_scenario_playwright_only_runs_playwright_item_steps():
     browser = _DeadBrowser()
     playwright = _FakePlaywright()
-    items = [XPathItem(name="pw_btn", xpath="//pw-ok", category="booking",
-                       source_engine="playwright")]
+    items = [
+        XPathItem(
+            name="pw_btn",
+            xpath="//pw-ok",
+            category="booking",
+            source_engine="playwright",
+        )
+    ]
     scenario = {
         "name": "pw-only",
         "steps": [
@@ -444,9 +500,12 @@ def test_scenario_playwright_only_fails_fast_on_selenium_steps():
 
 def test_scenario_both_dead_fails_fast_instead_of_empty_completed():
     outcome = _run_worker(
-        _DeadBrowser(), [],
-        {"name": "dead", "steps": [{"name": "x", "action": "validate_xpath",
-                                    "xpath": "//ok"}]},
+        _DeadBrowser(),
+        [],
+        {
+            "name": "dead",
+            "steps": [{"name": "x", "action": "validate_xpath", "xpath": "//ok"}],
+        },
         playwright=_DeadPlaywright(),
     )
 
@@ -456,8 +515,11 @@ def test_scenario_both_dead_fails_fast_instead_of_empty_completed():
 
 def test_scenario_playwright_item_falls_back_to_selenium():
     browser = _FakeBrowser()
-    items = [XPathItem(name="pw_btn", xpath="//ok", category="booking",
-                       source_engine="playwright")]
+    items = [
+        XPathItem(
+            name="pw_btn", xpath="//ok", category="booking", source_engine="playwright"
+        )
+    ]
     scenario = {
         "name": "fallback",
         "steps": [{"name": "pw check", "action": "validate_item", "item": "pw_btn"}],

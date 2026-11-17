@@ -2,7 +2,6 @@
 # pyright: reportAttributeAccessIssue=false, reportCallIssue=false, reportArgumentType=false
 """XPath Explorer mixin module (auto-split from legacy main file)."""
 
-
 from xpath_explorer.qt_compat import (
     QDialog,
     QHBoxLayout,
@@ -29,11 +28,12 @@ class NetworkInspectionMixin:
         analyzer = NetworkAnalyzer()
         if not analyzer.is_playwright_available():
             QMessageBox.warning(
-                self, "Playwright 필요",
+                self,
+                "Playwright 필요",
                 "네트워크 분석 기능을 사용하려면 Playwright가 필요합니다.\n\n"
                 "설치 방법:\n"
                 "pip install playwright\n"
-                "playwright install chromium"
+                "playwright install chromium",
             )
             return
 
@@ -90,7 +90,9 @@ class NetworkInspectionMixin:
                 last_error = getattr(analyzer, "last_error", "")
                 if last_error:
                     lbl_status.setText(f"● 시작 실패: {last_error}")
-                    self._show_toast(f"네트워크 분석기 시작 실패: {last_error}", "error")
+                    self._show_toast(
+                        f"네트워크 분석기 시작 실패: {last_error}", "error"
+                    )
                 else:
                     lbl_status.setText("● 시작 실패")
                 lbl_status.setStyleSheet("color: #f38ba8;")

@@ -79,7 +79,11 @@ class ExplorerDataFiltersMixin:
         return True
 
     def _collect_filtered_items(self, target_cat: str) -> List[XPathItem]:
-        items_to_show = [item for item in self.config.items if self._item_matches_filters(item, target_cat)]
+        items_to_show = [
+            item
+            for item in self.config.items
+            if self._item_matches_filters(item, target_cat)
+        ]
         items_to_show.sort(key=lambda x: x.sort_order)
         return items_to_show
 
@@ -96,11 +100,17 @@ class ExplorerDataFiltersMixin:
 
     def _update_table_summary(self, items_to_show: List[XPathItem]):
         verified_count = sum(1 for item in items_to_show if item.is_verified)
-        self.lbl_summary.setText(f"총 {len(self.config.items)}개 (필터됨: {len(items_to_show)}개) | ✅ {verified_count}")
+        self.lbl_summary.setText(
+            f"총 {len(self.config.items)}개 (필터됨: {len(items_to_show)}개) | ✅ {verified_count}"
+        )
         if len(items_to_show) == 0 and len(self.config.items) > 0:
-            self.lbl_summary.setText(f"검색 결과 없음 (전체: {len(self.config.items)}개)")
+            self.lbl_summary.setText(
+                f"검색 결과 없음 (전체: {len(self.config.items)}개)"
+            )
         elif len(self.config.items) == 0:
-            self.lbl_summary.setText("항목이 없습니다. '+ 새 항목' 버튼을 클릭하여 추가하세요.")
+            self.lbl_summary.setText(
+                "항목이 없습니다. '+ 새 항목' 버튼을 클릭하여 추가하세요."
+            )
 
     def _refresh_table(self, filter_cat=None, refresh_filters: bool = False):
         """테이블 갱신 - 모델/프록시 기반 필터 반영."""
@@ -109,15 +119,21 @@ class ExplorerDataFiltersMixin:
                 self.table_model.set_items(self.config.items)
                 self._table_data_dirty = False
             self._refresh_filter_options_if_dirty(force=refresh_filters)
-            target_cat = category_to_value(filter_cat or "") if filter_cat is not None else ""
+            target_cat = (
+                category_to_value(filter_cat or "") if filter_cat is not None else ""
+            )
             if not target_cat:
                 combo_data = self.combo_filter.currentData()
                 if isinstance(combo_data, str):
                     target_cat = combo_data
                 else:
-                    target_cat = category_to_value(self.combo_filter.currentText() or "")
+                    target_cat = category_to_value(
+                        self.combo_filter.currentText() or ""
+                    )
             self.table_proxy.set_category_filter(target_cat, "")
-            self.table_proxy.set_tag_filter(self._filter_tag or "모든 태그", "모든 태그")
+            self.table_proxy.set_tag_filter(
+                self._filter_tag or "모든 태그", "모든 태그"
+            )
             self.table_proxy.set_favorites_only(self._filter_favorites_only)
             self.table_proxy.set_search_text(self._search_text)
             items_to_show = self._get_displayed_items()
@@ -137,7 +153,7 @@ class ExplorerDataFiltersMixin:
 
     def _on_favorites_filter_changed(self, state):
         """즐겨찾기 필터 변경"""
-        self._filter_favorites_only = (state == Qt.CheckState.Checked.value)
+        self._filter_favorites_only = state == Qt.CheckState.Checked.value
         self._refresh_table()
 
     def _on_tag_filter_changed(self, tag):

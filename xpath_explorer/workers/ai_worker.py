@@ -7,13 +7,14 @@ from threading import Event
 from xpath_explorer.qt_compat import QThread, Signal
 from xpath_explorer.tools.ai import XPathAIAssistant
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 class AIGenerateWorker(QThread):
     """AI XPath 생성 워커."""
+
     generated = Signal(int, object)  # request_id, XPathSuggestion
-    failed = Signal(int, str)        # request_id, error
+    failed = Signal(int, str)  # request_id, error
 
     def __init__(self, assistant: XPathAIAssistant, description: str, request_id: int):
         super().__init__()

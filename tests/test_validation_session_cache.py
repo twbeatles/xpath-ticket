@@ -147,7 +147,7 @@ def test_validation_session_miss_ttl_expiry_triggers_rescan():
     assert "//missing" in session["misses"]
 
     # Force TTL expiry without sleeping.
-    session["misses"]["//missing"]["ts"] -= (VALIDATION_MISS_TTL_SECONDS + 0.1)
+    session["misses"]["//missing"]["ts"] -= VALIDATION_MISS_TTL_SECONDS + 0.1
     miss3 = bm.validate_xpath("//missing", session=session)
     assert miss3["found"] is False
     assert call_count["n"] == 2
@@ -178,4 +178,3 @@ def test_validation_session_frame_signature_change_invalidates_miss_cache():
     miss2 = bm.validate_xpath("//missing", session=session)
     assert miss2["found"] is False
     assert call_count["n"] == 2
-

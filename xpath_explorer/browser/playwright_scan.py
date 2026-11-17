@@ -20,25 +20,28 @@ from xpath_explorer.core.constants import SCAN_SELECTORS
 from xpath_explorer.core.perf import perf_span
 from xpath_explorer.tools.xpath_safety import xpath_attr_equals, xpath_literal
 
-logger = logging.getLogger('XPathExplorer')
+logger = logging.getLogger("XPathExplorer")
 
 
 # Playwright 가용성 확인
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     sync_playwright = None  # type: ignore[assignment]
     PlaywrightTimeout = Exception  # type: ignore[assignment]
-    logger.warning("Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install")
-
+    logger.warning(
+        "Playwright 모듈이 설치되지 않았습니다. pip install playwright && playwright install"
+    )
 
 
 PLAYWRIGHT_AVAILABLE = deps.PLAYWRIGHT_AVAILABLE
 sync_playwright = deps.sync_playwright
 PlaywrightTimeout = deps.PlaywrightTimeout
+
 
 class PlaywrightScanMixin:
     def _scan_page_metadata(self, page: Any) -> Dict[str, str]:
@@ -68,7 +71,9 @@ class PlaywrightScanMixin:
                 except Exception:
                     child_name = ""
                 identifier = child_name or f"index={idx}"
-                child_path = identifier if path in ("", "main") else f"{path}/{identifier}"
+                child_path = (
+                    identifier if path in ("", "main") else f"{path}/{identifier}"
+                )
                 walk(child, child_path)
 
         try:
@@ -93,7 +98,10 @@ class PlaywrightScanMixin:
 
         if normalized_scope in ("current_window_frames", "current_page_frames"):
             metadata = self._scan_page_metadata(page)
-            return [(frame, frame_path, metadata) for frame, frame_path in self._walk_scan_frames(page)]
+            return [
+                (frame, frame_path, metadata)
+                for frame, frame_path in self._walk_scan_frames(page)
+            ]
 
         if normalized_scope in ("all_pages_frames", "all"):
             for candidate_page in self._get_open_pages():
@@ -105,19 +113,25 @@ class PlaywrightScanMixin:
         frame = self._get_frame()
         if frame is None:
             return []
-        return [(frame, self._frame_path_for_scan_frame(page, frame), self._scan_page_metadata(page))]
+        return [
+            (
+                frame,
+                self._frame_path_for_scan_frame(page, frame),
+                self._scan_page_metadata(page),
+            )
+        ]
 
     def scan_elements(
         self,
-        element_type: str = 'interactive',
+        element_type: str = "interactive",
         max_count: int = 100,
         scope: str = "current_frame",
     ) -> List[ScannedElement]:
         """페이지 요소 자동 스캔"""
         if not self.is_alive():
             return []
-            
-        selector = SCAN_SELECTORS.get(element_type, SCAN_SELECTORS['interactive'])
+
+        selector = SCAN_SELECTORS.get(element_type, SCAN_SELECTORS["interactive"])
         results = []
 
         with perf_span("playwright.scan_elements"):
@@ -215,11 +229,12 @@ class PlaywrightScanMixin:
                             return rows;
                         }
                         """,
-                            remaining
+                            remaining,
                         )
                     except Exception as frame_error:
                         logger.warning(
-                            f"프레임 스캔 건너뜀 ({frame_path}): {frame_error}")
+                            f"프레임 스캔 건너뜀 ({frame_path}): {frame_error}"
+                        )
                         continue
 
                     for row in data_rows:
@@ -246,18 +261,17 @@ class PlaywrightScanMixin:
 
         return results
 
-    def _generate_xpath(self, el, el_id: str, el_name: str, 
-                        tag: str, text: str) -> str:
+    def _generate_xpath(self, el, el_id: str, el_name: str, tag: str, text: str) -> str:
         """최적화된 XPath 생성"""
         if el_id:
-            return f'//*[{xpath_attr_equals("id", el_id)}]'
+            return f"//*[{xpath_attr_equals('id', el_id)}]"
         if el_name:
-            return f'//{tag}[{xpath_attr_equals("name", el_name)}]'
-        if text and tag in ['button', 'a']:
+            return f"//{tag}[{xpath_attr_equals('name', el_name)}]"
+        if text and tag in ["button", "a"]:
             clean_text = text.strip()[:30]
             if clean_text:
-                return f'//{tag}[contains(text(), {xpath_literal(clean_text)})]'
-        
+                return f"//{tag}[contains(text(), {xpath_literal(clean_text)})]"
+
         try:
             full_xpath = el.evaluate("""el => {
                 function xpathLiteral(value) {
@@ -301,10 +315,11 @@ class PlaywrightScanMixin:
         if not value:
             return value
         # CSS 특수 문자 이스케이프
-        return re.sub(r'([!"#$%&\'()*+,./:;<=>?@\[\\\]^`{|}~])', r'\\\1', value)
+        return re.sub(r'([!"#$%&\'()*+,./:;<=>?@\[\\\]^`{|}~])', r"\\\1", value)
 
-    def _generate_css_selector(self, el_id: str, el_name: str, 
-                                el_class: str, tag: str) -> str:
+    def _generate_css_selector(
+        self, el_id: str, el_name: str, el_class: str, tag: str
+    ) -> str:
         """CSS 셀렉터 생성 (특수문자 이스케이프 포함)"""
         if el_id:
             return f"#{self._escape_css_identifier(el_id)}"

@@ -50,7 +50,9 @@ class CodeGenerator:
         self.indent = "    "
 
     @staticmethod
-    def list_xpath_templates(category: str = "", keyword: str = "") -> List[XPathTemplate]:
+    def list_xpath_templates(
+        category: str = "", keyword: str = ""
+    ) -> List[XPathTemplate]:
         """Return XPath templates with optional category/keyword filtering."""
         category = (category or "").strip().lower()
         keyword = (keyword or "").strip().lower()
@@ -85,7 +87,12 @@ class CodeGenerator:
         templates.sort(key=lambda t: (t.category, t.name))
         return templates
 
-    def generate(self, items: List, template: CodeTemplate, actions: Optional[List[ActionStep]] = None) -> str:
+    def generate(
+        self,
+        items: List,
+        template: CodeTemplate,
+        actions: Optional[List[ActionStep]] = None,
+    ) -> str:
         """
         XPath 항목들로 자동화 코드 생성
 
@@ -102,7 +109,9 @@ class CodeGenerator:
             return self._generate_pyautogui(items, actions)
         return "# Unsupported template"
 
-    def _generate_selenium(self, items: List, actions: Optional[List[ActionStep]] = None) -> str:
+    def _generate_selenium(
+        self, items: List, actions: Optional[List[ActionStep]] = None
+    ) -> str:
         """Selenium Python 코드 생성"""
         xpath_name_map = self._build_xpath_name_map(items)
 
@@ -167,16 +176,20 @@ class AutomationScript:
     def run_sequence(self):
         """자동화 시퀀스 실행"""
 '''
-        code += self._render_python_actions(actions, xpath_name_map, for_playwright=False)
-        code += '''
+        code += self._render_python_actions(
+            actions, xpath_name_map, for_playwright=False
+        )
+        code += """
 
 if __name__ == "__main__":
     script = AutomationScript()
     script.run_sequence()
-'''
+"""
         return code.replace("__TIMESTAMP__", self._timestamp())
 
-    def _generate_playwright(self, items: List, actions: Optional[List[ActionStep]] = None) -> str:
+    def _generate_playwright(
+        self, items: List, actions: Optional[List[ActionStep]] = None
+    ) -> str:
         """Playwright Python 코드 생성"""
         xpath_name_map = self._build_xpath_name_map(items)
 
@@ -244,8 +257,10 @@ class AutomationScript:
     def run_sequence(self):
         """자동화 시퀀스 실행"""
 '''
-        code += self._render_python_actions(actions, xpath_name_map, for_playwright=True)
-        code += '''
+        code += self._render_python_actions(
+            actions, xpath_name_map, for_playwright=True
+        )
+        code += """
 
 if __name__ == "__main__":
     script = AutomationScript()
@@ -254,10 +269,12 @@ if __name__ == "__main__":
         script.run_sequence()
     finally:
         script.close()
-'''
+"""
         return code.replace("__TIMESTAMP__", self._timestamp())
 
-    def _generate_pyautogui(self, items: List, actions: Optional[List[ActionStep]] = None) -> str:
+    def _generate_pyautogui(
+        self, items: List, actions: Optional[List[ActionStep]] = None
+    ) -> str:
         """PyAutoGUI 코드 생성 (XPath 참조용 주석 포함)"""
         code = '''# -*- coding: utf-8 -*-
 """
@@ -328,7 +345,9 @@ if __name__ == "__main__":
         for step in actions:
             action = (step.action or "").lower().strip()
             target_expr = self._resolve_python_xpath_expr(step.xpath, xpath_name_map)
-            comment = self._sanitize_comment(step.description or step.xpath or step.action)
+            comment = self._sanitize_comment(
+                step.description or step.xpath or step.action
+            )
 
             if action == "click":
                 lines.append(f"{self.indent * 2}# {comment}")
@@ -337,12 +356,18 @@ if __name__ == "__main__":
                 value_literal = self._python_literal(step.value)
                 lines.append(f"{self.indent * 2}# {comment}")
                 if for_playwright:
-                    lines.append(f"{self.indent * 2}self.fill_text({target_expr}, {value_literal})")
+                    lines.append(
+                        f"{self.indent * 2}self.fill_text({target_expr}, {value_literal})"
+                    )
                 else:
-                    lines.append(f"{self.indent * 2}self.type_text({target_expr}, {value_literal})")
+                    lines.append(
+                        f"{self.indent * 2}self.type_text({target_expr}, {value_literal})"
+                    )
             elif action == "wait":
                 lines.append(f"{self.indent * 2}# {comment}")
-                lines.append(f"{self.indent * 2}time.sleep({max(0.0, float(step.wait_time))})")
+                lines.append(
+                    f"{self.indent * 2}time.sleep({max(0.0, float(step.wait_time))})"
+                )
 
         if not lines:
             return f"{self.indent * 2}# 여기에 자동화 로직을 작성하세요\n{self.indent * 2}pass\n"
@@ -356,7 +381,9 @@ if __name__ == "__main__":
                 mapping[xpath] = self._safe_var_name(getattr(item, "name", "unnamed"))
         return mapping
 
-    def _resolve_python_xpath_expr(self, xpath: str, xpath_name_map: Dict[str, str]) -> str:
+    def _resolve_python_xpath_expr(
+        self, xpath: str, xpath_name_map: Dict[str, str]
+    ) -> str:
         const_name = xpath_name_map.get(xpath or "")
         if const_name:
             return f"XPathConstants.{const_name}"

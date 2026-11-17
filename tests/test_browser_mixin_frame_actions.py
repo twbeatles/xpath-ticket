@@ -265,7 +265,11 @@ def test_explicit_main_window_overrides_found_window():
     harness.combo_windows.setCurrentIndex(0)
     harness._on_window_changed(0)
 
-    assert harness._resolve_active_window_context() == {"handle": "main", "title": "", "url": ""}
+    assert harness._resolve_active_window_context() == {
+        "handle": "main",
+        "title": "",
+        "url": "",
+    }
     assert harness.browser.window_switch_calls[-1] == "main"
 
 
@@ -276,7 +280,11 @@ def test_highlight_uses_resolved_frame_path():
 
     harness._highlight_xpath()
 
-    assert harness.browser.window_context_calls[-1] == ("popup1", "https://popup.example", "Popup 1")
+    assert harness.browser.window_context_calls[-1] == (
+        "popup1",
+        "https://popup.example",
+        "Popup 1",
+    )
     assert harness.browser.highlight_calls[-1] == ("//button", "f1")
 
 

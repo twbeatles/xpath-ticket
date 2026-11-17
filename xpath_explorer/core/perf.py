@@ -93,7 +93,9 @@ def log_perf_summary(top_n: int = 20):
         key=lambda kv: (kv[1]["p95_ms"], kv[1]["avg_ms"], kv[1]["count"]),
         reverse=True,
     )
-    logger.info("[PERF] ===== Perf Summary (top %d by p95) =====", min(top_n, len(ordered)))
+    logger.info(
+        "[PERF] ===== Perf Summary (top %d by p95) =====", min(top_n, len(ordered))
+    )
     for name, metric in ordered[:top_n]:
         logger.info(
             "[PERF] %-32s count=%5d avg=%7.2fms p95=%7.2fms max=%7.2fms",

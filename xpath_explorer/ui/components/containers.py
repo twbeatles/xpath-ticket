@@ -47,8 +47,12 @@ class CollapsibleBox(QWidget):
                 color: #89b4fa;
             }
         """)
-        self.toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.toggle_button.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        self.toggle_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.toggle_button.setArrowType(
+            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        )
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(expanded)
         self.toggle_button.clicked.connect(self._on_toggle)
@@ -62,7 +66,9 @@ class CollapsibleBox(QWidget):
         self.content_area = QWidget()
         self.content_area.setMaximumHeight(16777215 if expanded else 0)
         self.content_area.setMinimumHeight(0)
-        self.content_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.content_area.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
         # 애니메이션
         self.animation = QPropertyAnimation(self.content_area, b"maximumHeight")
@@ -82,7 +88,9 @@ class CollapsibleBox(QWidget):
         self._expanded = expanded
 
         # 화살표 변경
-        self.toggle_button.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+        self.toggle_button.setArrowType(
+            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        )
 
         # 애니메이션 시작
         # 현재 컨텐츠의 높이 계산

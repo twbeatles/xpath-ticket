@@ -13,7 +13,9 @@ def test_atomic_write_json_writes_target_and_backup(tmp_path):
     atomic_write_json(target, {"new": True})
 
     assert json.loads(target.read_text(encoding="utf-8")) == {"new": True}
-    assert json.loads((tmp_path / "config.json.bak").read_text(encoding="utf-8")) == {"old": True}
+    assert json.loads((tmp_path / "config.json.bak").read_text(encoding="utf-8")) == {
+        "old": True
+    }
 
 
 def test_atomic_write_json_keeps_existing_file_when_dump_fails(monkeypatch, tmp_path):

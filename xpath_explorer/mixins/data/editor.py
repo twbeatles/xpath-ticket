@@ -72,25 +72,27 @@ class ExplorerDataEditorMixin:
         self.input_desc.setText(item.description)
         self.input_xpath.setPlainText(item.xpath)
         self.input_css.setText(item.css_selector)
-        self.input_tags.setText(', '.join(item.tags))
+        self.input_tags.setText(", ".join(item.tags))
 
         meta = f"최근 검증: {'성공' if item.is_verified else '미검증'}\n"
         if item.element_tag:
-            meta += f'태그: {item.element_tag}\n'
+            meta += f"태그: {item.element_tag}\n"
         if item.found_window_title:
-            meta += f'창: {item.found_window_title}\n'
+            meta += f"창: {item.found_window_title}\n"
         elif item.found_window_url:
-            meta += f'창 URL: {item.found_window_url}\n'
+            meta += f"창 URL: {item.found_window_url}\n"
         elif item.found_window:
-            meta += f'창 핸들: {item.found_window}\n'
+            meta += f"창 핸들: {item.found_window}\n"
         if item.found_frame:
-            meta += f'프레임: {item.found_frame}\n'
+            meta += f"프레임: {item.found_frame}\n"
         if item.source_engine == "playwright":
-            meta += "출처: Playwright 스캔 (Selenium 검증 시 창 제목/URL 기준으로 재탐색)\n"
+            meta += (
+                "출처: Playwright 스캔 (Selenium 검증 시 창 제목/URL 기준으로 재탐색)\n"
+            )
         if item.test_count > 0:
-            meta += f'테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n'
+            meta += f"테스트: {item.test_count}회 (성공률: {item.success_rate:.0f}%)\n"
         if item.last_tested:
-            meta += f'최근 테스트: {item.last_tested[:10]}\n'
+            meta += f"최근 테스트: {item.last_tested[:10]}\n"
 
         self.txt_result.setPlainText(meta)
 
@@ -101,7 +103,7 @@ class ExplorerDataEditorMixin:
         self.table.clearSelection()
 
     def _clear_editor(self):
-        self._editing_original_name = ''
+        self._editing_original_name = ""
         self._editing_source_engine = ""
         self._editing_source_frame = ""
         self._editing_source_window = ""
@@ -113,11 +115,11 @@ class ExplorerDataEditorMixin:
         self.input_css.clear()
         self.txt_result.clear()
         self.input_tags.clear()
-        default_category = self.input_category.findData('common')
+        default_category = self.input_category.findData("common")
         if default_category >= 0:
             self.input_category.setCurrentIndex(default_category)
         else:
-            self.input_category.setCurrentText('공통')
+            self.input_category.setCurrentText("공통")
 
     def _save_item(self):
         """항목 저장 - 이름 변경 충돌 방지 + 메타데이터 보존."""
@@ -125,37 +127,41 @@ class ExplorerDataEditorMixin:
         xpath = self.input_xpath.toPlainText().strip()
 
         if not name or not xpath:
-            self._show_toast('이름과 XPath는 필수입니다.', 'warning')
+            self._show_toast("이름과 XPath는 필수입니다.", "warning")
             return
 
-        original_name = str(getattr(self, '_editing_original_name', '') or '').strip()
+        original_name = str(getattr(self, "_editing_original_name", "") or "").strip()
         original_item = self.config.get_item(original_name) if original_name else None
         existing = self.config.get_item(name)
 
         if original_name and original_name != name and existing is not None:
-            self._show_toast(f"'{name}' 이름은 이미 사용 중입니다.", 'warning')
+            self._show_toast(f"'{name}' 이름은 이미 사용 중입니다.", "warning")
             return
 
         source_item = original_item if original_item is not None else existing
-        action = 'add'
-        action_desc = f'{name} 항목 추가'
+        action = "add"
+        action_desc = f"{name} 항목 추가"
         action_name = name
         if original_name and original_name != name and original_item is not None:
-            action = 'rename'
-            action_name = f'{original_name}->{name}'
-            action_desc = f'{original_name} -> {name} 이름 변경'
+            action = "rename"
+            action_name = f"{original_name}->{name}"
+            action_desc = f"{original_name} -> {name} 이름 변경"
         elif source_item is not None:
-            action = 'update'
-            action_desc = f'{name} 항목 수정'
+            action = "update"
+            action_desc = f"{name} 항목 수정"
 
-        self.history_manager.push_state(self.config.items, action, action_name, action_desc)
+        self.history_manager.push_state(
+            self.config.items, action, action_name, action_desc
+        )
 
         tags_text = self.input_tags.text().strip()
-        tags = [t.strip() for t in tags_text.split(',') if t.strip()]
+        tags = [t.strip() for t in tags_text.split(",") if t.strip()]
 
         category_value = self.input_category.currentData()
         if not isinstance(category_value, str) or not category_value:
-            category_value = category_to_value(self.input_category.currentText().strip())
+            category_value = category_to_value(
+                self.input_category.currentText().strip()
+            )
 
         item = XPathItem(
             name=name,
@@ -188,10 +194,22 @@ class ExplorerDataEditorMixin:
         source_engine = str(getattr(self, "_editing_source_engine", "") or "")
         if source_engine == "playwright":
             item.source_engine = "playwright"
-            item.found_window = str(getattr(self, "_editing_source_window", "") or item.found_window or "")
-            item.found_window_title = str(getattr(self, "_editing_source_window_title", "") or item.found_window_title or "")
-            item.found_window_url = str(getattr(self, "_editing_source_window_url", "") or item.found_window_url or "")
-            item.found_frame = str(getattr(self, "_editing_source_frame", "") or item.found_frame or "")
+            item.found_window = str(
+                getattr(self, "_editing_source_window", "") or item.found_window or ""
+            )
+            item.found_window_title = str(
+                getattr(self, "_editing_source_window_title", "")
+                or item.found_window_title
+                or ""
+            )
+            item.found_window_url = str(
+                getattr(self, "_editing_source_window_url", "")
+                or item.found_window_url
+                or ""
+            )
+            item.found_frame = str(
+                getattr(self, "_editing_source_frame", "") or item.found_frame or ""
+            )
         else:
             current_window = None
             browser = getattr(self, "browser", None)
@@ -202,7 +220,11 @@ class ExplorerDataEditorMixin:
                     browser_alive = bool(is_alive()) if callable(is_alive) else True
                 except Exception:
                     browser_alive = False
-            if browser_alive and browser is not None and hasattr(browser, "get_current_window_metadata"):
+            if (
+                browser_alive
+                and browser is not None
+                and hasattr(browser, "get_current_window_metadata")
+            ):
                 try:
                     current_window = browser.get_current_window_metadata()
                 except Exception:
@@ -211,12 +233,20 @@ class ExplorerDataEditorMixin:
                 current_window = None
 
             if isinstance(current_window, dict):
-                item.found_window = str(current_window.get("handle", "") or item.found_window or "")
-                item.found_window_title = str(current_window.get("title", "") or item.found_window_title or "")
-                item.found_window_url = str(current_window.get("url", "") or item.found_window_url or "")
+                item.found_window = str(
+                    current_window.get("handle", "") or item.found_window or ""
+                )
+                item.found_window_title = str(
+                    current_window.get("title", "") or item.found_window_title or ""
+                )
+                item.found_window_url = str(
+                    current_window.get("url", "") or item.found_window_url or ""
+                )
 
             if browser_alive and browser is not None:
-                current_frame_path = str(getattr(browser, "current_frame_path", "") or "")
+                current_frame_path = str(
+                    getattr(browser, "current_frame_path", "") or ""
+                )
                 if current_frame_path:
                     item.found_frame = current_frame_path
 
@@ -231,16 +261,22 @@ class ExplorerDataEditorMixin:
         self.history_manager.sync_current_state(self.config.items)
         self._editing_original_name = name
         self._autosave_snapshot()
-        self._show_toast(f"'{name}' 저장 완료", 'success')
+        self._show_toast(f"'{name}' 저장 완료", "success")
 
     def _delete_item(self, name):
         """항목 삭제 - v4.0: 히스토리 기록"""
-        if QMessageBox.question(self, "삭제", f"'{name}' 항목을 삭제하시겠습니까?", 
-                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(
+                self,
+                "삭제",
+                f"'{name}' 항목을 삭제하시겠습니까?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            == QMessageBox.StandardButton.Yes
+        ):
             # v4.0: 삭제 전 히스토리 저장
             self.history_manager.push_state(
-                self.config.items, "delete", name,
-                f"{name} 항목 삭제"
+                self.config.items, "delete", name, f"{name} 항목 삭제"
             )
             self.config.remove_item(name)
             self._table_data_dirty = True
@@ -284,19 +320,19 @@ class ExplorerDataEditorMixin:
             self.table.selectRow(index.row())
 
         menu = QMenu(self)
-        
+
         edit_action = QAction("✏️ 편집", self)
         edit_action.triggered.connect(self._on_item_selected)
         menu.addAction(edit_action)
-        
+
         copy_action = QAction("📋 XPath 복사", self)
         copy_action.triggered.connect(lambda: self._copy_from_table_context(0))
         menu.addAction(copy_action)
-        
+
         delete_action = QAction("🗑 삭제", self)
         delete_action.triggered.connect(self._delete_selected)
         menu.addAction(delete_action)
-        
+
         viewport = self.table.viewport()
         if viewport is not None:
             menu.exec(viewport.mapToGlobal(pos))
@@ -324,10 +360,14 @@ class ExplorerDataEditorMixin:
             ("Ctrl+H", "XPath 히스토리"),
             ("F5", "전체 유효성 검사"),
             ("Ctrl++", "폰트 크게"),
-            ("Ctrl+-", "폰트 작게")
+            ("Ctrl+-", "폰트 작게"),
         ]
         msg = "\n".join([f"{k}: {v}" for k, v in shortcuts])
         QMessageBox.information(self, "단축키 목록", msg)
 
     def _show_about(self):
-        QMessageBox.about(self, "정보", f"{APP_TITLE}\n\n티켓 예매 사이트 자동화를 위한 XPath 도구입니다.")
+        QMessageBox.about(
+            self,
+            "정보",
+            f"{APP_TITLE}\n\n티켓 예매 사이트 자동화를 위한 XPath 도구입니다.",
+        )

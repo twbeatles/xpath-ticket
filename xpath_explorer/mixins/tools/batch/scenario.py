@@ -36,16 +36,26 @@ class BatchScenarioMixin:
             "name": "기본 시나리오",
             "leave_context": False,
             "steps": [
-                {"name": "로그인 ID 확인", "action": "validate_item", "item": "login_id"},
+                {
+                    "name": "로그인 ID 확인",
+                    "action": "validate_item",
+                    "item": "login_id",
+                },
                 {"name": "잠시 대기", "action": "wait", "seconds": 0.5},
-                {"name": "예매 버튼 확인", "action": "validate_xpath", "xpath": "//a[contains(.,'예매하기')]"},
+                {
+                    "name": "예매 버튼 확인",
+                    "action": "validate_xpath",
+                    "xpath": "//a[contains(.,'예매하기')]",
+                },
             ],
         }
         return json.dumps(sample, ensure_ascii=False, indent=2)
 
     def _show_batch_scenario_runner(self):
         """JSON 시나리오 기반 배치 실행기."""
-        pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+        pw_alive = bool(
+            getattr(self, "pw_manager", None) and self.pw_manager.is_alive()
+        )
         if not self.browser.is_alive() and not pw_alive:
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
             return
@@ -88,7 +98,18 @@ class BatchScenarioMixin:
         table = QTableWidget()
         table.setColumnCount(10)
         table.setHorizontalHeaderLabels(
-            ["#", "이름", "액션", "대상", "결과", "메시지", "ms", "시도", "재시도", "최대시도"]
+            [
+                "#",
+                "이름",
+                "액션",
+                "대상",
+                "결과",
+                "메시지",
+                "ms",
+                "시도",
+                "재시도",
+                "최대시도",
+            ]
         )
         table_hh = table.horizontalHeader()
         if table_hh is not None:
@@ -177,11 +198,13 @@ class BatchScenarioMixin:
             success_count = sum(1 for row in results if row.get("success"))
             total = len(results)
             success_rate = (success_count / total * 100.0) if total > 0 else 0.0
-            total_retries = sum(max(0, int(row.get("retry_count", 0) or 0)) for row in results)
-            toast_type, status_text = self._classify_scenario_result(success_count, total, cancelled)
-            summary_text = (
-                f"성공 {success_count}/{total} | 성공률 {success_rate:.1f}% | 총 재시도 {total_retries}"
+            total_retries = sum(
+                max(0, int(row.get("retry_count", 0) or 0)) for row in results
             )
+            toast_type, status_text = self._classify_scenario_result(
+                success_count, total, cancelled
+            )
+            summary_text = f"성공 {success_count}/{total} | 성공률 {success_rate:.1f}% | 총 재시도 {total_retries}"
             lbl_summary.setText(f"{scenario_name} {status_text}: {summary_text}")
             self._show_toast(f"시나리오 {status_text}: {summary_text}", toast_type)
             if results:
@@ -197,7 +220,9 @@ class BatchScenarioMixin:
             if worker is not None and worker.isRunning():
                 return
 
-            pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+            pw_alive = bool(
+                getattr(self, "pw_manager", None) and self.pw_manager.is_alive()
+            )
             if not self.browser.is_alive() and not pw_alive:
                 self._show_toast("브라우저 연결이 끊어졌습니다.", "warning")
                 return
@@ -208,8 +233,12 @@ class BatchScenarioMixin:
                 self._show_toast(f"JSON 파싱 실패: {e}", "error")
                 return
 
-            if not isinstance(scenario, dict) or not isinstance(scenario.get("steps"), list):
-                self._show_toast("시나리오 형식이 올바르지 않습니다. (steps 배열 필요)", "warning")
+            if not isinstance(scenario, dict) or not isinstance(
+                scenario.get("steps"), list
+            ):
+                self._show_toast(
+                    "시나리오 형식이 올바르지 않습니다. (steps 배열 필요)", "warning"
+                )
                 return
 
             table.setRowCount(0)
@@ -281,7 +310,9 @@ class BatchScenarioMixin:
         dialog.finished.connect(lambda _=None: on_dialog_close())
         dialog.exec()
 
-    def _classify_scenario_result(self, success_count: int, total: int, cancelled: bool) -> Tuple[str, str]:
+    def _classify_scenario_result(
+        self, success_count: int, total: int, cancelled: bool
+    ) -> Tuple[str, str]:
         if cancelled:
             return ("warning", "취소됨")
         if total <= 0:

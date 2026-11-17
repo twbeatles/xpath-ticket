@@ -17,4 +17,7 @@ def test_xpath_template_library_filters_by_category():
 def test_xpath_template_library_filters_by_keyword_case_insensitive():
     templates = CodeGenerator.list_xpath_templates(keyword="captcha")
     assert templates
-    assert any("captcha" in template.xpath.lower() or "captcha" in template.description.lower() for template in templates)
+    assert any(
+        "captcha" in template.xpath.lower() or "captcha" in template.description.lower()
+        for template in templates
+    )

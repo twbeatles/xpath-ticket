@@ -110,7 +110,9 @@ def test_setup_logger_falls_back_to_console_when_file_handler_fails(monkeypatch)
     def _raise_file_handler(*_args, **_kwargs):
         raise OSError("readonly home")
 
-    monkeypatch.setattr("xpath_explorer.runtime.logging.FileHandler", _raise_file_handler)
+    monkeypatch.setattr(
+        "xpath_explorer.runtime.logging.FileHandler", _raise_file_handler
+    )
 
     try:
         configured = setup_logger()

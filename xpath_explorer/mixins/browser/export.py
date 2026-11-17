@@ -17,11 +17,11 @@ class ExplorerBrowserExportMixin:
     def _screenshot_current_element(self):
         """현재 선택된 요소 스크린샷 저장"""
         xpath = self.input_xpath.toPlainText().strip()
-        
+
         if not xpath:
             self._show_toast("XPath를 먼저 입력하세요.", "warning")
             return
-        
+
         if not self.browser.is_alive():
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
@@ -29,22 +29,25 @@ class ExplorerBrowserExportMixin:
             last_error = getattr(self.browser, "last_error", "")
             self._show_toast(last_error or "대상 창을 찾을 수 없습니다.", "error")
             return
-        
+
         # 저장 경로 선택
         fname, _ = QFileDialog.getSaveFileName(
-            cast(QWidget, self), "스크린샷 저장", "element_screenshot.png", "PNG 파일 (*.png)"
+            cast(QWidget, self),
+            "스크린샷 저장",
+            "element_screenshot.png",
+            "PNG 파일 (*.png)",
         )
-        
+
         if not fname:
             return
-        
+
         # 스크린샷 저장
         frame_path = self._resolve_active_frame_path()
         success = self.browser.screenshot_element(xpath, fname, frame_path=frame_path)
 
         if success:
             self._show_toast(f"스크린샷 저장 완료: {fname}", "success")
-            
+
             # 현재 항목에 스크린샷 경로 저장
             name = self.input_name.text().strip()
             item = self.config.get_item(name)
@@ -64,7 +67,9 @@ class ExplorerBrowserExportMixin:
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
 
-        default_name = f"selenium_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        default_name = (
+            f"selenium_dom_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.htm"
+        )
         fname, _ = QFileDialog.getSaveFileName(
             cast(QWidget, self),
             "DOM 저장",
@@ -77,10 +82,16 @@ class ExplorerBrowserExportMixin:
         if not fname.lower().endswith((".htm", ".html")):
             fname += ".htm"
 
-        scope_label = "현재 창 + iframe" if scope == "current" and include_frames else ("현재 창" if scope == "current" else "전체")
+        scope_label = (
+            "현재 창 + iframe"
+            if scope == "current" and include_frames
+            else ("현재 창" if scope == "current" else "전체")
+        )
         self._show_toast(f"DOM 추출 중... ({scope_label})", "info", 2000)
         try:
-            snapshots = self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            snapshots = self.browser.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            )
             current_window = self.browser.get_current_window_metadata()
             report = render_dom_report_htm(
                 snapshots,
@@ -111,7 +122,9 @@ class ExplorerBrowserExportMixin:
             self._show_toast("브라우저를 먼저 연결하세요.", "warning")
             return
 
-        default_name = f"selenium_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        default_name = (
+            f"selenium_dom_bundle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
         fname, _ = QFileDialog.getSaveFileName(
             cast(QWidget, self),
             "DOM 분석 번들 저장",
@@ -126,7 +139,9 @@ class ExplorerBrowserExportMixin:
 
         self._show_toast("DOM 번들 추출 중...", "info", 2000)
         try:
-            snapshots = self.browser.collect_dom_snapshots(include_frames=include_frames, scope=scope)
+            snapshots = self.browser.collect_dom_snapshots(
+                include_frames=include_frames, scope=scope
+            )
             current_window = self.browser.get_current_window_metadata()
             summary = save_dom_bundle(
                 snapshots,

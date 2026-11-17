@@ -90,13 +90,15 @@ def test_confirm_click_test_maps_dialog_result(monkeypatch):
     host = SimpleNamespace()
 
     monkeypatch.setattr(
-        validation_module.QMessageBox, "question",
+        validation_module.QMessageBox,
+        "question",
         staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
     )
     assert ExplorerBrowserValidationMixin._confirm_click_test(host) is True
 
     monkeypatch.setattr(
-        validation_module.QMessageBox, "question",
+        validation_module.QMessageBox,
+        "question",
         staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
     )
     assert ExplorerBrowserValidationMixin._confirm_click_test(host) is False

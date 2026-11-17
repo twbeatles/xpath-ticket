@@ -24,67 +24,69 @@ class ExplorerDataHistoryMixin:
         if not history:
             self._show_toast("히스토리가 비어있습니다.", "info")
             return
-            
+
         dialog = QDialog(self)
         dialog.setWindowTitle("XPath 히스토리")
         dialog.resize(600, 400)
-        
+
         layout = QVBoxLayout(dialog)
-        
+
         table = QTableWidget()
         table.setColumnCount(4)
         table.setHorizontalHeaderLabels(["날짜", "태그", "XPath", "프레임"])
         history_hh = table.horizontalHeader()
         if history_hh is not None:
             history_hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        
+
         # 최신순 정렬
         for row_data in reversed(history):
             row = table.rowCount()
             table.insertRow(row)
-            table.setItem(row, 0, QTableWidgetItem(row_data.get('time', '')))
-            table.setItem(row, 1, QTableWidgetItem(row_data.get('tag', '')))
-            table.setItem(row, 2, QTableWidgetItem(row_data.get('xpath', '')))
-            table.setItem(row, 3, QTableWidgetItem(row_data.get('frame', 'main')))
-            
+            table.setItem(row, 0, QTableWidgetItem(row_data.get("time", "")))
+            table.setItem(row, 1, QTableWidgetItem(row_data.get("tag", "")))
+            table.setItem(row, 2, QTableWidgetItem(row_data.get("xpath", "")))
+            table.setItem(row, 3, QTableWidgetItem(row_data.get("frame", "main")))
+
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         table.doubleClicked.connect(lambda: self._use_history_item(table, dialog))
-        
+
         layout.addWidget(table)
-        
+
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btn_use = btn_box.addButton("선택 사용", QDialogButtonBox.ButtonRole.AcceptRole)
-        btn_clear = btn_box.addButton("모두 지우기", QDialogButtonBox.ButtonRole.ResetRole)
-        
+        btn_clear = btn_box.addButton(
+            "모두 지우기", QDialogButtonBox.ButtonRole.ResetRole
+        )
+
         btn_box.rejected.connect(dialog.reject)
         if btn_use is not None:
             btn_use.clicked.connect(lambda: self._use_history_item(table, dialog))
         if btn_clear is not None:
             btn_clear.clicked.connect(lambda: self._clear_history(dialog))
-        
+
         layout.addWidget(btn_box)
         dialog.exec()
 
     def _add_to_history(self, xpath, css, tag, frame):
         """[BUG-005] 중복 방지하며 히스토리 추가"""
         history = self._load_xpath_history_data()
-        
+
         new_entry = {
             "xpath": xpath,
             "css": css,
             "tag": tag,
             "frame": frame,
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        
+
         # 중복 검사 (최근 10개만 검사해도 충분)
         is_duplicate = False
         for entry in history[-10:]:
-            if entry['xpath'] == xpath and entry['frame'] == frame:
+            if entry["xpath"] == xpath and entry["frame"] == frame:
                 is_duplicate = True
                 break
-        
+
         if not is_duplicate:
             history.append(new_entry)
             # 최대 100개 유지
@@ -93,7 +95,7 @@ class ExplorerDataHistoryMixin:
             self._save_xpath_history_data(history)
 
     def _load_xpath_history_data(self):
-        raw = self.settings.value('xpath_history', [])
+        raw = self.settings.value("xpath_history", [])
         if not isinstance(raw, list):
             return []
 
@@ -110,16 +112,19 @@ class ExplorerDataHistoryMixin:
         selected = table.selectedItems()
         if not selected:
             return
-        
+
         row = selected[0].row()
         xpath = table.item(row, 2).text()
-        
+
         self.input_xpath.setPlainText(xpath)
         self._show_toast("히스토리에서 불러왔습니다.", "success")
         dialog.accept()
 
     def _clear_history(self, dialog):
-        if QMessageBox.question(dialog, "확인", "히스토리를 모두 삭제하시겠습니까?") == QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(dialog, "확인", "히스토리를 모두 삭제하시겠습니까?")
+            == QMessageBox.StandardButton.Yes
+        ):
             self._save_xpath_history_data([])
             dialog.reject()
             self._show_toast("히스토리가 삭제되었습니다.", "success")

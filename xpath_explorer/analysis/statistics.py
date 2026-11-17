@@ -61,7 +61,9 @@ class StatisticsManager:
             try:
                 self.storage_path.parent.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                logger.warning("Statistics persistence disabled (path init failed): %s", e)
+                logger.warning(
+                    "Statistics persistence disabled (path init failed): %s", e
+                )
                 self.storage_path = None
                 self._persistence_enabled = False
                 self._storage_source = "memory"
@@ -141,7 +143,9 @@ class StatisticsManager:
     def _save_internal(self):
         if not self._persistence_enabled or self.storage_path is None:
             if not self._save_disabled_warned:
-                logger.warning("Statistics save skipped: persistence unavailable (in-memory only).")
+                logger.warning(
+                    "Statistics save skipped: persistence unavailable (in-memory only)."
+                )
                 self._save_disabled_warned = True
             with self._lock:
                 self._dirty = False
@@ -178,7 +182,9 @@ class StatisticsManager:
         if self._writer_thread.is_alive():
             self._writer_thread.join(timeout=timeout)
         if self._writer_thread.is_alive():
-            logger.warning("Statistics writer thread did not stop in time; forcing sync save.")
+            logger.warning(
+                "Statistics writer thread did not stop in time; forcing sync save."
+            )
             self._save_internal()
 
     def record_test(
@@ -236,7 +242,9 @@ class StatisticsManager:
             total_success = sum(s.successful_tests for s in self._stats.values())
             total_failure = sum(s.failed_tests for s in self._stats.values())
 
-        avg_success_rate = (total_success / total_tests * 100) if total_tests > 0 else 0.0
+        avg_success_rate = (
+            (total_success / total_tests * 100) if total_tests > 0 else 0.0
+        )
         return {
             "total_items": total_items,
             "total_tests": total_tests,

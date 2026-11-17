@@ -15,7 +15,9 @@ from xpath_explorer.workers.background import (
 class BatchRunnerMixin:
     def _batch_test(self, category: Optional[str] = None):
         """배치 테스트 실행 (취소 가능, 비동기)"""
-        pw_alive = bool(getattr(self, "pw_manager", None) and self.pw_manager.is_alive())
+        pw_alive = bool(
+            getattr(self, "pw_manager", None) and self.pw_manager.is_alive()
+        )
         if not self.browser.is_alive() and not pw_alive:
             self._show_toast("브라우저를 먼저 연결해주세요.", "warning")
             return
@@ -65,8 +67,8 @@ class BatchRunnerMixin:
             xpath=xpath,
             success=success,
             result={
-                'found': success,
-                'msg': msg,
+                "found": success,
+                "msg": msg,
             },
         )
 
@@ -104,8 +106,7 @@ class BatchRunnerMixin:
         categories = ["전체"] + sorted(self.config.get_categories())
 
         category, ok = QInputDialog.getItem(
-            self, "배치 테스트", "테스트할 카테고리 선택:",
-            categories, 0, False
+            self, "배치 테스트", "테스트할 카테고리 선택:", categories, 0, False
         )
         if ok and category is not None:
             self._batch_test(category)

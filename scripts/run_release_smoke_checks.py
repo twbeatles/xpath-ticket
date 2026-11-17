@@ -37,10 +37,14 @@ def load_spec_text(spec_path: Path) -> str:
 
 
 def check_tls_excludes(spec_text: str) -> Tuple[bool, List[str]]:
-    block_match = re.search(r"qt_excludes\s*=\s*\[(?P<body>.*?)\]", spec_text, flags=re.DOTALL)
+    block_match = re.search(
+        r"qt_excludes\s*=\s*\[(?P<body>.*?)\]", spec_text, flags=re.DOTALL
+    )
     if block_match:
         body = block_match.group("body")
-        entries = [m.group(1).lower() for m in re.finditer(r"['\"]([^'\"]+)['\"]", body)]
+        entries = [
+            m.group(1).lower() for m in re.finditer(r"['\"]([^'\"]+)['\"]", body)
+        ]
         blocked = [token for token in ("libcrypto", "libssl") if token in entries]
     else:
         # Fallback: conservative full text scan (legacy format compatibility).
@@ -49,7 +53,9 @@ def check_tls_excludes(spec_text: str) -> Tuple[bool, List[str]]:
     return len(blocked) == 0, blocked
 
 
-def run_https_smoke(url: str = "https://example.com", timeout: float = 5.0) -> Tuple[bool, str]:
+def run_https_smoke(
+    url: str = "https://example.com", timeout: float = 5.0
+) -> Tuple[bool, str]:
     request = Request(url, headers={"User-Agent": "XPathExplorerReleaseSmoke/1.0"})
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -92,7 +98,9 @@ def run_dom_report_smoke() -> Tuple[bool, str]:
     ]
     try:
         report = render_dom_report_htm(current, source_label="Selenium")
-        diff_report = render_dom_diff_report_htm(baseline, current, source_label="Selenium DOM")
+        diff_report = render_dom_diff_report_htm(
+            baseline, current, source_label="Selenium DOM"
+        )
         entries = diff_dom_snapshots(baseline, current)
         if "<html" not in report.lower() or "DOM Export Report" not in report:
             return False, "DOM export renderer output is invalid."
@@ -121,7 +129,9 @@ def check_optional_imports() -> Dict[str, bool]:
     return results
 
 
-def run_checks(repo_root: Path, strict_optional_imports: bool = False) -> List[SmokeResult]:
+def run_checks(
+    repo_root: Path, strict_optional_imports: bool = False
+) -> List[SmokeResult]:
     results: List[SmokeResult] = []
 
     spec_path = repo_root / "packaging" / "pyinstaller" / "xpath_explorer.spec"
@@ -129,7 +139,11 @@ def run_checks(repo_root: Path, strict_optional_imports: bool = False) -> List[S
         spec_text = load_spec_text(spec_path)
         ok, blocked = check_tls_excludes(spec_text)
         if ok:
-            results.append(SmokeResult("pyinstaller_tls_excludes", True, "TLS libraries are not excluded."))
+            results.append(
+                SmokeResult(
+                    "pyinstaller_tls_excludes", True, "TLS libraries are not excluded."
+                )
+            )
         else:
             results.append(
                 SmokeResult(
@@ -139,7 +153,9 @@ def run_checks(repo_root: Path, strict_optional_imports: bool = False) -> List[S
                 )
             )
     except Exception as e:
-        results.append(SmokeResult("pyinstaller_tls_excludes", False, f"Spec check failed: {e}"))
+        results.append(
+            SmokeResult("pyinstaller_tls_excludes", False, f"Spec check failed: {e}")
+        )
 
     https_ok, https_detail = run_https_smoke()
     results.append(SmokeResult("https_smoke", https_ok, https_detail))
@@ -176,7 +192,9 @@ def main(argv: List[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[1]
-    results = run_checks(repo_root, strict_optional_imports=args.strict_optional_imports)
+    results = run_checks(
+        repo_root, strict_optional_imports=args.strict_optional_imports
+    )
 
     failed = [r for r in results if not r.success]
     for result in results:
